@@ -13,4 +13,4 @@
 
 - name: Wait for VMs to boot and connect to tor
   pause:
-    minutes: 2
+    minutes: 3

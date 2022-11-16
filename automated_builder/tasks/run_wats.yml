@@ -27,3 +27,9 @@
 
     - name: Run test suite
       shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe /home/user/run_wats.sh --username user --password changeme > /home/ansible/test.log 2>&1'
+
+    ### Parse log output for all tests passing, throw error if != 0 failures
+
+  # Configure FRESH VM digitalocean
+  # VBoxManage setextradata global GUI/SuppressMessages remindAboutAutoCapture,remindAboutWrongColorDepth,remindAboutMouseIntegrationOn,remindAboutMouseIntegrationOff,confirmInputCapture,confirmGoingFullscreen
+  # Use VBoxManage modifyvm to beef up RAM settings to 4gb on build
