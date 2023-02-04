@@ -1,0 +1,15 @@
+---
+- name: Create run_wats script
+  template:
+    src: ../templates/run_wats.sh
+    dest: /home/ansible/run_wats.sh
+    mode: 0744
+
+- name: Copy run_wats script to guest
+  shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE copyto /home/ansible/run_wats.sh /home/user/ --username user --password changeme'
+
+- name: Change script mode for execution
+  shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe "/bin/chmod" --username user --password changeme -- chmod 777 /home/user/run_wats.sh'
+
+- name: Supress GUI VBox messages
+  shell: 'VBoxManage setextradata global GUI/SuppressMessages remindAboutAutoCapture,remindAboutWrongColorDepth,remindAboutMouseIntegrationOn,remindAboutMouseIntegrationOff,confirmInputCapture,confirmGoingFullscreen'

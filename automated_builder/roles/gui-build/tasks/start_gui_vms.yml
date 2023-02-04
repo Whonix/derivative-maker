@@ -3,11 +3,14 @@
   environment:
     DISPLAY: "localhost:1"
   block:
-    - name: Start VNC display
-      shell: "vncserver"
-
     - name: Add xhost
       shell: "xhost +"
+
+    - name: Add VRAM and RAM on Workstation
+      shell: 'VBoxManage modifyvm Whonix-Workstation-XFCE --vram 128 --ram 8192'
+
+    - name: Add RAM on Gateway
+      shell: 'VBoxManage modifyvm Whonix-Workstation-Gateway --ram 2096'
 
     - name: Start gateway VM
       shell: "VBoxManage startvm Whonix-Gateway-XFCE"

@@ -3,20 +3,28 @@
   apt:
     pkg:
       - xfce4
-      - xfce4=goodies
+      - xfce4-goodies
       - tightvncserver
       - dbus-x11
     update_cache: true
   become: true
 
-# TODO: Configure TightVNC password
-# - name: Install tightvnc
-#   expect:
-#     command: vncserver
-#     responses:
-#       Question:
-#         - response1
-#         - response2
-#         - response3
+- name: Install tightvnc
+  expect:
+    command: vncserver
+    responses:
+      'Password:': "{{ VNC_PASSWORD }}"
+      'Verify:': "{{ VNC_PASSWORD }}"
+      'Would you like to enter a view-only password \(y/n\)?': 'n'
 
-# https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-vnc-on-debian-11
+- name: Kill vncserver
+  shell: "vncserver -kill :1"
+
+- name: Add xstartup file for vnc configuration
+  template:
+    src: ../templates/xstartup
+    dest: /home/ansible/.vnc/xstartup
+    mode: 0744
+
+- name: Restart vncserver
+  command: vncserver

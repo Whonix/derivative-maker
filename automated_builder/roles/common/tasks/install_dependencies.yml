@@ -16,7 +16,12 @@
           - fasttrack-archive-keyring
           - dnsutils
           - software-properties-common
+          - python3-pip
         update_cache: true
+
+    - name: Install pexpect
+      pip:
+        name: pexpect
 
     - name: Install VirtualBox
       include_tasks: install_virtualbox.yml
