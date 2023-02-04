@@ -6,5 +6,4 @@
     mode: 0744
 
 - name: Run install_source script for tag
-  shell: "/home/ansible/install_source.sh {{ GIT_REPO }} {{ REF_NAME }} > /home/ansible/install_source.log 2>&1"
-  # ADD BACK AFTER DEBUG shell: "/home/ansible/install_source.sh {{ GIT_REPO }} {{ REF_NAME }} {{ REF_NAME }} > /home/ansible/install_source.log 2>&1"
+  shell: "/home/ansible/install_source.sh {{ GIT_REPO }} {{ REF_NAME }} {{ REF_NAME }} > /home/ansible/install_source.log 2>&1"
