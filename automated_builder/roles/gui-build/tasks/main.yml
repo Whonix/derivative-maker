@@ -12,4 +12,4 @@
     include_tasks: start_gui_vbox_vms
 
   - name: Run WATS
-    include_tasks: install_wats_runner.yml
+    include_tasks: run_wats.yml

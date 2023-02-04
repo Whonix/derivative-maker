@@ -41,3 +41,8 @@
       fetch:
         src: "/home/ansible/workstation_build.log"
         dest: "./logs/workstation_build.log"
+
+    - name: Copy WATS test log
+      fetch:
+        src: "/home/ansible/test.log"
+        dest: "./logs/test.log"
