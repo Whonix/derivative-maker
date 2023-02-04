@@ -7,16 +7,16 @@
     - ./roles/common/vars/secrets.yml
 
   tasks:
-    - name: Include common role
-      include_role:
-        name: common
+    # - name: Include common role
+    #   include_role:
+    #     name: common
 
-    - name: Include headless-build role
-      include_role:
-        name: headless-build
-      when: REF_TYPE != 'tag'
+    # - name: Include headless-build role
+    #   include_role:
+    #     name: headless-build
+    #   when: REF_TYPE != 'tag'
 
     - name: Include gui-build role
       include_role:
         name: gui-build
-      when: REF_TYPE == 'tag'
+      # when: REF_TYPE == 'tag'
