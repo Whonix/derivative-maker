@@ -1,15 +1,15 @@
 ---
- - name: Install source code for commit
-   include_tasks: install_source.yml
+- name: Install source code for commit
+  include_tasks: install_source.yml
 
- - name: Build VMs from tag
-   include_tasks: build_vms_from_tag.yml
+- name: Build VMs from tag
+  include_tasks: build_vms_from_tag.yml
 
-  - name: Install GUI components
-    include_tasks: install_gui.yml
+- name: Install GUI components
+  include_tasks: install_gui.yml
 
-  - name: Start GUI vms
-    include_tasks: start_gui_vbox_vms
+- name: Start GUI vms
+  include_tasks: start_gui_vbox_vms
 
-  - name: Run WATS
-    include_tasks: run_wats.yml
+- name: Run WATS
+  include_tasks: run_wats.yml
