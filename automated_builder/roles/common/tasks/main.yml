@@ -13,6 +13,3 @@
 
 - name: Install dependencies
   include_tasks: install_dependencies.yml
-
-- name: Clean existing VirtualBox VMs
-  include_tasks: clean_existing_vbox_vms.yml
