@@ -16,3 +16,5 @@
 
 - name: Run WATS
   shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe /home/user/run_wats.sh --username user --password changeme > /home/ansible/test.log 2>&1'
+
+# Check output of test.log, failed when "0 failures, 0 errors" NOT in file
