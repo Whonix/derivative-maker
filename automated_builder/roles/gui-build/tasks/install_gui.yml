@@ -2,10 +2,11 @@
 - name: Install xfce
   apt:
     pkg:
+      - dbus-x11
+      - tightvncserver
+      - xbase-clients
       - xfce4
       - xfce4-goodies
-      - tightvncserver
-      - dbus-x11
     update_cache: true
   become: true
 

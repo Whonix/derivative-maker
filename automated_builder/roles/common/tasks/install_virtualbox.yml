@@ -16,3 +16,26 @@
         src: "/root/{{ VBOX_ASC_KEY.name }}.asc.gpg"
         dest: "/usr/share/keyrings/{{ VBOX_ASC_KEY.name }}.asc.gpg"
         remote_src: true
+
+    - name: Register LSB release
+      shell: "lsb_release -cs"
+      register: lsb_release
+
+    - name: Add VirtualBox apt repository
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/{{ VBOX_ASC_KEY.name }}.asc.gpg] http://download.virtualbox.org/virtualbox/debian {{ lsb_release.stdout }} contrib"
+        state: present
+
+    - name: Install VirtualBox apt repository
+      apt:
+        name: "virtualbox-7.0"
+        update_cache: true
+
+    - name: Get extension pack
+      get_url:
+        url: "https://download.virtualbox.org/virtualbox/7.0.0/Oracle_VM_VirtualBox_Extension_Pack-7.0.0.vbox-extpack"
+        dest: /home/ansible
+
+    - name: Install extension pack
+      shell: "VBoxManage extpack install /home/ansible/Oracle_VM_VirtualBox_Extension_Pack-*.vbox-extpack"
+      become: true
