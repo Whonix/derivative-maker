@@ -10,8 +10,8 @@
     - name: Restart vncserver
       command: vncserver
 
-    - name: Add xhost
-      shell: "xhost +"
+    - name: Supress GUI VBox messages
+      shell: 'VBoxManage setextradata global GUI/SuppressMessages remindAboutAutoCapture,remindAboutWrongColorDepth,remindAboutMouseIntegrationOn,remindAboutMouseIntegrationOff,confirmInputCapture,confirmGoingFullscreen'
 
     - name: Add VRAM and RAM on Workstation
       shell: 'VBoxManage modifyvm Whonix-Workstation-XFCE --vram 128 --memory 8192'
