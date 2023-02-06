@@ -6,7 +6,7 @@ The `automated_builder` folder contains ansible plays in order to streamline Who
 2. Installs VirtualBox on the VPS, and packages required to run the builder
 3. Builds the Whonix Workstation and Gateway VMs on the VPS
 
-When a tag is pushed, the automated builder does a full build, with an XFCE GUI installed. This build runs the [Whonix™ Automated Test Suite](https://github.com/Mycobee/whonix_automated_test_suite) (called WATS for short) on the 
+When a tag is pushed, the automated builder does a full build, with an XFCE GUI installed. This build runs the [Whonix™ Automated Test Suite](https://github.com/Mycobee/whonix_automated_test_suite) (called WATS for short) on the Workstation from the VPS using VBoxManage.
 
 When a commit is pushed, the automated builder runs a headless build and verifies the `derivative-maker` build scripts work. WATS does not run.
 
