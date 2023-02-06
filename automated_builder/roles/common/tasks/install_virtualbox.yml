@@ -38,7 +38,9 @@
 
     - name: Install extension pack
       expect:
-        command: "VBoxManage extpack install /home/ansible/Oracle_VM_VirtualBox_Extension_Pack-*.vbox-extpack"
+        command: 'VBoxManage extpack install /home/ansible/Oracle_VM_VirtualBox_Extension_Pack-*.vbox-extpack'
+        args:
+          chdir: /home/ansible
         responses:
           'Do you agree to these license terms and conditions \(y/n\)?': 'y'
       become: true
