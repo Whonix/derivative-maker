@@ -5,6 +5,7 @@
   block:
     - name: Reboot server for consistent displays
       reboot:
+      become: true
 
     - name: Restart vncserver
       command: vncserver
