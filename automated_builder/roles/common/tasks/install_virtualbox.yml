@@ -30,17 +30,3 @@
       apt:
         name: "virtualbox-7.0"
         update_cache: true
-
-    - name: Get extension pack
-      get_url:
-        url: "https://download.virtualbox.org/virtualbox/7.0.0/Oracle_VM_VirtualBox_Extension_Pack-7.0.0.vbox-extpack"
-        dest: /home/ansible
-
-    - name: Install extension pack
-      expect:
-        command: 'VBoxManage extpack install /home/ansible/Oracle_VM_VirtualBox_Extension_Pack-*.vbox-extpack'
-        args:
-          chdir: /home/ansible
-        responses:
-          'Do you agree to these license terms and conditions \(y/n\)?': 'y'
-      become: true
