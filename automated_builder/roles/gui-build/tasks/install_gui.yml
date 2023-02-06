@@ -26,6 +26,3 @@
     src: ../templates/xstartup
     dest: /home/ansible/.vnc/xstartup
     mode: 0744
-
-- name: Restart vncserver
-  command: vncserver
