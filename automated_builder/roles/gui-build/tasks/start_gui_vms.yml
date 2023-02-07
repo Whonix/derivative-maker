@@ -6,6 +6,9 @@
     - name: Restart vncserver
       command: vncserver
 
+    - name: Add xhost
+      command: xhost +
+
     - name: Supress GUI VBox messages
       shell: 'VBoxManage setextradata global GUI/SuppressMessages remindAboutAutoCapture,remindAboutWrongColorDepth,remindAboutMouseIntegrationOn,remindAboutMouseIntegrationOff,confirmInputCapture,confirmGoingFullscreen'
 
