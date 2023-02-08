@@ -13,10 +13,10 @@
       shell: 'VBoxManage setextradata global GUI/SuppressMessages remindAboutAutoCapture,remindAboutWrongColorDepth,remindAboutMouseIntegrationOn,remindAboutMouseIntegrationOff,confirmInputCapture,confirmGoingFullscreen'
 
     - name: Add VRAM and RAM on Workstation
-      shell: 'VBoxManage modifyvm Whonix-Workstation-XFCE --vram 128 --memory 8192'
+      shell: 'VBoxManage modifyvm Whonix-Workstation-XFCE --vram 128 --memory 4096'
 
     - name: Add RAM on Gateway
-      shell: 'VBoxManage modifyvm Whonix-Gateway-XFCE --memory 2096'
+      shell: 'VBoxManage modifyvm Whonix-Gateway-XFCE --memory 4096'
 
     - name: Start gateway VM
       shell: "VBoxManage startvm Whonix-Gateway-XFCE"
