@@ -8,7 +8,7 @@ main() {
 
 prepare_environment() {
   echo changeme | sudo -S apt-get update -q
-  sudo apt-get install git python3-behave python3-pip python3-pyatspi python3-dogtail -yq
+  sudo apt-get install git python3-behave python3-pip python3-pyatspi python3-dogtail -yq --no-install-recommends
   gsettings set org.gnome.desktop.interface toolkit-accessibility true
 }
 
