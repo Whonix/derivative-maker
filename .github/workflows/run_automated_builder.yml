@@ -49,7 +49,7 @@ jobs:
           name: logs
           path: ./automated_builder/logs/
 
-      # - name: Teardown build
-      #   if: always()
-      #   run: |
-      #     ./automated_builder/scripts/teardown_build.sh $ANSIBLE_VAULT_PASSWORD
+      - name: Teardown build
+        if: always()
+        run: |
+          ./automated_builder/scripts/teardown_build.sh $ANSIBLE_VAULT_PASSWORD
