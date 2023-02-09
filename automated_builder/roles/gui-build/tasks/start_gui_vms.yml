@@ -24,6 +24,6 @@
     - name: Start workstation VM
       shell: "VBoxManage startvm Whonix-Workstation-XFCE"
 
-    - name: Wait for VMs to boot and connect to TOR
+    - name: Wait for VMs to boot
       pause:
-        minutes: 3
+        minutes: 1
