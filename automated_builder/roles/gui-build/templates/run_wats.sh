@@ -9,7 +9,9 @@ main() {
 prepare_environment() {
   dsudo setup-dist-noninteractive 1
   echo "Sleeping while Tor connects"
-  sleep 3m
+  echo "Time before sleep:" $(date)
+  sleep 5m
+  echo "Time after sleep:" $(date)
   dsudo apt-get update -q
   dsudo apt-get install git python3-behave python3-pip python3-pyatspi python3-dogtail -yq --no-install-recommends
   gsettings set org.gnome.desktop.interface toolkit-accessibility true
