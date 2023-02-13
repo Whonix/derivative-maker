@@ -50,6 +50,6 @@ jobs:
           path: ./automated_builder/logs/
 
       - name: Teardown build
-        if: always()
+        if: ${{ github.ref != '*DEBUG*' }}
         run: |
           ./automated_builder/scripts/teardown_build.sh $ANSIBLE_VAULT_PASSWORD
