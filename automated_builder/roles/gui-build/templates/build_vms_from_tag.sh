@@ -25,8 +25,9 @@ build_workstation_vm() {
 build_debug_vms() {
   if [[ "$DEBUG_BUILD" == "true" ]]; then
     wget https://download.whonix.org/ova/{{ DEBUG_BUILD_VERSION }}/Whonix-CLI-{{ DEBUG_BUILD_VERSION }}.ova
+    VBoxManage import Whonix-CLI-{{ DEBUG_BUILD_VERSION }}.ova --vsys 1 --eula accept  --vsys 0 --eula accept
   fi
-  VBoxManage import Whonix-CLI-{{ DEBUG_BUILD_VERSION }}.ova --vsys 1 --eula accept  --vsys 0 --eula accept
   exit 0
 }
+
 main
