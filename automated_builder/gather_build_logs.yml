@@ -27,9 +27,14 @@
         src: "/home/ansible/install_source.log"
         dest: "./logs/install_source.log"
 
+    - name: Debug vars
+      debug:
+        var: DEBUG_BUILD
+
     - name: Copy debug_build log
-      shell: "ls"
-      delegate_to: 127.0.0.1
+      fetch:
+        src: "/home/ansible/debug_build.log"
+        dest: "./logs/debug_build.log"
       when: DEBUG_BUILD is true
 
     - name: Copy gateway_build log
