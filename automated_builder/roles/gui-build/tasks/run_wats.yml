@@ -23,6 +23,9 @@
 - name: Change script mode for execution
   shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe "/bin/chmod" --username user --password changeme -- chmod 777 /home/user/prepare_wats.sh'
 
+- name: Run preparation script
+  shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe /home/user/prepare_wats.sh --username user --password changeme > /home/ansible/test.log 2>&1'
+
 - name: Copy run_wats script to guest
   shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE copyto /home/ansible/run_wats.sh /home/user/ --username user --password changeme'
 
@@ -30,7 +33,4 @@
   shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe "/bin/chmod" --username user --password changeme -- chmod 777 /home/user/run_wats.sh'
 
 - name: Run WATS
-  shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe /home/user/run_wats.sh --username user --password changeme > /home/ansible/test.log 2>&1'
-
-# - shell: "grep '0 failures, 0 errors' /home/ansible"
-#   changed_when: false
+  shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe /home/user/run_wats.sh --username user --password changeme >> /home/ansible/test.log 2>&1'
