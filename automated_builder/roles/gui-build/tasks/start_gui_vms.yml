@@ -26,4 +26,4 @@
 
     - name: Wait for VMs to boot
       pause:
-        minutes: 5
+        minutes: 2

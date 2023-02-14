@@ -11,6 +11,10 @@
 - name: Set noninteractive workstation
   shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe "/usr/bin/dsudo" --username user --password changeme -- dsudo setup-dist-noninteractive 1'
 
+- name: Wait for TOR to connect
+  pause:
+    minutes: 5
+
 - name: Copy run_wats script to guest
   shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE copyto /home/ansible/run_wats.sh /home/user/ --username user --password changeme'
 

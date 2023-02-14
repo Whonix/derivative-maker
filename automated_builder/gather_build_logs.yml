@@ -27,27 +27,23 @@
         src: "/home/ansible/install_source.log"
         dest: "./logs/install_source.log"
 
-    - name: Debug vars
-      debug:
-        var: DEBUG_BUILD
-
     - name: Copy debug_build log
       fetch:
         src: "/home/ansible/debug_build.log"
         dest: "./logs/debug_build.log"
-      when: DEBUG_BUILD is true
+      when: DEBUG_BUILD
 
     - name: Copy gateway_build log
       fetch:
         src: "/home/ansible/gateway_build.log"
         dest: "./logs/gateway_build.log"
-      when: DEBUG_BUILD is false
+      when: not DEBUG_BUILD
 
     - name: Copy workstation_build log
       fetch:
         src: "/home/ansible/workstation_build.log"
         dest: "./logs/workstation_build.log"
-      when: DEBUG_BUILD is false
+      when: not DEBUG_BUILD
 
     - name: Copy WATS test log
       fetch:
