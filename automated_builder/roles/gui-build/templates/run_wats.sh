@@ -7,7 +7,6 @@ main() {
 }
 
 prepare_environment() {
-  dsudo setup-dist-noninteractive 1
   echo "Sleeping while Tor connects"
   echo "Time before sleep:" $(date)
   sleep 5m

@@ -10,7 +10,7 @@
       command: xhost +
 
     - name: Supress GUI VBox messages
-      shell: 'VBoxManage setextradata global GUI/SuppressMessages remindAboutAutoCapture,remindAboutWrongColorDepth,remindAboutMouseIntegrationOn,remindAboutMouseIntegrationOff,confirmInputCapture,confirmGoingFullscreen'
+      shell: 'VBoxManage setextradata global GUI/SuppressMessages remindAboutAutoCapture,remindAboutWrongColorDepth,remindAboutMouseIntegrationOn,remindAboutMouseIntegrationOff,confirmInputCapture,confirmGoingFullscreen,showRuntimeError.warning.HostAudioNotResponding'
 
     - name: Add VRAM and RAM on Workstation
       shell: 'VBoxManage modifyvm Whonix-Workstation-XFCE --vram 128 --memory 4096'
