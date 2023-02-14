@@ -1,4 +1,10 @@
 ---
+- name: Create prepare_wats script
+  template:
+    src: ../templates/prepare_wats.sh
+    dest: /home/ansible/prepare_wats.sh
+    mode: 0744
+
 - name: Create run_wats script
   template:
     src: ../templates/run_wats.sh
@@ -10,6 +16,12 @@
 
 - name: Set noninteractive workstation
   shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe "/usr/bin/dsudo" --username user --password changeme -- dsudo setup-dist-noninteractive 1'
+
+- name: Copy prepare_wats script to guest
+  shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE copyto /home/ansible/prepare_wats.sh /home/user/ --username user --password changeme'
+
+- name: Change script mode for execution
+  shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE run --exe "/bin/chmod" --username user --password changeme -- chmod 777 /home/user/prepare_wats.sh'
 
 - name: Copy run_wats script to guest
   shell: 'VBoxManage guestcontrol Whonix-Workstation-XFCE copyto /home/ansible/run_wats.sh /home/user/ --username user --password changeme'
