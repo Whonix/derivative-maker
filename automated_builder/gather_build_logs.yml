@@ -27,20 +27,22 @@
         src: "/home/ansible/install_source.log"
         dest: "./logs/install_source.log"
 
-    - name: Check logs
+    - name: Copy debug_build log
       shell: "ls"
-      register: pwd
       delegate_to: 127.0.0.1
+      when: DEBUG_BUILD is true
 
     - name: Copy gateway_build log
       fetch:
         src: "/home/ansible/gateway_build.log"
         dest: "./logs/gateway_build.log"
+      when: DEBUG_BUILD is false
 
     - name: Copy workstation_build log
       fetch:
         src: "/home/ansible/workstation_build.log"
         dest: "./logs/workstation_build.log"
+      when: DEBUG_BUILD is false
 
     - name: Copy WATS test log
       fetch:

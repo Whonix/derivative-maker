@@ -1,16 +1,9 @@
 ---
-# set fact 
-# DEBUG_BUILD=false
-# when tag name != '*DEBUG_BUILD*'
-
-  # "{{ my_variable | default('default_value') }}"
 - name: Install build_vms_from_tag script
   template:
     src: ../templates/build_vms_from_tag.sh
     dest: /home/ansible/build_vms_from_tag.sh
     mode: 0744
-  # when: DEBUG_BUILD=false
 
 - name: Run build_vms_from_tag scripts
-  shell: "/home/ansible/build_vms_from_tag.sh"
-  # when: DEBUG_BUILD=false
+  shell: "DEBUG_BUILD={{ DEBUG_BUILD }} /home/ansible/build_vms_from_tag.sh"

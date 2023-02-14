@@ -6,4 +6,4 @@
     mode: 0744
 
 - name: Run build_vms_from_commit scripts
-  shell: "/home/ansible/build_vms_from_commit.sh"
+  shell: "DEBUG_BUILD={{ DEBUG_BUILD }} /home/ansible/build_vms_from_commit.sh"

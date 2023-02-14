@@ -19,6 +19,7 @@ jobs:
     env:
       ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
       REPO_URL: ${{ github.repository }}
+      DEBUG_BUILD: ${{ github.ref == '*DEBUG*' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -50,6 +51,6 @@ jobs:
           path: ./automated_builder/logs/
 
       - name: Teardown build
-        if: ${{ github.ref != '*DEBUG*' }}
         run: |
           ./automated_builder/scripts/teardown_build.sh $ANSIBLE_VAULT_PASSWORD
+        if: ${{ github.ref == '*DEBUG*' }}
