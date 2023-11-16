@@ -12,6 +12,10 @@
   command: cloud-init status --wait
   changed_when: false
 
+- name: Upgrade the OS (apt-get dist-upgrade)
+  apt:
+    upgrade: dist
+
 - name: Install apt packages
   become: true
   apt:
