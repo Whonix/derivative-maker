@@ -9,6 +9,8 @@
 ## to its custom build
 #.directory
 
+## ci test 3
+
 packages/.directory
 
 ## ignore kdevelop project files
