@@ -49,7 +49,7 @@ export_utm_packages() {
    $str_replace_tool "_TARGET_" "${utm_target}" "${binary_image_utm_folder}/config.plist"
 
    ## Fill in correct flavor for raw image filename and VM name as it appears on UTM.
-   $str_replace_tool "_FLAVOR_" "${VMNAME}.raw" "${binary_image_utm_folder}/config.plist"
+   $str_replace_tool "_FLAVOR_" "${VMNAME}" "${binary_image_utm_folder}/config.plist"
 
    ## TODO: This should be moved to dm-prepare-release.
    ##       But good enough to keep it here as long as UTM builds are not redistributed.
