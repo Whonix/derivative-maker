@@ -31,6 +31,7 @@ jobs:
       DEBIAN_FRONTEND: noninteractive
       CI: true
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
@@ -46,9 +47,20 @@ jobs:
             safe-rm \
             approx \
             debian-archive-keyring \
-            fasttrack-archive-keyring
-          ## gpg-sq is not in Noble repos. Symlink gpg as gpg-sq since
-          ## derivative-maker defaults to gpg-sq but gpg works fine.
+            fasttrack-archive-keyring \
+            equivs
+
+          ## gpg-sq is not in Noble repos. Create a dummy package so
+          ## derivative-maker's apt check thinks it's installed, then
+          ## symlink gpg as gpg-sq for the actual binary.
+          echo "Section: misc
+          Priority: optional
+          Standards-Version: 4.0.0
+          Package: gpg-sq
+          Version: 99.0
+          Description: dummy gpg-sq package (gpg symlink)" > /tmp/gpg-sq.equivs
+          cd /tmp && equivs-build gpg-sq.equivs
+          sudo dpkg -i /tmp/gpg-sq_99.0_all.deb
           sudo ln -sf /usr/bin/gpg /usr/local/bin/gpg-sq
 
       - name: Build Whonix gateway
