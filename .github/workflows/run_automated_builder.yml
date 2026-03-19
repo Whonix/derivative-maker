@@ -64,7 +64,7 @@ concurrency:
 
 jobs:
 
-  resolve:
+  resolve-jobs:
     runs-on: ubuntu-24.04
     outputs:
       jobs: ${{ steps.filter.outputs.jobs }}
@@ -82,8 +82,8 @@ jobs:
   ## VirtualBox — amd64 only ################################################
 
   whonix-lxqt-vbox-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'whonix-lxqt-virtualbox-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'whonix-lxqt-virtualbox-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: whonix
@@ -91,11 +91,11 @@ jobs:
       target: virtualbox
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   whonix-cli-vbox-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'whonix-cli-virtualbox-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'whonix-cli-virtualbox-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: whonix
@@ -103,11 +103,11 @@ jobs:
       target: virtualbox
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   kicksecure-lxqt-vbox-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-lxqt-virtualbox-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-lxqt-virtualbox-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -115,11 +115,11 @@ jobs:
       target: virtualbox
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   kicksecure-cli-vbox-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-cli-virtualbox-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-cli-virtualbox-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -127,13 +127,13 @@ jobs:
       target: virtualbox
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   ## Raw — amd64 #############################################################
 
   whonix-lxqt-raw-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'whonix-lxqt-raw-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'whonix-lxqt-raw-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: whonix
@@ -141,11 +141,11 @@ jobs:
       target: raw
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   whonix-cli-raw-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'whonix-cli-raw-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'whonix-cli-raw-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: whonix
@@ -153,11 +153,11 @@ jobs:
       target: raw
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   kicksecure-lxqt-raw-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-lxqt-raw-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-lxqt-raw-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -165,11 +165,11 @@ jobs:
       target: raw
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   kicksecure-cli-raw-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-cli-raw-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-cli-raw-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -177,13 +177,13 @@ jobs:
       target: raw
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   ## Raw — arm64 #############################################################
 
   whonix-lxqt-raw-arm64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'whonix-lxqt-raw-arm64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'whonix-lxqt-raw-arm64')
     uses: ./.github/workflows/build.yml
     with:
       distro: whonix
@@ -191,11 +191,11 @@ jobs:
       target: raw
       arch: arm64
       runner: ubuntu-24.04-arm
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   whonix-cli-raw-arm64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'whonix-cli-raw-arm64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'whonix-cli-raw-arm64')
     uses: ./.github/workflows/build.yml
     with:
       distro: whonix
@@ -203,11 +203,11 @@ jobs:
       target: raw
       arch: arm64
       runner: ubuntu-24.04-arm
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   kicksecure-lxqt-raw-arm64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-lxqt-raw-arm64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-lxqt-raw-arm64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -215,11 +215,11 @@ jobs:
       target: raw
       arch: arm64
       runner: ubuntu-24.04-arm
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   kicksecure-cli-raw-arm64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-cli-raw-arm64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-cli-raw-arm64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -227,13 +227,13 @@ jobs:
       target: raw
       arch: arm64
       runner: ubuntu-24.04-arm
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   ## ISO — kicksecure only ###################################################
 
   kicksecure-lxqt-iso-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-lxqt-iso-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-lxqt-iso-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -241,11 +241,11 @@ jobs:
       target: iso
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   kicksecure-cli-iso-amd64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-cli-iso-amd64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-cli-iso-amd64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -253,11 +253,11 @@ jobs:
       target: iso
       arch: amd64
       runner: ubuntu-24.04
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   kicksecure-lxqt-iso-arm64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-lxqt-iso-arm64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-lxqt-iso-arm64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -265,11 +265,11 @@ jobs:
       target: iso
       arch: arm64
       runner: ubuntu-24.04-arm
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
 
   kicksecure-cli-iso-arm64:
-    needs: resolve
-    if: contains(fromJSON(needs.resolve.outputs.jobs), 'kicksecure-cli-iso-arm64')
+    needs: resolve-jobs
+    if: contains(fromJSON(needs.resolve-jobs.outputs.jobs), 'kicksecure-cli-iso-arm64')
     uses: ./.github/workflows/build.yml
     with:
       distro: kicksecure
@@ -277,4 +277,4 @@ jobs:
       target: iso
       arch: arm64
       runner: ubuntu-24.04-arm
-      fast_build: ${{ inputs.fast_build }}
+      fast_build: ${{ inputs.fast_build || false }}
