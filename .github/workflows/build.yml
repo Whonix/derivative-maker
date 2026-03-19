@@ -29,6 +29,7 @@ jobs:
     runs-on: ${{ inputs.runner }}
     container:
       image: debian:trixie
+      options: --privileged
     env:
       DEBIAN_FRONTEND: noninteractive
       CI: true
