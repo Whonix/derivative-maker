@@ -33,6 +33,7 @@ jobs:
     env:
       DEBIAN_FRONTEND: noninteractive
       CI: true
+      make_use_debsign: false
     steps:
 
       - name: Install prerequisites
