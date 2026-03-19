@@ -41,27 +41,23 @@ jobs:
       - name: Install build prerequisites
         run: |
           sudo add-apt-repository -y universe
+
+          ## Add Debian Trixie repo for packages not in Noble (gpg-sq, newer sq).
+          ## Pin it low so it doesn't override Ubuntu packages by default.
+          sudo apt-get install -y --no-install-recommends debian-archive-keyring
+          echo "deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian trixie main" \
+            | sudo tee /etc/apt/sources.list.d/debian-trixie.list
+          printf 'Package: *\nPin: release o=Debian,n=trixie\nPin-Priority: 100\n' \
+            | sudo tee /etc/apt/preferences.d/debian-trixie
+
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            sq \
             safe-rm \
             approx \
-            debian-archive-keyring \
-            fasttrack-archive-keyring \
-            equivs
-
-          ## gpg-sq is not in Noble repos. Create a dummy package so
-          ## derivative-maker's apt check thinks it's installed, then
-          ## symlink gpg as gpg-sq for the actual binary.
-          echo "Section: misc
-          Priority: optional
-          Standards-Version: 4.0.0
-          Package: gpg-sq
-          Version: 99.0
-          Description: dummy gpg-sq package (gpg symlink)" > /tmp/gpg-sq.equivs
-          cd /tmp && equivs-build gpg-sq.equivs
-          sudo dpkg -i /tmp/gpg-sq_99.0_all.deb
-          sudo ln -sf /usr/bin/gpg /usr/local/bin/gpg-sq
+            fasttrack-archive-keyring
+          sudo apt-get install -y --no-install-recommends -t trixie \
+            sq \
+            gpg-sq
 
       - name: Build Whonix gateway
         if: inputs.distro == 'whonix' && inputs.target != 'iso'
