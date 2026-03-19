@@ -40,7 +40,8 @@ jobs:
             sudo \
             ca-certificates \
             adduser \
-            lsb-release
+            lsb-release \
+            sq
 
       - name: Checkout repository
         uses: actions/checkout@v4
