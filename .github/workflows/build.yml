@@ -59,7 +59,7 @@ jobs:
         if: inputs.target != 'iso'
         run: |
           cd derivative-maker
-          sudo ./derivative-maker \
+          ./derivative-maker \
             --flavor ${{ inputs.distro }}-gateway-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --arch ${{ inputs.arch }} \
@@ -69,7 +69,7 @@ jobs:
         if: inputs.target != 'iso'
         run: |
           cd derivative-maker
-          sudo ./derivative-maker \
+          ./derivative-maker \
             --flavor ${{ inputs.distro }}-workstation-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --arch ${{ inputs.arch }} \
@@ -79,7 +79,7 @@ jobs:
         if: inputs.target == 'iso'
         run: |
           cd derivative-maker
-          sudo ./derivative-maker \
+          ./derivative-maker \
             --flavor ${{ inputs.distro }}-${{ inputs.flavor }} \
             --target iso \
             --arch ${{ inputs.arch }} \
