@@ -41,7 +41,8 @@ jobs:
             ca-certificates \
             adduser \
             lsb-release \
-            sq
+            sq \
+            procps
 
       - name: Checkout repository
         uses: actions/checkout@v4
