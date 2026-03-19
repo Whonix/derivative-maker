@@ -54,36 +54,36 @@ jobs:
           echo 'user ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/user
           chown -R user:user derivative-maker
 
-      - name: Build gateway
-        if: inputs.target != 'iso'
+      - name: Build Whonix gateway
+        if: inputs.distro == 'whonix' && inputs.target != 'iso'
         run: |
           cd derivative-maker
           su user -c './derivative-maker \
-            --flavor ${{ inputs.distro }}-gateway-${{ inputs.flavor }} \
+            --flavor whonix-gateway-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --type vm \
             --arch ${{ inputs.arch }} \
             ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
-      - name: Build workstation
-        if: inputs.target != 'iso'
+      - name: Build Whonix workstation
+        if: inputs.distro == 'whonix' && inputs.target != 'iso'
         run: |
           cd derivative-maker
           su user -c './derivative-maker \
-            --flavor ${{ inputs.distro }}-workstation-${{ inputs.flavor }} \
+            --flavor whonix-workstation-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --type vm \
             --arch ${{ inputs.arch }} \
             ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
-      - name: Build ISO
-        if: inputs.target == 'iso'
+      - name: Build Kicksecure
+        if: inputs.distro == 'kicksecure'
         run: |
           cd derivative-maker
           su user -c './derivative-maker \
-            --flavor ${{ inputs.distro }}-${{ inputs.flavor }} \
-            --target iso \
-            --type host \
+            --flavor kicksecure-${{ inputs.flavor }} \
+            --target ${{ inputs.target }} \
+            --type ${{ inputs.target == 'iso' && 'host' || 'vm' }} \
             --arch ${{ inputs.arch }} \
             ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
