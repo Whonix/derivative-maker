@@ -59,52 +59,315 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  vbox-amd64:
-    uses: ./.github/workflows/build-vbox-amd64.yml
+
+  ## VirtualBox — amd64 only ################################################
+
+  whonix-lxqt-vbox-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'vbox-all'
+      || inputs.build_group == 'whonix-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'whonix')
+          && (inputs.flavor == 'all' || inputs.flavor == 'lxqt')
+          && (inputs.target == 'all' || inputs.target == 'virtualbox')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
     with:
-      build_group: ${{ inputs.build_group }}
-      distro: ${{ inputs.distro }}
-      flavor: ${{ inputs.flavor }}
-      target: ${{ inputs.target }}
-      arch: ${{ inputs.arch }}
+      distro: whonix
+      flavor: lxqt
+      target: virtualbox
+      arch: amd64
+      runner: ubuntu-24.04
       use_remote_repo: ${{ inputs.use_remote_repo }}
 
-  raw-amd64:
-    uses: ./.github/workflows/build-raw-amd64.yml
+  whonix-cli-vbox-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'vbox-all'
+      || inputs.build_group == 'whonix-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'whonix')
+          && (inputs.flavor == 'all' || inputs.flavor == 'cli')
+          && (inputs.target == 'all' || inputs.target == 'virtualbox')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
     with:
-      build_group: ${{ inputs.build_group }}
-      distro: ${{ inputs.distro }}
-      flavor: ${{ inputs.flavor }}
-      target: ${{ inputs.target }}
-      arch: ${{ inputs.arch }}
+      distro: whonix
+      flavor: cli
+      target: virtualbox
+      arch: amd64
+      runner: ubuntu-24.04
       use_remote_repo: ${{ inputs.use_remote_repo }}
 
-  raw-arm64:
-    uses: ./.github/workflows/build-raw-arm64.yml
+  kicksecure-lxqt-vbox-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'vbox-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'lxqt')
+          && (inputs.target == 'all' || inputs.target == 'virtualbox')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
     with:
-      build_group: ${{ inputs.build_group }}
-      distro: ${{ inputs.distro }}
-      flavor: ${{ inputs.flavor }}
-      target: ${{ inputs.target }}
-      arch: ${{ inputs.arch }}
+      distro: kicksecure
+      flavor: lxqt
+      target: virtualbox
+      arch: amd64
+      runner: ubuntu-24.04
       use_remote_repo: ${{ inputs.use_remote_repo }}
 
-  iso-amd64:
-    uses: ./.github/workflows/build-iso-amd64.yml
+  kicksecure-cli-vbox-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'vbox-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'cli')
+          && (inputs.target == 'all' || inputs.target == 'virtualbox')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
     with:
-      build_group: ${{ inputs.build_group }}
-      distro: ${{ inputs.distro }}
-      flavor: ${{ inputs.flavor }}
-      target: ${{ inputs.target }}
-      arch: ${{ inputs.arch }}
+      distro: kicksecure
+      flavor: cli
+      target: virtualbox
+      arch: amd64
+      runner: ubuntu-24.04
       use_remote_repo: ${{ inputs.use_remote_repo }}
 
-  iso-arm64:
-    uses: ./.github/workflows/build-iso-arm64.yml
+  ## Raw — amd64 #############################################################
+
+  whonix-lxqt-raw-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'raw-all'
+      || inputs.build_group == 'whonix-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'whonix')
+          && (inputs.flavor == 'all' || inputs.flavor == 'lxqt')
+          && (inputs.target == 'all' || inputs.target == 'raw')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
     with:
-      build_group: ${{ inputs.build_group }}
-      distro: ${{ inputs.distro }}
-      flavor: ${{ inputs.flavor }}
-      target: ${{ inputs.target }}
-      arch: ${{ inputs.arch }}
+      distro: whonix
+      flavor: lxqt
+      target: raw
+      arch: amd64
+      runner: ubuntu-24.04
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  whonix-cli-raw-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'raw-all'
+      || inputs.build_group == 'whonix-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'whonix')
+          && (inputs.flavor == 'all' || inputs.flavor == 'cli')
+          && (inputs.target == 'all' || inputs.target == 'raw')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: whonix
+      flavor: cli
+      target: raw
+      arch: amd64
+      runner: ubuntu-24.04
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  kicksecure-lxqt-raw-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'raw-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'lxqt')
+          && (inputs.target == 'all' || inputs.target == 'raw')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: kicksecure
+      flavor: lxqt
+      target: raw
+      arch: amd64
+      runner: ubuntu-24.04
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  kicksecure-cli-raw-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'raw-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'cli')
+          && (inputs.target == 'all' || inputs.target == 'raw')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: kicksecure
+      flavor: cli
+      target: raw
+      arch: amd64
+      runner: ubuntu-24.04
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  ## Raw — arm64 #############################################################
+
+  whonix-lxqt-raw-arm64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'raw-all'
+      || inputs.build_group == 'whonix-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'whonix')
+          && (inputs.flavor == 'all' || inputs.flavor == 'lxqt')
+          && (inputs.target == 'all' || inputs.target == 'raw')
+          && (inputs.arch == 'all' || inputs.arch == 'arm64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: whonix
+      flavor: lxqt
+      target: raw
+      arch: arm64
+      runner: ubuntu-24.04-arm
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  whonix-cli-raw-arm64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'raw-all'
+      || inputs.build_group == 'whonix-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'whonix')
+          && (inputs.flavor == 'all' || inputs.flavor == 'cli')
+          && (inputs.target == 'all' || inputs.target == 'raw')
+          && (inputs.arch == 'all' || inputs.arch == 'arm64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: whonix
+      flavor: cli
+      target: raw
+      arch: arm64
+      runner: ubuntu-24.04-arm
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  kicksecure-lxqt-raw-arm64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'raw-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'lxqt')
+          && (inputs.target == 'all' || inputs.target == 'raw')
+          && (inputs.arch == 'all' || inputs.arch == 'arm64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: kicksecure
+      flavor: lxqt
+      target: raw
+      arch: arm64
+      runner: ubuntu-24.04-arm
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  kicksecure-cli-raw-arm64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'raw-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'cli')
+          && (inputs.target == 'all' || inputs.target == 'raw')
+          && (inputs.arch == 'all' || inputs.arch == 'arm64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: kicksecure
+      flavor: cli
+      target: raw
+      arch: arm64
+      runner: ubuntu-24.04-arm
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  ## ISO — kicksecure only ###################################################
+
+  kicksecure-lxqt-iso-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'iso-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'lxqt')
+          && (inputs.target == 'all' || inputs.target == 'iso')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: kicksecure
+      flavor: lxqt
+      target: iso
+      arch: amd64
+      runner: ubuntu-24.04
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  kicksecure-cli-iso-amd64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'iso-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'cli')
+          && (inputs.target == 'all' || inputs.target == 'iso')
+          && (inputs.arch == 'all' || inputs.arch == 'amd64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: kicksecure
+      flavor: cli
+      target: iso
+      arch: amd64
+      runner: ubuntu-24.04
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  kicksecure-lxqt-iso-arm64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'iso-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'lxqt')
+          && (inputs.target == 'all' || inputs.target == 'iso')
+          && (inputs.arch == 'all' || inputs.arch == 'arm64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: kicksecure
+      flavor: lxqt
+      target: iso
+      arch: arm64
+      runner: ubuntu-24.04-arm
+      use_remote_repo: ${{ inputs.use_remote_repo }}
+
+  kicksecure-cli-iso-arm64:
+    if: >-
+      inputs.build_group == 'all'
+      || inputs.build_group == 'iso-all'
+      || inputs.build_group == 'kicksecure-all'
+      || (inputs.build_group == 'custom'
+          && (inputs.distro == 'all' || inputs.distro == 'kicksecure')
+          && (inputs.flavor == 'all' || inputs.flavor == 'cli')
+          && (inputs.target == 'all' || inputs.target == 'iso')
+          && (inputs.arch == 'all' || inputs.arch == 'arm64'))
+    uses: ./.github/workflows/build.yml
+    with:
+      distro: kicksecure
+      flavor: cli
+      target: iso
+      arch: arm64
+      runner: ubuntu-24.04-arm
       use_remote_repo: ${{ inputs.use_remote_repo }}
