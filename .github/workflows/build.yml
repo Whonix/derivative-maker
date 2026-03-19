@@ -59,6 +59,11 @@ jobs:
             sq \
             gpg-sq
 
+          ## Remove Trixie repo after installing what we need so
+          ## derivative-maker's own apt calls don't pull Debian packages.
+          sudo rm /etc/apt/sources.list.d/debian-trixie.list /etc/apt/preferences.d/debian-trixie
+          sudo apt-get update
+
       - name: Build Whonix gateway
         if: inputs.distro == 'whonix' && inputs.target != 'iso'
         run: |
