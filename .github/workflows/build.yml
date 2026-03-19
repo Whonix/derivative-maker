@@ -65,6 +65,8 @@ jobs:
             --target ${{ inputs.target }} \
             --type vm \
             --arch ${{ inputs.arch }} \
+            --allow-untagged true \
+            --allow-uncommitted true \
             ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
       - name: Build Whonix workstation
@@ -76,6 +78,8 @@ jobs:
             --target ${{ inputs.target }} \
             --type vm \
             --arch ${{ inputs.arch }} \
+            --allow-untagged true \
+            --allow-uncommitted true \
             ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
       - name: Build Kicksecure
@@ -87,6 +91,8 @@ jobs:
             --target ${{ inputs.target }} \
             --type ${{ inputs.target == 'iso' && 'host' || 'vm' }} \
             --arch ${{ inputs.arch }} \
+            --allow-untagged true \
+            --allow-uncommitted true \
             ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
       - name: Upload artifacts
