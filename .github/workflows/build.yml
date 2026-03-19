@@ -27,66 +27,61 @@ on:
 jobs:
   build:
     runs-on: ${{ inputs.runner }}
+    container:
+      image: debian:trixie
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
+      - name: Install prerequisites
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git \
+            sudo \
+            ca-certificates \
+            adduser
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           path: derivative-maker
           submodules: recursive
 
-      - name: Enable universe repository
-        run: sudo add-apt-repository -y universe
-
-      - name: Install build dependencies
+      - name: Create build user
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            grml-debootstrap \
-            debootstrap \
-            mmdebstrap \
-            kpartx \
-            qemu-utils \
-            rsync \
-            git \
-            curl \
-            ca-certificates \
-            lsb-release
-
-      - name: Install VirtualBox
-        if: inputs.target == 'virtualbox'
-        run: sudo apt-get install -y virtualbox
+          useradd -m user
+          echo 'user ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/user
+          chown -R user:user derivative-maker
 
       - name: Build gateway
         if: inputs.target != 'iso'
         run: |
           cd derivative-maker
-          ./derivative-maker \
+          su user -c './derivative-maker \
             --flavor ${{ inputs.distro }}-gateway-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --arch ${{ inputs.arch }} \
-            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}
+            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
       - name: Build workstation
         if: inputs.target != 'iso'
         run: |
           cd derivative-maker
-          ./derivative-maker \
+          su user -c './derivative-maker \
             --flavor ${{ inputs.distro }}-workstation-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --arch ${{ inputs.arch }} \
-            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}
+            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
       - name: Build ISO
         if: inputs.target == 'iso'
         run: |
           cd derivative-maker
-          ./derivative-maker \
+          su user -c './derivative-maker \
             --flavor ${{ inputs.distro }}-${{ inputs.flavor }} \
             --target iso \
             --arch ${{ inputs.arch }} \
-            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}
+            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
       - name: Upload artifacts
         if: always()
