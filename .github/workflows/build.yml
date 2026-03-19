@@ -27,74 +27,68 @@ on:
 jobs:
   build:
     runs-on: ${{ inputs.runner }}
-    container:
-      image: debian:trixie
     env:
       DEBIAN_FRONTEND: noninteractive
       CI: true
     steps:
-      - name: Install prerequisites
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            git \
-            sudo \
-            ca-certificates \
-            adduser \
-            lsb-release \
-            sq \
-            procps
-
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           path: derivative-maker
           submodules: recursive
 
-      - name: Create build user
+      - name: Enable universe repository
+        run: sudo add-apt-repository -y universe
+
+      - name: Install Debian keyring and missing packages
         run: |
-          useradd -m user
-          echo 'user ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/user
-          chown -R user:user derivative-maker
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            sq \
+            safe-rm \
+            approx \
+            debian-archive-keyring \
+            fasttrack-archive-keyring \
+            gpg-sq
 
       - name: Build Whonix gateway
         if: inputs.distro == 'whonix' && inputs.target != 'iso'
         run: |
           cd derivative-maker
-          su user -c './derivative-maker \
+          ./derivative-maker \
             --flavor whonix-gateway-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --type vm \
             --arch ${{ inputs.arch }} \
             --allow-untagged true \
             --allow-uncommitted true \
-            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
+            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}
 
       - name: Build Whonix workstation
         if: inputs.distro == 'whonix' && inputs.target != 'iso'
         run: |
           cd derivative-maker
-          su user -c './derivative-maker \
+          ./derivative-maker \
             --flavor whonix-workstation-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --type vm \
             --arch ${{ inputs.arch }} \
             --allow-untagged true \
             --allow-uncommitted true \
-            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
+            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}
 
       - name: Build Kicksecure
         if: inputs.distro == 'kicksecure'
         run: |
           cd derivative-maker
-          su user -c './derivative-maker \
+          ./derivative-maker \
             --flavor kicksecure-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --type ${{ inputs.target == 'iso' && 'host' || 'vm' }} \
             --arch ${{ inputs.arch }} \
             --allow-untagged true \
             --allow-uncommitted true \
-            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
+            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}
 
       - name: Upload artifacts
         if: always()

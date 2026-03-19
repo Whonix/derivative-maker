@@ -81,6 +81,12 @@ Are you building on Debian? Only building on Debian is supported."
       return 0
    fi
 
+   ## Allow non-Debian OS for CI builds.
+   if [ "$CI" = "true" ]; then
+      true "INFO: CI=true, skipping operating system version check."
+      return 0
+   fi
+
    if [ "$dist_build_apt_stable_release" = "$codename" ]; then
       true "INFO: up-to-date codename OK."
       return 0
