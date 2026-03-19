@@ -39,7 +39,8 @@ jobs:
             git \
             sudo \
             ca-certificates \
-            adduser
+            adduser \
+            lsb-release
 
       - name: Checkout repository
         uses: actions/checkout@v4
