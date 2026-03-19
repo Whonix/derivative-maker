@@ -31,6 +31,7 @@ jobs:
       image: debian:trixie
     env:
       DEBIAN_FRONTEND: noninteractive
+      CI: true
     steps:
       - name: Install prerequisites
         run: |
