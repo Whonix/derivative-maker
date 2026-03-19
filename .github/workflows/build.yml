@@ -29,11 +29,9 @@ jobs:
     runs-on: ${{ inputs.runner }}
     steps:
       - name: Checkout repository
-        run: |
-          git clone --depth=1 https://github.com/${{ github.repository }}.git derivative-maker
-          cd derivative-maker
-          git checkout ${{ github.sha }}
-          git submodule update --init --recursive --progress --jobs=4
+        uses: actions/checkout@v4
+        with:
+          path: derivative-maker
 
       - name: Enable universe repository
         run: sudo add-apt-repository -y universe
