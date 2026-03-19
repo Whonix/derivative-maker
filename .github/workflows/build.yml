@@ -1,0 +1,96 @@
+---
+name: Build (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      distro:
+        required: true
+        type: string
+      flavor:
+        required: true
+        type: string
+      target:
+        required: true
+        type: string
+      arch:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+      use_remote_repo:
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout repository
+        run: |
+          git clone --depth=1 https://github.com/${{ github.repository }}.git derivative-maker
+          cd derivative-maker
+          git checkout ${{ github.sha }}
+          git submodule update --init --recursive --progress --jobs=4
+
+      - name: Enable universe repository
+        run: sudo add-apt-repository -y universe
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            grml-debootstrap \
+            debootstrap \
+            mmdebstrap \
+            kpartx \
+            qemu-utils \
+            rsync \
+            git \
+            curl \
+            ca-certificates \
+            lsb-release
+
+      - name: Install VirtualBox
+        if: inputs.target == 'virtualbox'
+        run: sudo apt-get install -y virtualbox
+
+      - name: Build gateway
+        if: inputs.target != 'iso'
+        run: |
+          cd derivative-maker
+          sudo ./derivative-maker \
+            --flavor ${{ inputs.distro }}-gateway-${{ inputs.flavor }} \
+            --target ${{ inputs.target }} \
+            --arch ${{ inputs.arch }} \
+            ${{ inputs.use_remote_repo && '--repo true' || '' }}
+
+      - name: Build workstation
+        if: inputs.target != 'iso'
+        run: |
+          cd derivative-maker
+          sudo ./derivative-maker \
+            --flavor ${{ inputs.distro }}-workstation-${{ inputs.flavor }} \
+            --target ${{ inputs.target }} \
+            --arch ${{ inputs.arch }} \
+            ${{ inputs.use_remote_repo && '--repo true' || '' }}
+
+      - name: Build ISO
+        if: inputs.target == 'iso'
+        run: |
+          cd derivative-maker
+          sudo ./derivative-maker \
+            --flavor ${{ inputs.distro }}-${{ inputs.flavor }} \
+            --target iso \
+            --arch ${{ inputs.arch }} \
+            ${{ inputs.use_remote_repo && '--repo true' || '' }}
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.distro }}-${{ inputs.flavor }}-${{ inputs.target }}-${{ inputs.arch }}
+          path: ~/derivative-binary/
+          retention-days: 30

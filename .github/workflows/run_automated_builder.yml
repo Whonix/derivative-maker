@@ -2,59 +2,109 @@
 name: Run automated builder
 
 on:
-  pull_request:
-    branches: [master]
-  push:
-    branches:
-      #- master
-      - 'ci*'
-    tags:
-      - '*'
+  workflow_dispatch:
+    inputs:
+      build_group:
+        description: "Which jobs to run"
+        type: choice
+        default: all
+        options:
+          - all
+          - whonix-all
+          - kicksecure-all
+          - vbox-all
+          - raw-all
+          - iso-all
+          - custom
+      distro:
+        description: "Distro filter (custom only)"
+        type: choice
+        default: all
+        options:
+          - all
+          - whonix
+          - kicksecure
+      flavor:
+        description: "Flavor filter (custom only)"
+        type: choice
+        default: all
+        options:
+          - all
+          - lxqt
+          - cli
+      target:
+        description: "Target filter (custom only)"
+        type: choice
+        default: all
+        options:
+          - all
+          - virtualbox
+          - raw
+          - iso
+      arch:
+        description: "Architecture filter (custom only)"
+        type: choice
+        default: all
+        options:
+          - all
+          - amd64
+          - arm64
+      use_remote_repo:
+        description: "Pass --repo true to derivative-maker (fast build using remote packages)"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    env:
-      ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-      GIT_REPO: ${{ github.repository }}
-      REF_NAME: ${{ github.ref_name }}
-      REF_TYPE: ${{ github.ref_type }}
-      GITHUB_EVENT_NAME: ${{ github.event_name }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  vbox-amd64:
+    uses: ./.github/workflows/build-vbox-amd64.yml
+    with:
+      build_group: ${{ inputs.build_group }}
+      distro: ${{ inputs.distro }}
+      flavor: ${{ inputs.flavor }}
+      target: ${{ inputs.target }}
+      arch: ${{ inputs.arch }}
+      use_remote_repo: ${{ inputs.use_remote_repo }}
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: 3.12
+  raw-amd64:
+    uses: ./.github/workflows/build-raw-amd64.yml
+    with:
+      build_group: ${{ inputs.build_group }}
+      distro: ${{ inputs.distro }}
+      flavor: ${{ inputs.flavor }}
+      target: ${{ inputs.target }}
+      arch: ${{ inputs.arch }}
+      use_remote_repo: ${{ inputs.use_remote_repo }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ansible
+  raw-arm64:
+    uses: ./.github/workflows/build-raw-arm64.yml
+    with:
+      build_group: ${{ inputs.build_group }}
+      distro: ${{ inputs.distro }}
+      flavor: ${{ inputs.flavor }}
+      target: ${{ inputs.target }}
+      arch: ${{ inputs.arch }}
+      use_remote_repo: ${{ inputs.use_remote_repo }}
 
-      - name: Run automated builder
-        run: |
-          ./automated_builder/scripts/run_automated_builder.sh $ANSIBLE_VAULT_PASSWORD
+  iso-amd64:
+    uses: ./.github/workflows/build-iso-amd64.yml
+    with:
+      build_group: ${{ inputs.build_group }}
+      distro: ${{ inputs.distro }}
+      flavor: ${{ inputs.flavor }}
+      target: ${{ inputs.target }}
+      arch: ${{ inputs.arch }}
+      use_remote_repo: ${{ inputs.use_remote_repo }}
 
-      - name: Handle artifacts
-        if: always()
-        run: |
-          ./automated_builder/scripts/handle_artifacts.sh $ANSIBLE_VAULT_PASSWORD
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: logs
-          path: ./automated_builder/logs/
-
-      - name: Teardown build
-        if: always()
-        run: |
-          ./automated_builder/scripts/teardown_build.sh $ANSIBLE_VAULT_PASSWORD
+  iso-arm64:
+    uses: ./.github/workflows/build-iso-arm64.yml
+    with:
+      build_group: ${{ inputs.build_group }}
+      distro: ${{ inputs.distro }}
+      flavor: ${{ inputs.flavor }}
+      target: ${{ inputs.target }}
+      arch: ${{ inputs.arch }}
+      use_remote_repo: ${{ inputs.use_remote_repo }}
