@@ -1,9 +1,0 @@
----
-- name: Install build_vms_from_tag script
-  template:
-    src: ../templates/build_vms_from_tag.sh
-    dest: /home/ansible/build_vms_from_tag.sh
-    mode: 0744
-
-- name: Run build_vms_from_tag scripts
-  shell: "/home/ansible/build_vms_from_tag.sh"

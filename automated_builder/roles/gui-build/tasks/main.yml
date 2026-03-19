@@ -1,6 +1,0 @@
----
-- name: Install source code for commit
-  include_tasks: install_source.yml
-
-- name: Build VMs from tag
-  include_tasks: build_vms_from_tag.yml

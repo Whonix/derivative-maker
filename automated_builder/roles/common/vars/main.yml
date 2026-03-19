@@ -1,4 +1,0 @@
-REF_TYPE: "{{ lookup('env', 'REF_TYPE') }}"
-GIT_REPO: "{{ lookup('env', 'GIT_REPO') }}"
-REF_NAME: "{{ lookup('env', 'REF_NAME') }}"
-GITHUB_EVENT_NAME: "{{ lookup('env', 'GITHUB_EVENT_NAME') }}"
