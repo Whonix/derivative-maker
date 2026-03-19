@@ -27,11 +27,14 @@ on:
 jobs:
   build:
     runs-on: ${{ inputs.runner }}
+    env:
+      DEBIAN_FRONTEND: noninteractive
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           path: derivative-maker
+          submodules: recursive
 
       - name: Enable universe repository
         run: sudo add-apt-repository -y universe
