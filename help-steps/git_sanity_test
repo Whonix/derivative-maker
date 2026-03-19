@@ -247,7 +247,11 @@ git_sanity_test_main() {
    ## compromised, but if the repo is safe, this (in combination with the key
    ## import above) will do the initial verification, providing "trust on first
    ## use" (TOFU) security.
-   verify_ref "${dist_build_current_git_head}" 'commit'
+   if [ "$dist_build_ignore_untagged" = "true" ]; then
+      true "${bold}${cyan}$BASH_SOURCE INFO: Skipping verify_ref because --allow-untagged true is set.${reset}"
+   else
+      verify_ref "${dist_build_current_git_head}" 'commit'
+   fi
 
    git_sanity_test_check_for_untagged_commits
    git_sanity_test_check_for_uncommitted_changes
