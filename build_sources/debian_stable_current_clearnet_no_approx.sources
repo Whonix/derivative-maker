@@ -1,0 +1,17 @@
+## Same as debian_stable_current_clearnet.sources but pointing directly at
+## Debian mirrors instead of through the approx caching proxy. For use in CI
+## where approx/systemd is not available.
+
+Types: deb deb-src
+URIs: https://deb.debian.org/debian
+Suites: trixie trixie-updates
+Components: main contrib non-free non-free-firmware
+Enabled: yes
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb deb-src
+URIs: https://deb.debian.org/debian-security
+Suites: trixie-security
+Components: main contrib non-free non-free-firmware
+Enabled: yes
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
