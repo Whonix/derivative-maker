@@ -60,6 +60,7 @@ jobs:
           su user -c './derivative-maker \
             --flavor ${{ inputs.distro }}-gateway-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
+            --type vm \
             --arch ${{ inputs.arch }} \
             ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
@@ -70,6 +71,7 @@ jobs:
           su user -c './derivative-maker \
             --flavor ${{ inputs.distro }}-workstation-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
+            --type vm \
             --arch ${{ inputs.arch }} \
             ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
@@ -80,6 +82,7 @@ jobs:
           su user -c './derivative-maker \
             --flavor ${{ inputs.distro }}-${{ inputs.flavor }} \
             --target iso \
+            --type host \
             --arch ${{ inputs.arch }} \
             ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}'
 
