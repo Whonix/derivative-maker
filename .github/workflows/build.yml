@@ -19,7 +19,7 @@ on:
       runner:
         required: true
         type: string
-      use_remote_repo:
+      fast_build:
         required: false
         type: boolean
         default: false
@@ -65,7 +65,7 @@ jobs:
             --flavor ${{ inputs.distro }}-gateway-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --arch ${{ inputs.arch }} \
-            ${{ inputs.use_remote_repo && '--repo true' || '' }}
+            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}
 
       - name: Build workstation
         if: inputs.target != 'iso'
@@ -75,7 +75,7 @@ jobs:
             --flavor ${{ inputs.distro }}-workstation-${{ inputs.flavor }} \
             --target ${{ inputs.target }} \
             --arch ${{ inputs.arch }} \
-            ${{ inputs.use_remote_repo && '--repo true' || '' }}
+            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}
 
       - name: Build ISO
         if: inputs.target == 'iso'
@@ -85,7 +85,7 @@ jobs:
             --flavor ${{ inputs.distro }}-${{ inputs.flavor }} \
             --target iso \
             --arch ${{ inputs.arch }} \
-            ${{ inputs.use_remote_repo && '--repo true' || '' }}
+            ${{ inputs.fast_build && '--repo true --remote-derivative-packages true' || '' }}
 
       - name: Upload artifacts
         if: always()
