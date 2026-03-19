@@ -59,9 +59,9 @@ jobs:
           ## kpartx -d fails in containers because device mapper can't fully
           ## clean up loop devices. The image is already written at this point
           ## so the failure is harmless. Add || true to tolerate it.
-          sed -i 's|kpartx -d "${ORIG_TARGET}" >/dev/null$|kpartx -d "${ORIG_TARGET}" >/dev/null || true|' \
+          sed -i 's#kpartx -d "${ORIG_TARGET}" >/dev/null$#kpartx -d "${ORIG_TARGET}" >/dev/null || true#' \
             derivative-maker/grml-debootstrap/grml-debootstrap
-          sed -i 's|kpartx -d "/dev/${LOOP_DISK}" >/dev/null$|kpartx -d "/dev/${LOOP_DISK}" >/dev/null || true|' \
+          sed -i 's#kpartx -d "/dev/${LOOP_DISK}" >/dev/null$#kpartx -d "/dev/${LOOP_DISK}" >/dev/null || true#' \
             derivative-maker/grml-debootstrap/grml-debootstrap
 
       - name: Create build user
