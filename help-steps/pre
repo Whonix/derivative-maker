@@ -5,7 +5,7 @@
 
 ## ERR path:
 ##   exception_handler_general | exception_handler_unchroot_unmount | exception_handler_unmount
-##   -> exception_handler_process_shared -> function_trace_function -> process_backtrace_function -> exception_handler_shell -> exception_handler_retry -> exception_handler_maybe_exit
+##   -> exception_handler_process_shared -> function_trace -> process_backtrace -> exception_handler_shell -> exception_handler_retry -> exception_handler_maybe_exit
 ## INT/TERM path:
 ##   exception_handler_signal -> variant cleanup -> exit 128+signum
 
@@ -26,46 +26,27 @@ shopt -s inherit_errexit
 
 true "${BASH_SOURCE[0]} INFO: begin"
 
-## Suspend xtrace around a block of top-level code that must not be echoed
-## to logs (e.g. secret handling, noisy third-party parser output). Saves
-## the current xtrace state to a single-level global and disables xtrace.
-## Restore with xtrace_restore.
-##
-## Usage:
-##   xtrace_off
-##   export SECRET="$1"       # not traced
-##   xtrace_restore           # xtrace is back to whatever it was
-##
-## Uses a single global (dist_build_xtrace_prev_state); nested
-## xtrace_off/xtrace_restore calls are not supported. For function-scoped
-## silencing inside a function, a local 'trap ... RETURN' snapshot of
-## 'shopt -po xtrace' is cleaner (see function_trace_function).
-xtrace_off() {
-   if test -o xtrace; then
-      dist_build_xtrace_prev_state=on
-   else
-      dist_build_xtrace_prev_state=off
-   fi
-   set +x
-}
-
-xtrace_restore() {
-   ## Read and unset the saved state BEFORE the 'set -x' below so the
-   ## 'unset' does not itself print a trace line after xtrace is re-enabled.
-   local _should_restore="${dist_build_xtrace_prev_state:-off}"
-   unset dist_build_xtrace_prev_state
-   if [ "$_should_restore" = "on" ]; then
-      set -x
-   fi
-}
+## Source helper-scripts libraries that pre depends on. xtrace.bsh
+## must be loaded first because the colors source below is wrapped in
+## xtrace_off / xtrace_restore (and the trap functions further down
+## reach for benchmark_format / function_trace / process_backtrace).
+helper_scripts_libexec="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts"
+# shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/xtrace.bsh
+source "${helper_scripts_libexec}/xtrace.bsh"
 
 xtrace_off
 ## help-steps/pre uses color variables (e.g. $red, $bold, $reset) in its
 ## error messages and in root_check (called at end of this file). Source
 ## colors here so callers don't have to worry about source order.
 ## Sourcing it again later (from the caller) is idempotent.
-source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/get_colors.sh"
+# shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/get_colors.sh
+source "${helper_scripts_libexec}/get_colors.sh"
+# shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/benchmark.bsh
+source "${helper_scripts_libexec}/benchmark.bsh"
+# shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/trace.bsh
+source "${helper_scripts_libexec}/trace.bsh"
 xtrace_restore
+unset helper_scripts_libexec
 
 ## Keep xtrace on if '--debug' was passed; otherwise silence it. Cannot be
 ## moved to help-steps/parse-cmd because parse-cmd runs later.
@@ -93,13 +74,8 @@ fi
 ## parse-cmd still wins.
 args=()
 
-output_cmd_set() {
-   if [ -o xtrace ]; then
-      output_cmd="true"
-   else
-      output_cmd="echo"
-   fi
-}
+## output_cmd_set is sourced from helper-scripts (xtrace.bsh) at the
+## top of this file.
 
 build_run_function() {
    case "${build_skip_run_functions:-}" in
@@ -128,95 +104,9 @@ error() {
    true
 }
 
-function_trace_function() {
-   #$output_cmd "INFO: BEGIN: ${FUNCNAME[0]}"
-   ## 'local -' saves the current shell options (xtrace etc.) and
-   ## restores them when this function returns. 'set +x' below silences
-   ## the function's own machinery without needing a RETURN trap.
-   local -
-   set +x
-   local frame temp one two
-   ## Reset the (global) result so repeat errors (auto-retry, multiple
-   ## trap invocations) do not append onto stale frames from a prior call.
-   function_trace_result=""
-   frame="0"
-   while caller >/dev/null 2>&1 $frame; do
-      temp="$(caller $frame)" || true
-      read -r one two _ <<< "$temp"
-      if [ "${function_trace_result:-}" = "" ] ; then
-         function_trace_result="$two (line number: $one)"
-      else
-         function_trace_result="$function_trace_result
-$two (line number: $one)"
-      fi
-      frame="$(( $frame + 1 ))" || true
-   done
-   function_trace_result="$(echo "$function_trace_result" | tac)" || true
-   #$output_cmd "INFO: END  : ${FUNCNAME[0]}"
-}
-
-## {{{ process_backtrace_function - GPL v2.0 (only)
-
-process_backtrace_function() {
-   ## function    : process_backtrace_function
-   ## Copyright   : Gian Paolo Ghilardi
-   ## LICENSE     : GPL v2.0 (only)
-   ## Source      : http://stackoverflow.com/a/1438241/2605155
-   ## Modification: Patrick Schleizer
-   #$output_cmd "INFO: BEGIN: ${FUNCNAME[0]}"
-   ## 'local -' saves shell options (xtrace etc.) and restores them on
-   ## return, so 'set +x' below silences this function's own machinery
-   ## without needing a RETURN trap.
-   local -
-   set +x
-   local TRACE CP CMDLINE PP loop_counter who_ami ps_p_output
-   loop_counter=0
-   who_ami="$(whoami)" || true
-   TRACE=""
-   CP="$$" ## PID of the script itself [1]
-   while true ; do
-      loop_counter="$(( loop_counter + 1 ))"
-      if [ "${loop_counter:-0}" -ge 20 ]; then
-         printf '%s\n' "${FUNCNAME[0]} ERROR: who_ami: $who_ami | user_name: ${user_name:-} | loop counter greater than 20. Aborting ${FUNCNAME[0]}."
-         break
-      fi
-      if [ "${CP:-}" = "" ]; then
-         printf '%s\n' "${FUNCNAME[0]} ERROR: who_ami: $who_ami | user_name: ${user_name:-} | Variable CP is empty."
-         break
-      fi
-      if [ "${CP:-}" = "1" ]; then
-         ## we reach 'init' [PID 1] => backtrace end
-         TRACE="$TRACE : init\n"
-         break
-      fi
-      ## Reset per-iteration state so a missing /proc/$CP/{cmdline,status}
-      ## (e.g. a parent process that died mid-backtrace) does not carry the
-      ## previous iteration's values into this one, which would mis-attribute
-      ## a cmdline to the wrong PID and walk back into an already-visited
-      ## parent on the next iteration.
-      CMDLINE=""
-      PP=""
-      if test -f "/proc/$CP/cmdline" ; then
-         CMDLINE="$(cat "/proc/$CP/cmdline" | tr '\000' ' ')" || true
-      else
-         ps_p_output="$(ps --no-headers -p "$CP")" || true
-         printf '%s\n' "${FUNCNAME[0]} ERROR: who_ami: $who_ami | user_name: ${user_name:-} | /proc/$CP/cmdline does not exist | ps_p_output: $ps_p_output"
-      fi
-      if test -f "/proc/$CP/status" ; then
-         PP="$(grep -- PPid "/proc/$CP/status" | awk '{ print $2; }')" || true
-      else
-         ps_p_output="$(ps --no-headers -p "$CP")" || true
-         printf '%s\n' "${FUNCNAME[0]} ERROR: who_ami: $who_ami | user_name: ${user_name:-} | /proc/$CP/status does not exist | ps_p_output: $ps_p_output"
-      fi
-      TRACE="$TRACE : $CMDLINE\n"
-      CP="$PP"
-   done
-   ## using tac to "print in reverse" [3]
-   process_backtrace_result="$(echo -en "$TRACE" | tac | grep --line-number -- ":")" || true
-   #$output_cmd "INFO: END  : ${FUNCNAME[0]}"
-}
-
-## }}} process_backtrace_function - GPL v2.0 (only)
+## function_trace and process_backtrace are sourced from
+## helper-scripts (trace.bsh) at the top of this file. They print
+## their result to stdout; callers capture into a local variable.
 
 exception_handler_shell() {
    $output_cmd "${cyan}${bold}INFO: Opening interactive shell...${reset}"
@@ -293,8 +183,11 @@ exception_handler_process_shared() {
    local first
    read -r first _ <<< "$last_failed_bash_command" || true
 
-   process_backtrace_function ## sets process_backtrace_result
-   function_trace_function ## sets function_trace_result
+   ## process_backtrace and function_trace print their result to
+   ## stdout; capture into a local before referencing in the report.
+   local process_backtrace_result function_trace_result
+   process_backtrace_result="$(process_backtrace)"
+   function_trace_result="$(function_trace)"
    output_cmd_set
    $output_cmd "
 ${cyan}${bold}############################################################${reset}
@@ -600,35 +493,10 @@ fi
 ## shell started or since the last assignment to it - so we get script
 ## timing without spawning date(1). Reset here to make 'seconds since
 ## this script was sourced' the baseline.
+##
+## benchmark_format / benchmark_since are sourced from helper-scripts
+## (benchmark.bsh) at the top of this file.
 SECONDS=0
-
-## Format integer seconds as a compact duration: '0s', '42s', '3m42s',
-## '1h03m42s'. 'local -; set +x' suspends xtrace for the function body
-## so the bookkeeping arithmetic does not clutter traces; 'local -'
-## restores the caller's xtrace state on return.
-benchmark_format() {
-   local -
-   set +x
-   local s=${1:-0}
-   if (( s >= 3600 )); then
-      printf '%dh%02dm%02ds' "$((s/3600))" "$(((s%3600)/60))" "$((s%60))"
-   elif (( s >= 60 )); then
-      printf '%dm%02ds' "$((s/60))" "$((s%60))"
-   else
-      printf '%ds' "$s"
-   fi
-}
-
-## Return elapsed time since the given $SECONDS snapshot, formatted.
-## Usage:
-##   local start=$SECONDS
-##   do_work
-##   printf 'took %s\n' "$(benchmark_since "$start")"
-benchmark_since() {
-   local -
-   set +x
-   benchmark_format "$(( SECONDS - ${1:-0} ))"
-}
 
 exithandler() {
    local exit_code=$?
