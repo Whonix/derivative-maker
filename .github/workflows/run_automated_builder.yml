@@ -11,6 +11,19 @@ on:
     tags:
       - '*'
 
+## Defensive minimum-permissions block. Documents the GITHUB_TOKEN
+## scope this workflow needs, isolating it from the org-level "default
+## workflow permissions" setting (which dm-github-policy pins to read).
+##
+## actions: write is intentionally NOT granted. actions/upload-artifact@v7
+## was tested empirically (see commit history for the throwaway
+## test/artifact-permissions branch and run 24967508066) and works
+## correctly with contents: read alone - the artifact backend uses the
+## workflow run's own identity, not the GITHUB_TOKEN's permission scope,
+## so no actions: write is required.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
