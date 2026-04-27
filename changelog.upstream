@@ -1,3 +1,877 @@
+commit 8879d289ff39c01b9c9f4c66e7a8aa949a26f561
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Apr 27 11:35:19 2026 -0400
+
+    .
+
+commit 5f1d3237b6261f170e65e01d649822d33d904c0b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Apr 27 11:32:40 2026 -0400
+
+    comment
+
+commit dee9e2b175603121b487cf7e3765ce9b2e298bd9
+Merge: 48fc536d8 441e6dde5
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Apr 27 11:30:32 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/configure-repo-access-hZI4X'
+
+commit 48fc536d8cf6c57240550d8aceee02f06fb1cda6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Apr 27 11:17:24 2026 -0400
+
+    .
+
+commit a1eca7f3bdbb695ba9b2766e8f8b84e36fc6ae65
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Apr 27 10:44:28 2026 -0400
+
+    .
+
+commit 60017e309ef2ccd3bfb9aedf77f16257005f4546
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Apr 27 05:44:41 2026 -0400
+
+    .
+
+commit 441e6dde574bbee9e052a35da425e2ffe184b588
+Author: Claude <noreply@anthropic.com>
+Date:   Mon Apr 27 07:01:40 2026 +0000
+
+    run_automated_builder: add defensive permissions: contents=read
+
+    Adds an explicit minimum-permissions block to insulate this workflow
+    from org-level "default workflow permissions" changes (which
+    dm-github-policy pins to read). The block documents intent and makes
+    the workflow self-contained for auditors.
+
+    actions: write is deliberately NOT granted. actions/upload-artifact@v7
+    was tested empirically against contents=read alone via a throwaway
+    test/artifact-permissions branch (run id 24967508066: both
+    permissions variants succeeded). The artifact backend uses the
+    workflow run's own identity, separate from the GITHUB_TOKEN's
+    permission scope, so the upload step does not require actions: write.
+
+commit 5a709de5a0fb5cbf09fd4dc41e6f1ae2c36b0a5b
+Author: Claude <noreply@anthropic.com>
+Date:   Sun Apr 26 17:01:56 2026 +0000
+
+    help-steps/pre: source migrated helpers from helper-scripts
+
+    Removes the inline definitions of helpers that have moved into
+    helper-scripts (Tier 1+2 migration on the helper-scripts feature
+    branch). pre now sources them at startup; the on-disk function
+    contracts and call sites are equivalent except where the trace
+    helpers got renamed.
+
+    Removed (now sourced from helper-scripts):
+    - xtrace_off / xtrace_restore         -> xtrace.bsh
+    - output_cmd_set                      -> xtrace.bsh
+    - benchmark_format / benchmark_since  -> benchmark.bsh
+    - function_trace_function             -> trace.bsh as function_trace
+    - process_backtrace_function          -> trace.bsh as process_backtrace
+
+    Caller updates (exception_handler_process_shared):
+    - function_trace_function / process_backtrace_function calls replaced
+      with function_trace / process_backtrace, capturing stdout into local
+      variables (the lib helpers no longer write to function_trace_result
+      / process_backtrace_result globals).
+
+    Naming:
+    - The xtrace saved-state global dist_build_xtrace_prev_state is now
+      helper_xtrace_prev_state (defined in xtrace.bsh). Confirmed via grep
+      that no other file in derivative-maker referenced the old name.
+
+    Sourcing layout:
+    - A single helper_scripts_libexec variable derives the path once;
+      all four sources reuse it. xtrace.bsh is loaded before colors
+      because the colors source is wrapped in xtrace_off / xtrace_restore.
+
+    NOTE: This commit assumes the packages/kicksecure/helper-scripts
+    submodule pointer will be bumped to a commit that includes the new
+    .bsh files. The bump is intentionally left to the maintainer to do
+    after the helper-scripts PR merges to master.
+
+    File shrinks from 714 to 582 lines.
+
+commit 22b7e8f150f06698981d74fbb4f1f8406b295af1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 06:42:39 2026 -0400
+
+    fix
+
+commit fcc74cad98c9309051b490407c7a06d9dc3c8d96
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 06:39:36 2026 -0400
+
+    fix
+
+commit 6ff82581fb8b92dff6409395e8067056618c49cc
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 06:35:31 2026 -0400
+
+    restore
+
+commit 0ff7013a64f630ad9c7f514956203b9f38d416f8
+Merge: 56802a2fa b1e8d7a1c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 06:28:36 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/vbox-mac-m1-support-QJrIL'
+
+commit b1e8d7a1c2d4a69e7f08f7b75c63b4016e802c6c
+Author: Claude <noreply@anthropic.com>
+Date:   Sun Apr 26 10:05:41 2026 +0000
+
+    virtualbox: build VBoxManage VMs inside an amd64 cowbuilder chroot
+
+    Mac M1/M2 support requires producing an arm64 VirtualBox OVA, but
+    VirtualBox is not packaged for arm64 Linux. On an arm64 Linux host the
+    build must therefore call 'VBoxManage' from amd64 -- which means
+    inside an amd64 cowbuilder chroot. Apply the same chroot path on
+    amd64 hosts too, so the build host stays clean.
+
+    Pipeline:
+
+    - build-steps.d/1300_cowbuilder-setup: when '--target virtualbox' the
+      amd64 cowbuilder chroot now also gets VirtualBox installed via
+      'help-steps/pbuilder-chroot-script-virtualbox' (the "TODO: Enable
+      after running create-vbox-vm inside chroot" hook). Already-existing
+      arm64-target -> amd64-chroot logic is reused.
+
+    - build-steps.d/4600_create-vbox-vm: turned into a thin host-side
+      wrapper that serialises '$env_vars_keep_list' (curated allowlist
+      from 'help-steps/variables') to an env file and invokes the new
+      'help-steps/pbuilder-chroot-script-create-vbox-vm' inside the amd64
+      chroot via 'cowbuilder --execute --save-after-login'. Bind-mounts
+      source + build folders at identical absolute paths so
+      '$binary_image_raw_file' & friends resolve.
+
+    - help-steps/pbuilder-chroot-script-create-vbox-vm (new): runs the
+      'VBoxManage convertfromraw / createvm / modifyvm / storageattach'
+      sequence as the 'dm-vbox-temp' user inside the chroot. Was the
+      body of the old 4600.
+
+    - build-steps.d/1200_prepare-build-machine: drop the host-side
+      'virtualbox-installation', 'check-virtualbox-installed',
+      'create-virtualbox-temporary-user', the
+      'linux-headers-$host_architecture' dep, and the VirtualBox branch
+      of 'check-vm-exists'. The host no longer needs VirtualBox, the
+      'dm-vbox-temp' user, or kernel headers.
+
+    - help-steps/variables: extend '$env_vars_keep_list' with the
+      VM-identity / paths / SUDO_TO_VBOX_TEMP / build_dry_run /
+      source_code_folder_dist / dist_developer_meta_files_folder
+      variables that 4600 needs to pass into the chroot. Single source
+      of truth for "what crosses the boundary" (no parallel list).
+      Default '$rsync_cmd' to "echo simulate-only rsync" when
+      '$build_dry_run=true' so dry-run builds don't need a real rsync
+      upload pipe.
+
+    - build-steps.d/5200_prepare-release: NOT moved into the chroot.
+      See the long TODO inside its 'prepare-release()' function for the
+      full rationale; in short, wrapping all of 'dm-prepare-release'
+      into the chroot required bind-mounting the operator's release
+      signing/upload credentials in, which was too heavy and fragile.
+      The right fix is upstream in 'Kicksecure/developer-meta-files':
+      factor the 'VBoxManage'-using portion of 'dm-prepare-release' out
+      so signing/upload stays on the host. Until that lands,
+      '--target virtualbox' will fail at this step; '--target qcow2 /
+      raw / iso / windows / utm' continue to work.
+
+    dry-run signing path:
+
+    - build-steps.d/1200_prepare-build-machine 'signing_key()': add a
+      'build_dry_run=true' branch that calls 'signing-key-create' to
+      auto-generate a signify keypair, between the 'CI=true' and
+      'redistributable' branches. Without this, dry-run could not
+      exercise the signing path on a dev box without real keys.
+    - build-steps.d/1100_sanity-tests
+      'check-redistributable-builds-requirements': add a
+      'build_dry_run=true' early-return alongside the existing
+      '$CI=true' early-return. Real redistributable hard-error path
+      preserved for the operator-on-workstation case. CI early-return
+      comment corrected: ansible vault holds DigitalOcean / ssh keys,
+      NOT release signing keys; release keys are auto-generated per
+      build by 'signing-key-create'.
+    - help-steps/dm-build-official-one: skip the 'test -d ~/.ssh' check
+      in dry-run mode (rsync is mocked, ssh is unused).
+
+    cross-cutting test infrastructure:
+
+    - help-steps/run-as-user (new): idempotent root-to-user drop wrapper.
+      'sudo help-steps/run-as-user [--chown <dir>] <user> -- <cmd...>'.
+      Useradd if missing, atomic visudo+sponge passwordless-sudo
+      drop-in, optional source-tree chown, then 'sudo -u' handoff.
+      Re-entrant (no-op if caller is already <user>); refuses to
+      escalate from any non-root non-target uid; refuses suspicious
+      usernames.
+    - automated_builder/scripts/run_local_dry_run.sh (new): local
+      smoke-test harness. Delegates user/sudoers/chown to run-as-user;
+      itself owns only the test-specific bits (default flavor / arch,
+      '--dry-run true' flag, narrowing 'flavors_list', pre-setting the
+      env vars 'help-steps/variables' needs before parse-cmd has run,
+      submodule init guard). 'set -x' is gated on '$CI=true' so local
+      invocations are clean. Documented: on non-Debian-trixie hosts use
+      'sudo ./docker/derivative-maker-docker-run -- --dry-run true ...'
+      instead.
+
+    minor docker fix:
+
+    - docker/derivative-maker-docker-setup: gate the 'adduser' / sudoers
+      drop-in on '$USER != root' so the host-side
+      'sudo --non-interactive -- ./docker/derivative-maker-docker-setup'
+      call from 'help-steps/dm-build-official-one' CI branch stops
+      silently writing a useless 'root ALL=(ALL) NOPASSWD:ALL' file
+      (its own pre-existing TODO BUG comment).
+
+    shell strictness:
+
+    All four new scripts use the codebase-standard preamble
+    ('set -o errexit/nounset/pipefail/errtrace'), '${var:-}' guards on
+    optional env-file vars, '${BASH_SOURCE[0]}', and '"$*"' over '"$@"'
+    in trace messages.
+
+    Verified:
+    - All four new scripts pass 'bash -n'.
+    - 'help-steps/run-as-user' unit-tested for re-entrance, root-to-user
+      drop, missing '--' rejection, non-root non-target rejection.
+    - 'help-steps/variables' env-allowlist dump unit-tested with seeded
+      'SSH_AUTH_SOCK' / 'GPG_AGENT_INFO' / 'ANSIBLE_VAULT_PASSWORD' /
+      'AWS_SECRET_ACCESS_KEY' in parent env -- none leak through.
+    - '1100_sanity-tests' check-redistributable matrix tested for all
+      four 'redistributable / CI / build_dry_run' combinations.
+    - End-to-end harness on this branch (Ubuntu 24.04 sandbox) reaches
+      the trixie-vs-noble OS-codename gate cleanly: 'run-as-user'
+      writes the sudoers drop-in, drops to ubuntu,
+      'dm-build-official-one' logs "Skipping test if folder ~/.ssh
+      exists in dry-run mode", 1100 auto-creates only '~/.gnupg'
+      (other folders correctly deferred to their owners), no 'missing
+      required folder' or 'unbound variable' errors. A full end-to-end
+      dry-run requires Debian trixie + network access to
+      deb.debian.org, which the sandbox blocks.
+
+    https://claude.ai/code/session_01E1HCwZkSuVL4JqyfAote3i
+
+commit 56802a2fa686116ea913852bac62c265988cc926
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 05:54:03 2026 -0400
+
+    .
+
+commit b560f9c77e57b4788f5b877bb4e4817042766f7d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 05:52:08 2026 -0400
+
+    .
+
+commit e987f921edb09faffcac3aefede05425b2827f40
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 05:50:20 2026 -0400
+
+    TODO
+
+commit 6daaf546348fa1f3ce407aba32936c8ec37b4955
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 05:50:11 2026 -0400
+
+    .
+
+commit 521e605765166dc969e89f5b476523c98516d97b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 05:06:22 2026 -0400
+
+    fix
+
+commit 8624c1a7f92a8e224ddd3bdad815f92c72949790
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 04:58:42 2026 -0400
+
+    fix
+
+commit 2f1eee5b1acceaaf4776943c92d29fe1ad219f3f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 04:58:33 2026 -0400
+
+    .
+
+commit d3618b5d76f7afdbff6b687b5207a019c41ae3b5
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 04:46:22 2026 -0400
+
+    fix
+
+commit d73c4bc7743f42f222757804bcdecb24a7fcd641
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 04:24:12 2026 -0400
+
+    fix
+
+commit 19416e4356306a33842754a9177227eecb30ca57
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 04:16:19 2026 -0400
+
+    fix
+
+commit a4795c2c256430b122bf7e9bae5ea8d4ba79cbb7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Apr 26 03:56:50 2026 -0400
+
+    fix
+
+commit c2eefa403615218e78a55a26bbaa7786fb68904c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 08:43:40 2026 -0400
+
+    .
+
+commit 8d1811db2590b4da9d59e376e5687dadcba34c3c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 08:42:45 2026 -0400
+
+    fix
+
+commit e5b4b7a6b7a9c3792c11543f2dcd5fdc18945d87
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 08:36:44 2026 -0400
+
+    fix
+
+commit b1139de455e1840858732378627f7072e4b1bc33
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 08:36:37 2026 -0400
+
+    .
+
+commit f50519286f0e40a035b5a027e26bd4ee75d39608
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 08:21:10 2026 -0400
+
+    xtrace
+
+commit 0c1c8aecd71e6c9e4ae171f47e132f90d4c5e0c9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 08:18:10 2026 -0400
+
+    fix
+
+commit 7fce5990d494d5ecdaf95a293e5557bde78e810f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 08:02:44 2026 -0400
+
+    fix
+
+commit e6844c62d345e97653450fe67173783aaeb46c63
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:54:27 2026 -0400
+
+    .
+
+commit 99903da9f7c958937c92b6d32b3668e13b61db60
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:54:01 2026 -0400
+
+    xtrace
+
+commit 75c62165609d4f5205b0550d57340cafae493dae
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:48:52 2026 -0400
+
+    xtrace
+
+commit 0bcca1f7f0d57f8cb9908bc7439394907c0e0fc5
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:45:17 2026 -0400
+
+    no longer source colors as this is done by pre already nowadays
+
+commit 523bb3ce3277ca414243fe9237e760daa5a18213
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:41:00 2026 -0400
+
+    no longer source colors as this is done by pre already nowadays
+
+commit 66d7cdae19891f5113fe6e6937f527b95403c015
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:39:42 2026 -0400
+
+    .
+
+commit 94f1b17dff5b7cc3d2f3cda4981eb43dd7babb76
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:18:08 2026 -0400
+
+    fix
+
+commit a36a76290ee29621d6d884f9ae08347a3764a101
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:17:49 2026 -0400
+
+    .
+
+commit 073a103d5e87af12bf1b0f6ac1339f18bdbc82e6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:08:55 2026 -0400
+
+    .
+
+commit b5c67c423b65b9d1b38cf9a918bff32155d5b741
+Merge: 282860a83 9e02166f6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:07:09 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/add-bash-error-handling-Wro3p'
+
+commit 9e02166f60f26b6965b394813f4655940b870e18
+Author: Claude <noreply@anthropic.com>
+Date:   Sat Apr 25 11:05:32 2026 +0000
+
+    parse-cmd, derivative-maker: guard $1/$2 under nounset
+
+    Reviewer-flagged regressions from strict-mode enablement. With
+    'set -o nounset' enabled, unguarded positional-parameter expansion
+    crashes with 'unbound variable' before existing user-facing
+    validation can give a friendly error.
+
+    - derivative-maker:72: 'if [ "$1" = "--help" ]' was unsafe when the
+      script is invoked with no arguments. Use 'if [ "${1:-}" = "--help" ]'.
+
+    - help-steps/parse-cmd: 12 bare '$2' references in option-value
+      branches - info-log lines like 'true "INFO: --type $2 chosen."',
+      the 'implicit_dist_type_*' value-passing strings, and the
+      'BUILD_INITRAMFS_PKGS' / 'BUILD_KERNEL_PKGS' / 'BUILD_HEADER_PKGS'
+      'export ... $2' appends - all crashed under nounset when the
+      preceding flag (e.g. '--type') was passed without a value.
+      Mass-fixed to '${2:-}'. The existing per-branch validation
+      ('parse_cmd_type_error', 'parse_cmd_flavor_error', etc.) now runs
+      as intended on missing values.
+
+commit 282860a8391580e25d1d9a218f4f876afa58b63c
+Merge: 4e94fad69 604ca7b36
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 07:01:34 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/add-bash-error-handling-Wro3p'
+
+commit 4e94fad699c066fcfac97f94186a0f548ac729e0
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 06:30:46 2026 -0400
+
+    .
+
+commit 7ab19f15307beeab0b30ffcc046f615c4e409852
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 06:26:59 2026 -0400
+
+    .
+
+commit be982e832cac3a5bf2de66339133e1e2203f4a39
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 06:24:38 2026 -0400
+
+    .
+
+commit 604ca7b367fd6ff2a01529a2ccca512217f85796
+Author: Claude <noreply@anthropic.com>
+Date:   Sat Apr 25 07:29:14 2026 +0000
+
+    Bash error-handling and idiomatic-bash overhaul
+
+    Tree-wide pass to make every bash script robust under strict mode and
+    shellcheck-clean. 76 files changed, +1814 -1403.
+
+    1) Strict mode header on all 72 scripts.
+
+       Every script now starts with the same header (after shebang +
+       copyright):
+
+           set -x          (or '#set -x' if the original did not enable it)
+           set -o errexit
+           set -o nounset
+           set -o pipefail
+           set -o errtrace
+
+       Removed shorthand 'set -e' and redundant later-in-file 'set -o ...'
+       repeats. Also applied to buildconfig.d/*.conf (sourced config
+       files).
+
+    2) nounset compatibility.
+
+       Mechanical rewrites at every callsite for the full bracket-test
+       family:
+           [ -n "\$var" ]                    -> [ -n "\${var:-}" ]
+           [ -z "\$var" ]                    -> [ -z "\${var:-}" ]
+           [ "\$var" = "..." ]               -> [ "\${var:-}" = "..." ]
+           [ "\$var" != "..." ]              -> [ "\${var:-}" != "..." ]
+           [ ! "\$var" = "..." ]             -> [ ! "\${var:-}" = "..." ]
+           [[ -n "\$var" ]] / [[ ... ]]      -> guarded form
+           [ "\$var" -eq/-ne/-lt/-gt/... ]   -> [ "\${var:-0}" -eq ... ]
+
+       Targeted fixes in the core library files:
+       - help-steps/pre: guard \${dist_build_version:-} / \${trap_signal_type_last:-}
+         / \${error_reason:-} at the few points that reference them before
+         assignment; pre also sources help-steps/colors itself so callers
+         no longer have to worry about source order.
+       - help-steps/colors: declare every color var to '' at the top so
+         non-tty (no \$TERM, no -t 2) sourcing does not leave them unbound.
+       - help-steps/parse-cmd: 'case \$1 in' -> 'case "\${1:-}" in'; same for
+         all naked '"\$1"' / '"\$2"' references in the option parser.
+       - help-steps/pbuilder-chroot-script-{main,virtualbox} and the
+         pbuilder hooks: drop unavailable-in-chroot color references
+         (plain 'true "INFO: ..."'); restructure the
+         '[ -n "\$TMP" -a ! -d "\$TMP" ] && mkdir -p "\$TMP" || true' /
+         'chmod 1777 "\$TMP"' lines to a guarded
+         'if [ -n "\${TMP:-}" ]; then ...; fi' so unbound TMP/TMPDIR is
+         handled cleanly.
+
+    3) help-steps/pre refactor.
+
+       - Sources colors directly so root_check (called at the end of pre)
+         has \$red / \$bold / \$reset available regardless of caller order.
+       - Add 'shopt -s inherit_errexit' so '\$( cmd1; cmd2 )' command
+         substitutions inherit errexit, instead of bash's default of
+         silently disabling errexit inside the substitution subshell.
+       - Make 'set +e' conditional. The retry / interactive-continue
+         paths in the ERR handler need errexit OFF (a trap cannot put a
+         script back on its feet under errexit; bash exits after the
+         trap regardless). Fail-fast callers - opt in by exporting both
+         'dist_build_auto_retry=0' and 'dist_build_non_interactive=true'
+         before sourcing pre - keep errexit ON for the whole script. CI
+         scripts in automated_builder/scripts/* now use this and source
+         pre directly; the duplicate xtrace_off/xtrace_restore helpers
+         in functions.bash were removed.
+       - root_check: 'dist_build_allow_root=true' escape hatch so CI
+         runners / containers without a non-root user can source pre.
+       - Reusable top-level xtrace helpers, exported on pre source:
+             xtrace_off                save state to a single global,
+                                       then 'set +x'
+             xtrace_restore            restore the saved state
+         For function-scoped silencing, 'local -; set +x' uses bash's
+         'local -' to auto-restore shell options on function return -
+         applied in function_trace_function, process_backtrace_function,
+         and (in automated_builder/scripts/functions.bash) write_password.
+       - Replaced 'trap ... RETURN' machinery with 'local -' where the
+         scope is a single function. RETURN traps are NOT auto-cleared by
+         bash, so the old code had to do 'trap - RETURN' inside the trap
+         body to avoid re-firing on every caller frame.
+       - Removed 'shopt -s extdebug' (its DEBUG / function-tracing
+         features are unused; ERR-trap inheritance is already handled by
+         'set -o errtrace'), the 'maybe_set_plus_x' dead helper, and the
+         unused 'MINUS_X_SET' capture in analyze_image.
+       - Dropped all 'export -f' from pre. None of the helper functions
+         are invoked through 'bash -c' / sudo bash; every caller sources
+         pre directly, so 'export -f' was dead code (14 lines).
+       - Replaced 'date +%s'-based benchmark with bash's '\$SECONDS'
+         builtin. Old code: convertsecs() / benchmark_time_start() /
+         benchmarktimeend(), with '|| true' on every arithmetic line
+         because '(( expr ))' returns exit 1 when the result is 0
+         (a real bash bear trap under errexit). New code uses '\$((expr))'
+         (value substitution, no exit code) plus '(( expr ))' only inside
+         'if'/'elif' conditions. Helpers 'benchmark_format <s>' and
+         'benchmark_since <start-snapshot>' format compactly ('0s', '42s',
+         '3m42s', '1h03m42s' instead of '00:00:00') and silence their
+         own xtrace via 'local -; set +x'. exithandler now uses
+         'benchmark_format \"\$SECONDS\"' for total script duration.
+
+    4) Secret-leak protection for ANSIBLE_VAULT_PASSWORD.
+
+       .github/workflows/run_automated_builder.yml passes the
+       GitHub-Actions secret as the first argument to three CI scripts:
+       run_automated_builder.sh, handle_artifacts.sh, teardown_build.sh.
+       Each script does 'export ANSIBLE_VAULT_PASSWORD=\"\$1\"', and
+       functions.bash::write_password later writes it to disk. Under
+       'set -x' all of these would echo the secret to stderr / CI logs.
+
+       - Each entrypoint sources help-steps/pre first (with the fail-fast
+         opt-in flags), gaining xtrace_off / xtrace_restore. The
+         'export ANSIBLE_VAULT_PASSWORD=\"\$1\"' line is wrapped in
+         xtrace_off / xtrace_restore so the secret is silenced for that
+         line and xtrace state is restored for everything after.
+       - functions.bash::write_password uses 'local -; set +x' so the
+         'printf | tee' that writes the secret to disk is silent
+         regardless of caller xtrace; '( umask 077; ... )' subshell
+         scopes the tightened umask without manual save/restore; the
+         write goes through 'tee --' instead of '>' so write errors
+         produce a clear 'tee: file: reason' diagnostic and propagate
+         through pipefail.
+       - Drop 'sudo --non-interactive --stdin' from
+         automated_builder/scripts/run_wats.sh: 'sudo --help' makes it
+         explicit ('If -n is specified ... -S has no effect') so the
+         'echo changeme | sudo --stdin' was always a no-op. The next
+         line in the same function uses passwordless 'sudo
+         --non-interactive' alone, confirming intent.
+
+    5) Idiomatic-bash modernization.
+
+       - 'echo \"...\"' -> 'printf %s\\\\n \"...\"' across the tree (109
+         call sites, ~15 files). Avoids echo's flag / backslash quirks.
+         The two 'time \$SUDO_TO_ROOT echo ...' sudo-overhead probes also
+         switched to printf for consistency.
+       - End-of-options '--' added on every command that supports it
+         where the trailing argument is a variable: cat, cp, mv, rm,
+         mkdir, rmdir, chmod, chown, touch, ln, tee, grep, sed, awk,
+         head, tail, find, lsof, realpath, lsof. (Tested each command's
+         '--' support before applying. echo does NOT support '--';
+         printf '%s' does not need it because '%s' already scopes the
+         next arg as a string.)
+       - '\$(id -u)' root checks -> '\$EUID' (bash builtin, no fork). 5
+         callsites in pre, derivative-update, umount_kill, variables,
+         repo_download_chroot_script.
+       - Boolean-only stored exit codes turned into actual booleans:
+         analyze_image's 'mount_raw_exit_code' was set in mount_image
+         and then compared with '= \"0\"' at 7 places elsewhere - never
+         used as an exit-code value. Renamed to 'mount_raw_succeeded'
+         with true/false, and mount_image now uses
+         'if mount-raw \"\$@\"; then mount_raw_succeeded=true; else ... fi'
+         instead of the 'cmd || { exit_code=\$?; true; }' swallow pattern.
+         Other commented 'id_exit_code' / 'command_v_exit_code' blocks in
+         1200_prepare-build-machine and analyze_image likewise replaced
+         with 'if id ...; then' / 'if command -v ...; then'.
+       - help-steps/parse-cmd : 'case \$1' -> 'case \"\${1:-}\" in', and
+         positional-parameter references in option-value branches use
+         '\${2:-}' so missing values do not explode under nounset.
+       - help-steps/umount_kill.sh: 'grep \"\$file_system_object\"' was
+         using the path as a regex, so a path with regex metacharacters
+         (., *, [, () would mis-match. Switched to 'grep --fixed-strings
+         -- \"\$file_system_object\"'. Also 'echo \"\$temp1\" | grep ...' ->
+         'printf %s\\\\n ...'; 'realpath' -> 'realpath --'.
+       - help-steps/unmount-helper: 'case \$1 in' was unsafe under
+         nounset when called with no args - 'case \"\${1:-}\" in'.
+         'unmount_folder=\"\$1\"' became '\"\${1:-}\"' plus an explicit
+         empty-arg check. Removed the dead 'exit_code' variable in
+         'cmd || { exit_code=\$?; true; }'.
+
+    6) Shellcheck-clean (warning level) tree-wide.
+
+       Starting state: 740 findings. Now: 0 findings on all 72 scripts.
+
+       - Project-wide '.shellcheckrc' disables four codes that produce
+         noise without bug-finding value here: SC2154 (vars referenced
+         but not assigned - sourced colors / variables files; shellcheck
+         does not follow runtime-computed source paths); SC2034 (vars
+         assigned but appear unused - many config flags read by sourced
+         children); SC1090 / SC1091 (non-constant source paths derived
+         from \$BASH_SOURCE / \$MYDIR / \$dist_*).
+       - Mechanical fixes:
+         - SC2128: '\$BASH_SOURCE' / '\$FUNCNAME' -> '\${BASH_SOURCE[0]}' /
+           '\${FUNCNAME[0]}' (both are arrays; bare expansion only gives
+           index 0). 175 hits across 34 files.
+         - SC2145: '\"...\$@...\"' inside a quoted string splits across
+           multiple arguments at \"\$1\" / \"\$N\" boundaries. Convert to
+           '\$*' so the message stays one logical argument. 82 hits.
+       - Targeted real fixes:
+         - 1700_create-vm-text:140 had 'true \"...\$0 \"\$@\"\${reset}\"',
+           outer-quoted-with-inner-quoted that is mis-parsed. Use '\$*'.
+         - docker/build-data/docker-entrypoint-stop.sh: 'grep [A-Z]' was
+           unquoted and the shell could glob it; use 'grep -- \"[A-Z]\"'.
+         - help-steps/mmdebstrap: 'args_original=\"\$@\"' assigned an array
+           to a scalar; use '\$*'.
+         - 3200_create-raw-image:79 same pattern in 'export DPKG_OPTIONS'.
+         - help-steps/pre 'export benchmark_time_start=\"\$(date +%s)\" || true'
+           masked the exit code (SC2155); split assignment from export.
+       - Suppression directives kept narrow:
+         - help-steps/pre 'exception_handler_setup': trap commands
+           intentionally interpolate \$handler / \$signal / \$kind at setup
+           time so each trap captures its own values - explicit
+           '# shellcheck disable=SC2064' with rationale.
+         - help-steps/colors: file-level '# shellcheck disable=SC2155'
+           on the colors() function rather than 25+ per-line directives.
+           The whole tput block is wrapped in '2>/dev/null ||:' precisely
+           because tput failures are tolerated.
+
+    Verified end-to-end:
+    - All 72 scripts pass 'bash -n'.
+    - 'shellcheck --severity=warning' clean across the tree.
+    - help-steps/pre + colors source cleanly under
+      'set -o errexit -o nounset -o pipefail -o errtrace'.
+    - Fail-fast CI flow ('dist_build_auto_retry=0',
+      'dist_build_non_interactive=true', 'dist_build_allow_root=true'):
+      errexit stays on after sourcing pre, false triggers the trap, trap
+      exits 1, post-failure code unreachable.
+    - Default retry flow: errexit goes off via 'set +o errexit'; a flaky
+      command fails once, the trap retries, and the script continues
+      past the original failure.
+    - xtrace silencing test (caller bash -x; write_password runs):
+      function call line traced, body silent, file written mode 600 via
+      the umask subshell, xtrace state restored on return.
+
+commit 3443233bdcb520e05688b5d75d4ac412953713f6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 05:30:23 2026 -0400
+
+    .
+
+commit 8ebdbff30ce86c60866ddcf9dcb4bf46a9e67e2b
+Merge: 559da8fed 02e01703b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 05:22:35 2026 -0400
+
+    Merge remote-tracking branch 'ArrayBolt3/arraybolt3/trixie'
+
+commit 559da8fed3dd8a6df80b882d7038aac89ed6e343
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Apr 25 05:21:58 2026 -0400
+
+    .
+
+commit 02e01703bf7db060c22605c394ed17f61498aad1
+Merge: 5be09ef37 78f05eb33
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Fri Apr 24 20:21:32 2026 -0400
+
+    Merge branch 'master' into arraybolt3/trixie
+
+commit 5be09ef373dc57ceb44a5fc7c7904c21da6bcaa4
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Fri Apr 24 20:20:25 2026 -0400
+
+    Bash arithmetic hardening
+
+commit 78f05eb33054fa9c2f3b837b66c0b326ac49eeb7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 08:51:01 2026 -0400
+
+    .
+
+commit 3ac8df52acc9aa6d4920fa6a7ed46afee00bd2ee
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 08:50:13 2026 -0400
+
+    .
+
+commit d5fac1072f59bd79cfa639303ea13b124046d6d3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 08:47:26 2026 -0400
+
+    .
+
+commit aa5038b1185825e2080129e1915dd01d29492541
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 08:46:36 2026 -0400
+
+    .
+
+commit 527b194535c3457e75617a5c155d62cc6added35
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 08:42:33 2026 -0400
+
+    .
+
+commit 9f680f329ac2ac16b37f3a3e9226e90d7dc6ede8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 08:41:09 2026 -0400
+
+    .
+
+commit ddf355dc0f233c059240e6c9cf820adda3cbd5f1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:53:26 2026 -0400
+
+    fix
+
+commit 766d91e2f6d2e6f963b692c97d7a2aee9550f7ef
+Merge: 18ea60b7b daef1c477
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:50:54 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/fix-gui-build-ci-erzrd'
+
+commit 18ea60b7be30c97c39a6afda03e994ae9b449192
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:49:01 2026 -0400
+
+    .
+
+commit 256c06db319a442612c79379e781d2d933295492
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:47:46 2026 -0400
+
+    .
+
+commit daef1c4779e0afbc7eac4c792100c3bd5b684c31
+Author: Claude <noreply@anthropic.com>
+Date:   Fri Apr 24 11:43:25 2026 +0000
+
+    git_sanity_test: guard all commands in classify_tag against errexit suppression
+
+    When classify_tag() is called via '|| cls=$?', bash suppresses
+    errexit and the ERR trap for every command inside the function.
+    This caused safe-rm failures to be silently ignored in CI.
+
+    Add explicit '|| die' guards on all critical commands (mkdir,
+    chmod, extract-openpgp-policy-trusted-certs, git cat-file,
+    split_tag) and '|| true' on cleanup-only safe-rm calls.
+
+    Add pre-flight 'command -v' checks for git and sq-git at script
+    startup for clear early errors.
+
+    All silent failure modes were already fail-safe (they caused tag
+    rejection, not acceptance), but the guards provide clear error
+    messages and defense in depth.
+
+    https://claude.ai/code/session_012xGmXYf8KoP3EhM2e7xtwr
+
+commit bef6f4d0f80bb883d642040af5935bc7921cedf2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:21:32 2026 -0400
+
+    .
+
+commit 6ca7e4127641235f505d1fbd9ca334b446f89739
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:20:44 2026 -0400
+
+    .
+
+commit 577d8e4e6774df2051ae8ac4d307ef2fae5fb861
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:13:18 2026 -0400
+
+    .
+
+commit e4a886739d7cd7da92c5a111ca0afd0d56526a2b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:12:33 2026 -0400
+
+    .
+
+commit b0a66f9c49a4eb66e4869faeb6a3239febd310f4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:05:52 2026 -0400
+
+    fix
+
+commit 92bab692623fea290a2e27cfccebbd977b5fabbf
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 07:05:40 2026 -0400
+
+    .
+
+commit 5868012405a380b61210b35840967811ea43d945
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 06:17:16 2026 -0400
+
+    .
+
+commit b6050b53440e84941f2181b151f95ebbcdaa76c7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 06:15:48 2026 -0400
+
+    .
+
+commit d0eb7787dc3f235aa389be25888096fa476ecbb1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Apr 24 06:09:09 2026 -0400
+
+    .
+
+commit 51358698cde971d570e79318581ebbb8ba6a532a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Apr 23 13:19:59 2026 +0000
+
+    bumped changelog version
+
 commit 557935f58d3aeecc903d713ec1ae728d708ea416
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Thu Apr 23 06:43:39 2026 -0400
