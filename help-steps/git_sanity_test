@@ -150,7 +150,7 @@ esac
 if [ "${dist_build_one_parsed:-}" != "true" ]; then
    orig_pwd="$PWD"
    set -- "${forwarded_args[@]}"
-   dist_build_internal_run="true"
+   dist_build_source_run="true"
    source "$MYDIR/pre"
    source "$MYDIR/variables"
    cd -- "$orig_pwd" || die "cannot restore original cwd: $orig_pwd"

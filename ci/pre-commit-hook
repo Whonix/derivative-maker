@@ -1,0 +1,39 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Pre-commit hook: runs the fast offline lint checks before each commit
+## so syntax errors never make it into a commit.
+##
+## Install (one-time, per clone):
+##   ln -s ../../ci/pre-commit-hook .git/hooks/pre-commit
+##
+## Bypass (when intentional):
+##   git commit --no-verify ...
+##
+## Runs ci/lint-yaml.sh. shellcheck is heavier and runs only in CI;
+## for a complete pre-commit scan, run 'bash ci/local-checks.sh' (it
+## chains lint-yaml.sh + lint-shellcheck.sh).
+
+set -o errexit
+set -o nounset
+set -o errtrace
+set -o pipefail
+
+cd -- "$(git rev-parse --show-toplevel)"
+
+if [ ! -x ci/lint-yaml.sh ]; then
+  printf '%s\n' 'pre-commit-hook: ci/lint-yaml.sh is missing or not executable.' >&2
+  printf '%s\n' 'pre-commit-hook: this is an environment bug, not a reason to skip.' >&2
+  printf '%s\n' 'pre-commit-hook: re-clone or restore the file before committing.' >&2
+  exit 1
+fi
+
+rc=0
+bash ci/lint-yaml.sh || rc=$?
+
+if (( rc != 0 )); then
+  printf '\npre-commit-hook: blocking commit. Run "git commit --no-verify" to bypass.\n' >&2
+fi
+exit "${rc}"

@@ -226,6 +226,20 @@ if [ ! "${dist_build_one_parsed:-}" = "true" ]; then
    export dist_build_one_parsed
 fi
 
+## Architecture-derived defaults. Kept here (not in parse-cmd) so internal
+## helper scripts that pre-set 'dist_build_one_parsed=true' to skip parse-cmd
+## (e.g. dm-tor-update-repository, dm-reprepro-wrapper) still get sensible
+## values for these variables.
+if [ "${dist_build_target_arch:-}" = "amd64" ]; then
+   [ -n "${target_architecture_pretty_name:-}" ] || target_architecture_pretty_name="Intel_AMD64"
+fi
+[ -n "${target_architecture_pretty_name:-}" ] || target_architecture_pretty_name="${dist_build_target_arch:-}"
+[ -n "${BUILD_KERNEL_PKGS:-}" ]                || BUILD_KERNEL_PKGS="linux-image-${dist_build_target_arch:-}"
+[ -n "${BUILD_HEADER_PKGS:-}" ]                || BUILD_HEADER_PKGS="linux-headers-${dist_build_target_arch:-}"
+export target_architecture_pretty_name
+export BUILD_KERNEL_PKGS
+export BUILD_HEADER_PKGS
+
 [[ -v sq_git_policy_file ]] || sq_git_policy_file="${source_code_folder_dist}/openpgp-policy.toml"
 export sq_git_policy_file
 
@@ -239,7 +253,19 @@ export sq_git_policy_file
 export dist_build_ignore_untagged
 export dist_build_ignore_uncommitted
 
-## TODO BUG: 'buildconfig.d' is being parsed after, not before this?
+## Configuration precedence (lowest -> highest):
+##   1. Code defaults (this file)
+##   2. ${source_code_folder_dist}/buildconfig.d/*  (in-tree, ships with code)
+##   3. /etc/buildconfig-dist.d/*                   (system override)
+##   4. ../buildconfig.d/*                          (user/wrapper override)
+##   5. Environment variables
+##   6. Command-line options (parse-cmd)
+##
+## All defaults below MUST use '[ -n "${var:-}" ] ||' or '[[ -v var ]] ||'
+## so that anything already set by parse-cmd / env / buildconfig.d wins.
+## Validation that depends on the final value (e.g. the redistributable
+## --repo check) is performed AFTER buildconfig.d sourcing further down.
+##
 ## NOTE: Variable 'dist_build_redistributable=true' is set in 'help-steps/dm-build-official'.
 if [ "${dist_build_redistributable:-}" = "true" ]; then
    if [ "${CI:-}" = "true" ]; then
@@ -261,8 +287,10 @@ if [ "${dist_build_redistributable:-}" = "true" ]; then
 
    ## Enable binary derivative repository by default for official builds.
    ## Same as: '--repo true'
-   ## NOTE: Needs to be set before parsing 'buildconfig.d' folder / 'dist_build_source_config_dir' function!
-   build_remote_repo_enable="true"
+   ## Defaulted (not unconditionally assigned) so that '--repo false' /
+   ## env / buildconfig.d can still take effect; an explicit 'false' is
+   ## then validated below after buildconfig.d sourcing.
+   [ -n "${build_remote_repo_enable:-}" ] || build_remote_repo_enable="true"
    export build_remote_repo_enable
 
    if [ "${dist_build_target_arch:-}" = "amd64" ]; then
@@ -321,9 +349,9 @@ export dist_build_sources_list_primary
 ## https://forums.whonix.org/t/kicksecure-etc-hostname-etc-hosts/10919
 [ -n "${dist_build_hostname:-}" ] || dist_build_hostname="localhost"
 
-if [ "${dist_build_flavor:-}" = "internalrun" ]; then
-   [ -n "${dist_build_type_long:-}" ] || dist_build_type_long="internalrun"
-   [ -n "${dist_build_type_short:-}" ] || dist_build_type_short="internalrun"
+if [ "${dist_build_flavor:-}" = "source" ]; then
+   [ -n "${dist_build_type_long:-}" ] || dist_build_type_long="source"
+   [ -n "${dist_build_type_short:-}" ] || dist_build_type_short="source"
 fi
 
 if [ "${dist_build_flavor:-}" = "dist-installer-cli" ]; then
@@ -490,12 +518,12 @@ fi
 ## - buildconfig.d/25_apt_sources.conf to create a APT URIs.
 ## - build-steps.d/*_create-debian-packages to iterate through one or multiple package folders.
 
-if [ "${dist_build_internal_run:-}" = "true" ]; then
-   [ -n "${VMNAME:-}" ] || VMNAME="internal"
-   [ -n "${SHORT_VMNAME:-}" ] || SHORT_VMNAME="internal"
+if [ "${dist_build_source_run:-}" = "true" ]; then
+   [ -n "${VMNAME:-}" ] || VMNAME="source"
+   [ -n "${SHORT_VMNAME:-}" ] || SHORT_VMNAME="source"
    [ -n "${derivative_name_list:-}" ] || derivative_name_list="kicksecure whonix"
-   [ -n "${dist_build_type_long:-}" ] || dist_build_type_long="internalrun"
-   [ -n "${dist_build_type_short:-}" ] || dist_build_type_short="internalrun"
+   [ -n "${dist_build_type_long:-}" ] || dist_build_type_long="source"
+   [ -n "${dist_build_type_short:-}" ] || dist_build_type_short="source"
    [ -n "${dist_build_desktop:-}" ] || dist_build_desktop="none"
 fi
 
@@ -516,14 +544,14 @@ fi
 if [ "${dist_build_type_short}" = "kicksecure" ]; then
    [ -n "${vm_names_to_be_exported:-}" ] || vm_names_to_be_exported="${VMNAME}"
 fi
-## internalrun / source
+## --flavor source fallback
 [ -n "${vm_names_to_be_exported:-}" ] || vm_names_to_be_exported="none"
 
 maybe_disable_dist_build_windows_installer() {
-   if [ "${dist_build_internal_run:-}" = "true" ]; then
-      true "${BASH_SOURCE[0]} INFO: dist_build_internal_run set to true, skipping ${FUNCNAME[0]}, ok."
+   if [ "${dist_build_source_run:-}" = "true" ]; then
+      true "${BASH_SOURCE[0]} INFO: dist_build_source_run set to true, skipping ${FUNCNAME[0]}, ok."
    else
-      true "${BASH_SOURCE[0]} INFO: dist_build_internal_run is not set to true, therefore: dist_build_windows_installer=false"
+      true "${BASH_SOURCE[0]} INFO: dist_build_source_run is not set to true, therefore: dist_build_windows_installer=false"
       dist_build_windows_installer=false
    fi
 }
@@ -553,8 +581,17 @@ elif [ "${dist_build_type_short:-}" = "dist-installer-cli" ]; then
    maybe_disable_dist_build_windows_installer
    ## Hardcoded.
    VMNAME=dist-installer-cli
-elif [ "${dist_build_type_short:-}" = "internalrun" ]; then
-   true
+elif [ "${dist_build_type_short:-}" = "source" ]; then
+   ## --flavor source / --target source path. Set the same defaults the
+   ## kicksecure / whonix / dist-installer-cli branches set, so later
+   ## consumers (around line ~1080: dist_server_with_upload_location_list,
+   ## derivative_name_list usage) don't trip on unset variables. The
+   ## values match dist-installer-cli, which is also a non-flavor-
+   ## specific multi-derivative build.
+   [ -n "${derivative_name_list:-}" ]                    || derivative_name_list="kicksecure whonix"
+   [ -n "${dist_build_type_short_pretty:-}" ]            || dist_build_type_short_pretty="source"
+   [ -n "${dist_server_with_upload_location_list_list:-}" ] || dist_server_with_upload_location_list_list="kicksecure.com whonix.org"
+   [ -n "${project_clearnet:-}" ]                        || project_clearnet="kicksecure.com"
 else
    error "unknown dist_build_type_short!"
 fi
@@ -634,7 +671,7 @@ if [ "${VMNAME:-}" = "unknown" ]; then
    exit 1
 fi
 
-if [ "${dist_build_internal_run:-}" = "true" ]; then
+if [ "${dist_build_source_run:-}" = "true" ]; then
    true "${BASH_SOURCE[0]} INFO: Internal run."
 else
    true "${BASH_SOURCE[0]} INFO: VMNAME is $VMNAME"
@@ -932,8 +969,8 @@ elif [ "${dist_build_type_short:-}" = "whonix" ]; then
     set_default_variable dist_unified_name "Whonix-${dist_build_desktop}"
 elif [ "${dist_build_type_short:-}" = "dist-installer-cli" ]; then
     set_default_variable dist_unified_name "dist-installer-cli"
-elif [ "${dist_build_type_short:-}" = "internalrun" ]; then
-    set_default_variable dist_unified_name "internalrun"
+elif [ "${dist_build_type_short:-}" = "source" ]; then
+    set_default_variable dist_unified_name "source"
 else
     error "dist_unified_name: unhandled dist_build_type_short '$dist_build_type_short'"
 fi
@@ -1092,6 +1129,27 @@ if [ ! "${dist_build_conf_file:-}" = "" ]; then
    if [ -f "$dist_build_conf_file" ]; then
       bash -n -- "$dist_build_conf_file"
       source "$dist_build_conf_file"
+   fi
+fi
+
+## Late validation: redistributable builds disallow disabling the binary
+## derivative repository by default, because the resulting images would not
+## be able to fetch updates from the official APT repository. To override
+## (e.g. for testing), set 'dist_build_redistributable_allow_no_repo=true'
+## via the environment or a buildconfig.d/*.conf file. We don't expose this
+## as a command-line flag because it should be a deliberate, persistent
+## opt-in, not something pasted into an ad-hoc invocation.
+if [ "${dist_build_redistributable:-}" = "true" ]; then
+   if [ "${build_remote_repo_enable:-}" = "false" ]; then
+      if [ ! "${dist_build_redistributable_allow_no_repo:-}" = "true" ]; then
+         error "${red}${bold}\
+'--repo false' (or build_remote_repo_enable=false) is incompatible with a
+redistributable build (dist_build_redistributable=true). Redistributable
+images must point at the official APT repository so end users can receive
+updates. To override this guard for testing or special-purpose builds,
+set dist_build_redistributable_allow_no_repo=true via the environment or
+a buildconfig.d/*.conf file.${reset}"
+      fi
    fi
 fi
 
@@ -1355,7 +1413,7 @@ env_vars_keep_list="
    dist_build_iso
    dist_build_utm
    dist_build_install_to_root
-   dist_build_internal_run
+   dist_build_source_run
    dist_build_fast1
    dist_build_redistributable
    VMNAME

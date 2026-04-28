@@ -102,7 +102,7 @@ mount_raw() {
    $SUDO_TO_ROOT losetup --all
    sync
 
-   read a b device _ <<< "$kpartx_last_line"
+   read -r a b device _ <<< "$kpartx_last_line"
    ## example device:
    ## loop0p3
    true "device: $device"

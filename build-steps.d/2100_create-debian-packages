@@ -6,16 +6,16 @@
 ## general example usage:
 
 ## 1)
-#make_cross_build_platform_list="amd64 arm64" ./build-steps.d/*_cowbuilder-setup --allow-untagged true --allow-uncommitted true --flavor internal --target root
+#make_cross_build_platform_list="amd64 arm64" ./build-steps.d/*_cowbuilder-setup --allow-untagged true --allow-uncommitted true --flavor source --target root
 
 ## 2)
-#make_cross_build_platform_list="amd64 arm64" ./build-steps.d/*_create-debian-packages --allow-untagged true --allow-uncommitted true --flavor internal --target root
+#make_cross_build_platform_list="amd64 arm64" ./build-steps.d/*_create-debian-packages --allow-untagged true --allow-uncommitted true --flavor source --target root
 
 ## specific example usage:
 
-#make_cross_build_platform_list="amd64 arm64" ./build-steps.d/*_create-debian-packages --allow-untagged true --allow-uncommitted true --flavor internal --target root --function download_tpo_packages
+#make_cross_build_platform_list="amd64 arm64" ./build-steps.d/*_create-debian-packages --allow-untagged true --allow-uncommitted true --flavor source --target root --function download_tpo_packages
 
-#./build-steps.d/*_create-debian-packages --allow-untagged true --allow-uncommitted true --flavor internal --target virtualbox --function download_packages_from_debian_sid
+#./build-steps.d/*_create-debian-packages --allow-untagged true --allow-uncommitted true --flavor source --target virtualbox --function download_packages_from_debian_sid
 
 ## TODO: always check packages/kicksecure/anon-shared-build-apt-sources-tpo/etc/apt/sources.list.d/torproject.sources first!
 
@@ -33,7 +33,7 @@ cd "$MYDIR"
 cd ..
 cd help-steps
 
-dist_build_internal_run="true"
+dist_build_source_run="true"
 
 source pre
 source variables
@@ -168,7 +168,7 @@ download_packages_from_debian_sid() {
 }
 
 ## usage example for manual testing:
-#./build-steps.d/*_create-debian-packages --allow-untagged true --allow-uncommitted true --flavor internal --target iso --function download_packages_from_debian_forky_backports
+#./build-steps.d/*_create-debian-packages --allow-untagged true --allow-uncommitted true --flavor source --target iso --function download_packages_from_debian_forky_backports
 download_packages_from_debian_forky_backports() {
    available_architectures_for_download_only_list="all"
    dist_build_special_packages_chroot_script="$dist_source_help_steps_folder/repo_download_chroot_script"

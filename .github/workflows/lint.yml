@@ -1,0 +1,68 @@
+---
+## Offline lint checks. Runs on every PR and on master pushes.
+## Each check is a discrete workflow step so failures are visible
+## in the GitHub Actions UI without scrolling. The dispatcher script
+## ci/local-checks.sh reproduces the whole flow on a dev machine.
+##
+## See agents/github-actions-security.md for permissions /
+## persist-credentials / fork-PR / SHA-pinning conventions, and for
+## the rationale on why actionlint is not used.
+
+name: Lint
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches:
+      - master
+      - 'ci*'
+    tags:
+      - '*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+
+    timeout-minutes: 7
+
+    container:
+      ## debian:trixie - Debian 13, current stable. TODO: update for
+      ## forky. Re-pin procedure: agents/github-actions-security.md.
+      image: debian:trixie@sha256:35b8ff74ead4880f22090b617372daff0ccae742eb5674455d542bef71ef1999  # debian:trixie as of 2026-04-27
+
+    steps:
+      - name: Install git for actions/checkout
+        ## Inline because checkout has not yet run - the ci/ script
+        ## would not be on disk yet.
+        run: |
+          set -e
+          cat /etc/os-release
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - name: Install lint dependencies (Debian apt)
+        run: bash ci/lint-install.sh
+
+      - name: Lint diagnostics
+        run: bash ci/lint-diagnostics.sh
+
+      - name: Lint yaml
+        run: bash ci/lint-yaml.sh
+
+      - name: Lint shellcheck
+        run: bash ci/lint-shellcheck.sh

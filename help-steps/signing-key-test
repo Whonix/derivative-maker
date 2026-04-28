@@ -17,7 +17,7 @@ cd "$MYDIR"
 cd ..
 cd help-steps
 
-dist_build_internal_run="true"
+dist_build_source_run="true"
 
 source pre
 source variables
