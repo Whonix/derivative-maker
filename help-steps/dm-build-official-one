@@ -46,7 +46,7 @@ fi
 if [ "${CI:-}" = "true" ]; then
   ## Minimal test only for now.
   sudo --non-interactive -- ./docker/derivative-maker-docker-setup
-  ./docker/derivative-maker-docker-run --build-step 1100_sanity-tests --target raw --flavor internal
+  ./docker/derivative-maker-docker-run --build-step 1100_sanity-tests --target raw --flavor source
 fi
 
 ## architecture choice
@@ -161,13 +161,13 @@ done
 ## * 1) '--target iso', and,
 ## * 2) "${multi_target_args[@]}"
 ## for prepare-build-machine, because additional dependencies are required for building the ISO.
-run_cmd ./build-steps.d/*_prepare-build-machine "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor internal "$@"
+run_cmd ./build-steps.d/*_prepare-build-machine "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor source "$@"
 
-run_cmd ./build-steps.d/*_cowbuilder-setup "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor internal "$@"
-run_cmd ./build-steps.d/*_local-dependencies "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor internal "$@"
+run_cmd ./build-steps.d/*_cowbuilder-setup "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor source "$@"
+run_cmd ./build-steps.d/*_local-dependencies "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor source "$@"
 
 export dist_build_raw_base_image_create=true
-## '--flavor internal' would lead to variable dist_build_hostname being unset.
+## '--flavor source' would lead to variable dist_build_hostname being unset.
 ## Therefore using '--flavor kicksecure-cli' to create a raw base image.
 ## '--target iso' must not be used because ISO is nowadays created using live-build, not create-raw-image.
 ## create-raw-image would do nothing if using '--target iso'.
@@ -175,7 +175,7 @@ run_cmd ./build-steps.d/*_create-raw-image "${build_args[@]}" "${multi_target_ar
 unset dist_build_raw_base_image_create
 
 ## '--target iso' is required to download calamares from backports.
-run_cmd ./build-steps.d/*_create-debian-packages "${build_args[@]}" --target iso "${multi_target_args[@]}" --flavor internal "$@"
+run_cmd ./build-steps.d/*_create-debian-packages "${build_args[@]}" --target iso "${multi_target_args[@]}" --flavor source "$@"
 
 ## Fast. No need to skip.
 #SKIP_SCRIPTS+=" sanity-tests "
@@ -248,7 +248,7 @@ for flavor_item in "${flavors_list[@]}"; do
   for ((i=0; i<${#multi_target_args[@]}; i+=2)); do
     target_arg="${multi_target_args[i]}"
     target_value="${multi_target_args[i+1]}"
-    run_cmd dm-upload-images "${build_args[@]}" $target_arg $target_value --flavor "$flavor_item" "$@"
+    run_cmd dm-upload-images "${build_args[@]}" "$target_arg" "$target_value" --flavor "$flavor_item" "$@"
   done
 done
 

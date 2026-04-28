@@ -1,0 +1,69 @@
+---
+## End-to-end dry-run smoke. Heavyweight (5-15 min). Tag-push only;
+## uncomment the pull_request / push-master blocks below to also cover
+## those triggers (cost: ~10 min per run).
+##
+## See agents/github-actions-security.md for the standard
+## permissions / persist-credentials / fork-PR / SHA-pin patterns.
+
+name: Dry-run
+
+on:
+  #pull_request:
+  #  branches: [master]
+  #push:
+  #  branches:
+  #    - master
+  #    - 'ci*'
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dry-run:
+    name: derivative-maker --dry-run true
+    runs-on: ubuntu-latest
+
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+
+    timeout-minutes: 25
+
+    container:
+      ## debian:trixie - Debian 13, current stable. TODO: update for
+      ## forky. Re-pin procedure: agents/github-actions-security.md.
+      image: debian:trixie@sha256:35b8ff74ead4880f22090b617372daff0ccae742eb5674455d542bef71ef1999  # debian:trixie as of 2026-04-27
+
+    steps:
+      - name: Checkout repository (with submodules)
+        ## fetch-depth: 0 so the helper-scripts submodule's pinned SHA
+        ## is reachable.
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install build prerequisites in container
+        run: bash ci/dry-run-install.sh
+
+      - name: Symlink /usr/libexec/helper-scripts
+        ## help-steps/pre's get_colors.sh hardcodes
+        ## /usr/libexec/helper-scripts/check_runtime.bsh; satisfy it
+        ## with the in-tree submodule.
+        run: ln -sfn "$PWD/packages/kicksecure/helper-scripts/usr/libexec/helper-scripts" /usr/libexec/helper-scripts
+
+      - name: Drop privileges and run derivative-maker --dry-run true
+        run: bash ci/dry-run-derivative-maker.sh
+
+      ## No artifact upload step: --dry-run prints to stdout (captured
+      ## by the Actions step log); nothing in help-steps/ or
+      ## build-steps.d/ writes a .log file. If a future build step
+      ## starts producing one, add the upload step back with the
+      ## actual path - don't pre-emptively glob.

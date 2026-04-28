@@ -31,6 +31,110 @@ true "INFO: Currently running: $0 (derivative-maker help-steps/mmdebstrap wrappe
 
 args_original="$*"
 
+## Diagnostic argument filter.
+##
+## Replaces the previous string-replacement-based 'args_filtered' approach
+## (which had multiple subtle bugs: filtered against the wrong architecture
+## variable during cross-builds, depended on exact whitespace, and ignored
+## option order). We now walk "$@" token by token and log per-token under
+## xtrace whether each token is dropped (with reason) or kept.
+##
+## NOTE: The wrapper currently does NOT forward 'args_passthrough' to
+## mmdebstrap. It hardcodes every mmdebstrap argument explicitly below.
+## The filter exists as scaffolding so that, when grml-debootstrap or
+## cowbuilder eventually start passing options we want to honor, we can
+## start forwarding 'args_passthrough' selectively without re-introducing
+## the brittle string-substitution approach. Forwarding it today would
+## reintroduce ordering bugs (e.g. a leftover BUILDPLACE positional from
+## the grml path appearing before the suite/sources tail) and risk
+## conflicting flags (e.g. duplicate '--architectures').
+##
+## Tokens classified as "drop":
+## - default mirror URLs hardcoded by cowbuilder, pbuilder, grml-debootstrap
+## - --mirror (we re-supply it via the sources list)
+## - the BUILDPLACE positional (we re-emit it later in the required order)
+## - --force-check-gpg (mmdebstrap rejects this; it always GPG-checks)
+## - --verbose (we re-add it)
+## - --include / --include=...        (we provide our own --include)
+## - --variant=buildd                 (we use --variant=required)
+## - --arch / --arch=ARCH             (we use --architectures=...)
+## - --architecture / --architecture=ARCH (cowbuilder spelling)
+## - --architectures / --architectures=ARCH (mmdebstrap's own option;
+##   would otherwise collide with the wrapper-supplied value)
+## - the suite (positional; we re-emit it)
+## - the sources list path (positional; we re-emit it)
+## - --skip=cleanup/apt, --skip=check/empty (grml-debootstrap)
+mmdebstrap_filter_args() {
+   local arg next_is_value pending_option
+   args_passthrough=()
+   next_is_value=""
+   pending_option=""
+   for arg in "$@"; do
+      if [ -n "$next_is_value" ]; then
+         true "INFO: drop value of $pending_option (we re-supply it ourselves): $arg"
+         next_is_value=""
+         pending_option=""
+         continue
+      fi
+      case "$arg" in
+         --mirror|--arch|--architecture|--architectures|--include|--variant)
+            true "INFO: drop $arg (and next token; we re-supply via --architectures / --include / sources list)"
+            next_is_value="1"
+            pending_option="$arg"
+            continue
+            ;;
+         --mirror=*|--arch=*|--architecture=*|--architectures=*|--include=*|--variant=*)
+            true "INFO: drop $arg (we re-supply via --architectures / --include / sources list)"
+            continue
+            ;;
+         --force-check-gpg)
+            true "INFO: drop $arg (mmdebstrap always GPG-checks; the option is unsupported)"
+            continue
+            ;;
+         --verbose)
+            true "INFO: drop $arg (we re-add --verbose ourselves)"
+            continue
+            ;;
+         --skip=cleanup/apt|--skip=check/empty)
+            true "INFO: drop $arg (set by grml-debootstrap; not desired here)"
+            continue
+            ;;
+         "${dist_build_apt_sources_mirror:-}")
+            true "INFO: drop mirror URI $arg (we re-supply via the sources list)"
+            continue
+            ;;
+         "${BUILDPLACE:-}")
+            true "INFO: drop BUILDPLACE positional $arg (re-emitted later in the required order)"
+            continue
+            ;;
+         "${dist_build_apt_stable_release:-}")
+            true "INFO: drop suite positional $arg (re-emitted later in the required order)"
+            continue
+            ;;
+         "${dist_build_sources_list_primary:-}")
+            true "INFO: drop sources-list positional $arg (re-emitted later in the required order)"
+            continue
+            ;;
+         http://ftp.us.debian.org/debian|https://ftp.us.debian.org/debian)
+            true "INFO: drop default mirror URI from cowbuilder/pbuilder: $arg"
+            continue
+            ;;
+         http://httpredir.debian.org/debian|https://httpredir.debian.org/debian)
+            true "INFO: drop default mirror URI from grml-debootstrap (httpredir): $arg"
+            continue
+            ;;
+         http://deb.debian.org/debian|https://deb.debian.org/debian)
+            true "INFO: drop default mirror URI from grml-debootstrap (deb.debian.org): $arg"
+            continue
+            ;;
+         *)
+            true "INFO: keep arg (passthrough to mmdebstrap): $arg"
+            args_passthrough+=( "$arg" )
+            ;;
+      esac
+   done
+}
+
 path_variable_remove_help_steps() {
    local path_part path_array
 
@@ -86,70 +190,9 @@ cat -- "$dist_aptgetopt_file"
 true "dist_build_sources_list_primary: $dist_build_sources_list_primary"
 cat -- "$dist_build_sources_list_primary"
 
-## args_filtered is currently not required. Just keeping it for debugging
-## purposes in applications such as grml-debootstrap, cowbuilder or pbuilder in
-## the future set additional arguments.
-
-args_filtered="$args_original"
-
-true "INFO: filter out default mirror by cowbuilder or pbuilder (if we were not using --mirror)."
-args_filtered="${args_filtered//"http://ftp.us.debian.org/debian"}"
-args_filtered="${args_filtered//"https://ftp.us.debian.org/debian"}"
-
-true "INFO: filter out default mirror by grml-debootstrap"
-args_filtered="${args_filtered//"http://httpredir.debian.org/debian"}"
-args_filtered="${args_filtered//"https://httpredir.debian.org/debian"}"
-args_filtered="${args_filtered//"http://deb.debian.org/debian"}"
-args_filtered="${args_filtered//"https://deb.debian.org/debian"}"
-
-true "INFO: filter out --mirror"
-args_filtered="${args_filtered//"$dist_build_apt_sources_mirror"}"
-
-true "INFO: filter out variable BUILDPLACE (set by pbuilder) because we need to adjust the order of arguments."
-args_filtered="${args_filtered//"$BUILDPLACE"}"
-
-true "INFO: filter out --force-check-gpg (set by cowbuilder or pbuilder) since mmdebstrap does this by default and therefore does not support that command."
-args_filtered="${args_filtered//"--force-check-gpg"}"
-
-true "INFO: filter out --verbose (set by grml-debootstrap) since we add it by ourselves."
-args_filtered="${args_filtered//"--verbose"}"
-
-true "INFO: filter out --include=apt (set by cowbuilder or pbuilder) since we will use our own --include switch."
-args_filtered="${args_filtered//"--include=apt"}"
-
-true "INFO: Default to default --variant. Decide which packages are to be installed using --include."
-args_filtered="${args_filtered//"--variant=buildd"}"
-
-true "INFO: filter out '--arch amd64' since we will use our own."
-args_filtered="${args_filtered//"--arch $dist_build_target_arch"}"
-true "INFO: filter out '--arch=amd64' since we will use our own."
-args_filtered="${args_filtered//"--arch=$dist_build_target_arch"}"
-
-true "INFO: filter out suite since we will use our own."
-args_filtered="${args_filtered//"$dist_build_apt_stable_release"}"
-
-true "INFO: filter out --include (that grml-debootstrap sets) since we will use our own."
-args_filtered="${args_filtered//"--include"}"
-
-true "INFO: filter out sources list file (that grml-debootstrap sets) since we will use our own."
-args_filtered="${args_filtered//"$dist_build_sources_list_primary"}"
-
-true "INFO: filter out dist_build_apt_sources_mirror (that pbuilder sets) since we will use our own."
-args_filtered="${args_filtered//"$dist_build_apt_sources_mirror"}"
-
-true "INFO: filter out --skip=cleanup/apt (that grml-debootstrap sets) since deletion of APT package lists and cache is useful because later build steps set up different build sources."
-args_filtered="${args_filtered//"--skip=cleanup/apt"}"
-
-true "INFO: filter out --skip=check/empty (that grml-debootstrap sets) since we are not operating on empty folders."
-args_filtered="${args_filtered//"--skip=check/empty"}"
-
-## TODO: broken
-#true "INFO: filter out extraneous white spaces."
-#args_filtered="${args_filtered//" "}"
-
-true "FINAL args_filtered: $args_filtered"
-## example args_filtered:
-## /mnt/debootstrap.15557
+true "INFO: walking caller args; each token is logged (drop or keep)."
+mmdebstrap_filter_args "$@"
+true "FINAL args_passthrough: ${args_passthrough[*]}"
 
 ## mmdebstrap needs 3 positional arguments.
 ## suite buildplace path-to-sources-list

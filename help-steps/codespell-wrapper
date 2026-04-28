@@ -11,8 +11,9 @@ set -o errtrace
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
-## XXX: hardcoded
-cd -- ~/derivative-maker
+## Resolve to the repo root regardless of where this script lives or is
+## invoked from: BASH_SOURCE[0]/.. is help-steps/, so .. is the repo root.
+cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
 skip_patterns=(
   COPYING

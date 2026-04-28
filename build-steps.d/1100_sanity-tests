@@ -128,6 +128,15 @@ Are you building on Debian? Only building on Debian is supported."
       return 0
    fi
 
+   if [ "${build_unsupported_os:-}" = "true" ]; then
+      ## '--unsupported-os true' opt-out for developer / AI / CI smoke
+      ## testing on non-Debian hosts. The mismatch is logged loudly so
+      ## it is still obvious in build logs, but does not abort.
+      printf '%s\n' "${yellow:-}${bold:-}WARN: detected codename '$codename' != expected '$dist_build_apt_stable_release'; \
+continuing because --unsupported-os true is set. Resulting image is NOT a release-quality build.${reset:-}" >&2
+      return 0
+   fi
+
    error "\
 Wrong operating system!
 
@@ -137,7 +146,10 @@ Either your version is older or newer than expected. See build documentation
 to learn which operating system is suggested.
 
 detected operating system codename: '$codename'
-expected operating system codename: '$dist_build_apt_stable_release'"
+expected operating system codename: '$dist_build_apt_stable_release'
+
+To bypass this check (NOT for release builds; dev / AI / CI smoke only):
+  --unsupported-os true"
 
    true
 }
@@ -354,7 +366,7 @@ mount-test() {
 }
 
 check-copy-vms-into-raw() {
-   if [ "${dist_build_internal_run:-}" = "true" ]; then
+   if [ "${dist_build_source_run:-}" = "true" ]; then
       return 0
    fi
 

@@ -5,7 +5,7 @@
 
 ## example usage:
 
-#make_cross_build_platform_list="armel armhf i386 amd64 arm64" ./build-steps.d/*_cowbuilder-setup --allow-untagged true --allow-uncommitted true --flavor internal --target root
+#make_cross_build_platform_list="armel armhf i386 amd64 arm64" ./build-steps.d/*_cowbuilder-setup --allow-untagged true --allow-uncommitted true --flavor source --target root
 
 set -x
 set -o errexit

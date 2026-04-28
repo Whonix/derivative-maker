@@ -1,0 +1,65 @@
+---
+## OpenSSF Scorecard - weekly posture audit. Publishes findings as
+## SARIF in the repo's Security tab. See
+## https://github.com/ossf/scorecard#scorecard-checks for the check
+## list. Trust footprint: OpenSSF / Linux Foundation. See
+## agents/github-actions-security.md for standard workflow patterns.
+
+name: Scorecard
+
+on:
+  ## Branch-protection setting changes are themselves a check input.
+  branch_protection_rule:
+  schedule:
+    - cron: '0 4 * * 0'
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+
+    timeout-minutes: 10
+
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+      ## Intentionally NOT 'id-token: write'. That is only needed for
+      ## publish_results: true; keep us off the OSSF public transparency
+      ## log unless you opt in (one-way commitment).
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: false
+
+      - name: Upload SARIF artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 14
+
+      - name: Upload to GitHub code scanning
+        uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4.35.2
+        with:
+          sarif_file: results.sarif

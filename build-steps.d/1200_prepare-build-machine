@@ -308,7 +308,7 @@ repo_proxy_test() {
 ## 'build-steps.d/*_create-vbox-vm').
 
 check-vm-exists() {
-   if [ "${dist_build_internal_run:-}" = "true" ]; then
+   if [ "${dist_build_source_run:-}" = "true" ]; then
       return 0
    fi
 

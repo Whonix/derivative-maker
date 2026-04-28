@@ -294,7 +294,7 @@ Choose ${under}either${eunder} option A), B), C) ${under}or${eunder} D).
  - D) Press ${blue}${bold}a${reset} and enter to abort.${reset}
 ${blue}${bold}#####${reset}"
 
-            read -p "Answer? " answer
+            read -r -p "Answer? " answer
          else
             $output_cmd "INFO: stdin not connected to terminal, using non-interactive error handler."
             break

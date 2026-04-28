@@ -1,7 +1,29 @@
 ---
+## Dependabot configuration. Bumps the SHA pins on GitHub Actions and
+## the digest pins on Docker base images that the workflows reference.
+## All actions and image: lines are already SHA-pinned; Dependabot
+## updates them to whatever the upstream tags currently resolve to.
+##
+## Note: Dependabot does NOT auto-bump container digests inside
+## workflow 'image:' lines, only Dockerfile 'FROM' lines in well-known
+## locations. See agents/github-actions-security.md for the manual
+## re-pin procedure for the matrix images.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(deps)"
+      include: scope
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci(deps)"
+      include: scope

@@ -15,7 +15,7 @@ MYDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 cd "$MYDIR"
 
-dist_build_internal_run="true"
+dist_build_source_run="true"
 
 source ./help-steps/pre
 source ./help-steps/variables

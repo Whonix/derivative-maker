@@ -255,9 +255,9 @@ main() {
       create-empty-raw-image
    elif [ "${dist_build_type_long:-}" = "custom-workstation" ]; then
       create-empty-raw-image
-   elif [ "${dist_build_type_long:-}" = "internalrun" ]; then
+   elif [ "${dist_build_type_long:-}" = "source" ]; then
       ## Missing variables such as: dist_build_hostname
-      error "unsupported flavor: --flavor internal"
+      error "unsupported flavor: --flavor source"
    else
       create-debian-raw-image
    fi

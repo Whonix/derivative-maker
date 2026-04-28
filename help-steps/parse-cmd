@@ -64,6 +64,7 @@ parse_cmd_flavor_error() {
 --flavor kicksecure-cli
 --flavor kicksecure-lxqt
 --flavor dist-installer-cli
+--flavor source
 ${reset}"
    exit 1
 }
@@ -111,6 +112,7 @@ Flavors:
     whonix-host-lxqt            : Builds Whonix-Host LXQt.
     kicksecure-cli              : Builds Kicksecure VM CLI VM.
     kicksecure-lxqt             : Builds Kicksecure VM LXQt VM.
+    source                      : Build helpers (e.g. cowbuilder chroot, source packages) without targeting a specific VM flavor.
 
 Targets:
   --target [target_option]
@@ -186,6 +188,7 @@ Advanced Options:
     (Note: amd64 also works with most Intel CPUs.)
   --debug                         : Does not disable verbose/debug (xtrace) during help-steps pre, variables and parse-cmd.
   --dry-run [true|false]          : Does not actually build real images. Just an empty text file. Useful for debugging dm-prepare-release script.
+  --unsupported-os [true|false]   : Skip the build-host operating system / codename sanity check. NOT for release builds; for dev / AI / CI smoke tests on non-Debian hosts only.
 
 For VMs only:
   --initramfs [packages]          : Specify initramfs packages. (default: \$BUILD_INITRAMFS_PKGS)
@@ -234,7 +237,7 @@ dist_build_one_parse_cmd() {
 
    args=("$@")
 
-   if ! [ "${dist_build_internal_run:-}" = "true" ]; then
+   if ! [ "${dist_build_source_run:-}" = "true" ]; then
       if [ "${#args[@]}" -eq 0 ]; then
          printf '%s\n' "${red}${bold}No option chosen! Use '--help'.${reset}"
          exit 1
@@ -287,13 +290,10 @@ dist_build_one_parse_cmd() {
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
                   export dist_build_installer_dist="true"
                   dist_build_image_upload_supported="true"
-               elif [ "${dist_build_flavor:-}" = "internal" ]; then
+               elif [ "${dist_build_flavor:-}" = "source" ]; then
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
-                  ## XXX: Belonging here?
-                  ## Cannot set to "internal" or cause issues with '--architectures'.
-                  #dist_build_target_arch="internal"
                   dist_build_target_arch=""
-                  export dist_build_internal_run="true"
+                  export dist_build_source_run="true"
                else
                   parse_cmd_flavor_error
                fi
@@ -693,6 +693,27 @@ dist_build_one_parse_cmd() {
                export build_dry_run
                shift 2
                ;;
+           --unsupported-os)
+               ## Bypass the build-steps.d/1100_sanity-tests
+               ## check-operating-system-version error. Useful when
+               ## smoke-testing the build pipeline on a non-Debian host
+               ## (developer laptops, AI dev sandboxes, GitHub
+               ## ubuntu-latest CI runners, ...) where the rest of the
+               ## stack still works. Real builds should never set this:
+               ## the package versions and APT codename will not match
+               ## and the resulting image will be subtly broken.
+               if [ "${2:-}" = "true" ]; then
+                  build_unsupported_os="true"
+                  true "${cyan}INFO: --unsupported-os true: bypassing OS-version sanity check (dev / AI / CI use only).${reset}"
+               elif [ "${2:-}" = "false" ]; then
+                  build_unsupported_os="false"
+               else
+                  printf '%s\n' "${red}${bold}ERROR: supported options for --unsupported-os are 'true' or 'false'.${reset}"
+                  exit 1
+               fi
+               export build_unsupported_os
+               shift 2
+               ;;
            --freedom)
                if [ "${2:-}" = "false" ]; then
                   build_freedom_only="false"
@@ -734,7 +755,7 @@ dist_build_one_parse_cmd() {
                break
                ;;
            -*)
-               if ! [ "${dist_build_internal_run:-}" = "true" ]; then
+               if ! [ "${dist_build_source_run:-}" = "true" ]; then
                   printf '%s\n' "${red}${bold}unknown option (1): '${1:-}'${reset}"
                   exit 1
                fi
@@ -744,7 +765,7 @@ dist_build_one_parse_cmd() {
                if [ "${1:-}" = "" ]; then
                   true
                else
-                  if ! [ "${dist_build_internal_run:-}" = "true" ]; then
+                  if ! [ "${dist_build_source_run:-}" = "true" ]; then
                      printf '%s\n' "${red}${bold}unknown option (2): '${1:-}'${reset}"
                      exit 1
                   fi
@@ -764,7 +785,7 @@ dist_build_one_parse_cmd() {
          architecture_valid=true
          ## XXX: Belonging here?
          dist_build_target_arch=""
-      elif [ "${dist_build_internal_run:-}" = "true" ]; then
+      elif [ "${dist_build_source_run:-}" = "true" ]; then
          architecture_valid=true
          ## XXX: Belonging here?
          dist_build_target_arch=""
@@ -789,8 +810,6 @@ ${reset}"
       [ -n "${virtualbox_supported_architecture:-}" ] || virtualbox_supported_architecture="true"
    elif [ "${dist_build_target_arch:-}" = "amd64" ]; then
       [ -n "${virtualbox_supported_architecture:-}" ] || virtualbox_supported_architecture="true"
-      ## https://forums.whonix.org/t/long-wiki-edits-thread/3477/2009
-      [ -n "${target_architecture_pretty_name:-}" ] || target_architecture_pretty_name="Intel_AMD64"
    elif [ "${dist_build_target_arch:-}" = "arm64" ]; then
       [ -n "${virtualbox_supported_architecture:-}" ] || virtualbox_supported_architecture="true"
    else
@@ -810,8 +829,7 @@ Should VirtualBox meanwhile support other architectures such as 'ppc64el', then 
       fi
    fi
 
-   ## XXX: 'internal' belonging here?
-   for architecture_all_item in "${architecture_all_list[@]}" "internal"; do
+   for architecture_all_item in "${architecture_all_list[@]}"; do
       if [ "${dist_build_target_arch:-}" = "$architecture_all_item" ]; then
         architecture_valid=true
         break
@@ -829,22 +847,13 @@ ${architecture_all_list[*]}
 ${reset}"
    fi
 
-   [ -n "${target_architecture_pretty_name:-}" ] || target_architecture_pretty_name="$dist_build_target_arch"
-
-   [ -n "${BUILD_KERNEL_PKGS:-}" ] || BUILD_KERNEL_PKGS="linux-image-${dist_build_target_arch}"
-   [ -n "${BUILD_HEADER_PKGS:-}" ] || BUILD_HEADER_PKGS="linux-headers-${dist_build_target_arch}"
-
    export BUILD_INITRAMFS_PKGS
    ## Using export, so it can be read by chroot-post.d scripts.
    export dist_build_target_arch
-   export BUILD_KERNEL_PKGS
-   export BUILD_HEADER_PKGS
-   export target_architecture_pretty_name
 
    true "${cyan}INFO: dist_build_target_arch    (--arch): $dist_build_target_arch${reset}"
-   true "${cyan}INFO: target_architecture_pretty_name   : $target_architecture_pretty_name${reset}"
-   true "${cyan}INFO: BUILD_KERNEL_PKGS       (--kernel): $BUILD_KERNEL_PKGS${reset}"
-   true "${cyan}INFO: BUILD_HEADER_PKGS      (--headers): $BUILD_HEADER_PKGS${reset}"
+   true "${cyan}INFO: BUILD_KERNEL_PKGS       (--kernel): ${BUILD_KERNEL_PKGS:-}${reset}"
+   true "${cyan}INFO: BUILD_HEADER_PKGS      (--headers): ${BUILD_HEADER_PKGS:-}${reset}"
 
    if [ "${dist_build_sources_clearnet_or_onion:-}" = "" ]; then
       true "${cyan}${bold}INFO: No --connection type 'clearnet' or 'onion' has been chosen. \
@@ -856,7 +865,7 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
    ## If there are input files (for example) that follow the options, they
    ## will remain in the "$@" positional parameters.
 
-   if [ "${dist_build_internal_run:-}" = "true" ]; then
+   if [ "${dist_build_source_run:-}" = "true" ]; then
       true
    else
       if [ "${build_machines_counter:-0}" -gt "1" ]; then
@@ -868,7 +877,7 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
    if [ "${build_machines_counter:-0}" -le "0" ]; then
       if [ "${dist_build_one_parsed:-}" = "true" ]; then
          true
-      elif [ "${dist_build_internal_run:-}" = "true" ] ; then
+      elif [ "${dist_build_source_run:-}" = "true" ] ; then
          true
       else
          parse_cmd_flavor_error
@@ -891,7 +900,7 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
       true
    elif [ "${dist_build_iso:-}" = "true" ]; then
       true
-   elif [ "${dist_build_internal_run:-}" = "true" ]; then
+   elif [ "${dist_build_source_run:-}" = "true" ]; then
       true
    elif [ "${dist_build_source_archive:-}" = "true" ]; then
       true
@@ -910,7 +919,7 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
       true
    elif [ "${dist_build_type:-}" = "host" ]; then
       true
-   elif [ "${dist_build_internal_run:-}" = "true" ]; then
+   elif [ "${dist_build_source_run:-}" = "true" ]; then
       true
    elif [ "${dist_build_source_archive:-}" = "true" ]; then
       true
