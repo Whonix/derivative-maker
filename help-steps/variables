@@ -11,6 +11,9 @@ set -o errtrace
 
 true "${BASH_SOURCE[0]} INFO: begin"
 
+## Silence xtrace while sourcing parse-cmd and running the parser, to
+## avoid flooding output with irrelevant parser trace lines. Restore
+## the previous xtrace state afterwards.
 xtrace_off
 
 #printf "%s\n" "INFO: Currently running script: ${BASH_SOURCE[0]}"
@@ -216,9 +219,6 @@ export SOURCE_DATE_EPOCH
 export tpo_downloader_debug
 
 if [ ! "${dist_build_one_parsed:-}" = "true" ]; then
-   ## Silence xtrace while sourcing parse-cmd and running the parser, to
-   ## avoid flooding output with irrelevant parser trace lines. Restore
-   ## the previous xtrace state afterwards.
    bash -n -- "${source_code_folder_dist}/help-steps/parse-cmd"
    source "${source_code_folder_dist}/help-steps/parse-cmd"
    dist_build_one_parse_cmd "$@"
@@ -231,11 +231,12 @@ fi
 ## (e.g. dm-tor-update-repository, dm-reprepro-wrapper) still get sensible
 ## values for these variables.
 if [ "${dist_build_target_arch:-}" = "amd64" ]; then
+   ## https://forums.whonix.org/t/long-wiki-edits-thread/3477/2009
    [ -n "${target_architecture_pretty_name:-}" ] || target_architecture_pretty_name="Intel_AMD64"
 fi
 [ -n "${target_architecture_pretty_name:-}" ] || target_architecture_pretty_name="${dist_build_target_arch:-}"
-[ -n "${BUILD_KERNEL_PKGS:-}" ]                || BUILD_KERNEL_PKGS="linux-image-${dist_build_target_arch:-}"
-[ -n "${BUILD_HEADER_PKGS:-}" ]                || BUILD_HEADER_PKGS="linux-headers-${dist_build_target_arch:-}"
+[ -n "${BUILD_KERNEL_PKGS:-}" ] || BUILD_KERNEL_PKGS="linux-image-${dist_build_target_arch:-}"
+[ -n "${BUILD_HEADER_PKGS:-}" ] || BUILD_HEADER_PKGS="linux-headers-${dist_build_target_arch:-}"
 export target_architecture_pretty_name
 export BUILD_KERNEL_PKGS
 export BUILD_HEADER_PKGS
@@ -584,14 +585,14 @@ elif [ "${dist_build_type_short:-}" = "dist-installer-cli" ]; then
 elif [ "${dist_build_type_short:-}" = "source" ]; then
    ## --flavor source / --target source path. Set the same defaults the
    ## kicksecure / whonix / dist-installer-cli branches set, so later
-   ## consumers (around line ~1080: dist_server_with_upload_location_list,
+   ## consumers (e.g. dist_server_with_upload_location_list,
    ## derivative_name_list usage) don't trip on unset variables. The
    ## values match dist-installer-cli, which is also a non-flavor-
    ## specific multi-derivative build.
-   [ -n "${derivative_name_list:-}" ]                    || derivative_name_list="kicksecure whonix"
-   [ -n "${dist_build_type_short_pretty:-}" ]            || dist_build_type_short_pretty="source"
+   [ -n "${derivative_name_list:-}" ]         || derivative_name_list="kicksecure whonix"
+   [ -n "${dist_build_type_short_pretty:-}" ] || dist_build_type_short_pretty="source"
    [ -n "${dist_server_with_upload_location_list_list:-}" ] || dist_server_with_upload_location_list_list="kicksecure.com whonix.org"
-   [ -n "${project_clearnet:-}" ]                        || project_clearnet="kicksecure.com"
+   [ -n "${project_clearnet:-}" ]             || project_clearnet="kicksecure.com"
 else
    error "unknown dist_build_type_short!"
 fi
@@ -1139,18 +1140,16 @@ fi
 ## via the environment or a buildconfig.d/*.conf file. We don't expose this
 ## as a command-line flag because it should be a deliberate, persistent
 ## opt-in, not something pasted into an ad-hoc invocation.
-if [ "${dist_build_redistributable:-}" = "true" ]; then
-   if [ "${build_remote_repo_enable:-}" = "false" ]; then
-      if [ ! "${dist_build_redistributable_allow_no_repo:-}" = "true" ]; then
-         error "${red}${bold}\
+if [ "${dist_build_redistributable:-}" = "true" ] \
+   && [ "${build_remote_repo_enable:-}" = "false" ] \
+   && [ ! "${dist_build_redistributable_allow_no_repo:-}" = "true" ]; then
+   error "${red}${bold}\
 '--repo false' (or build_remote_repo_enable=false) is incompatible with a
 redistributable build (dist_build_redistributable=true). Redistributable
 images must point at the official APT repository so end users can receive
 updates. To override this guard for testing or special-purpose builds,
 set dist_build_redistributable_allow_no_repo=true via the environment or
 a buildconfig.d/*.conf file.${reset}"
-      fi
-   fi
 fi
 
 ## }}}

@@ -66,7 +66,7 @@ build_machine_setup() {
    ## }}
 
    ## Debugging.
-   true 'INFO: Benchmarking "$SUDO_TO_ROOT printf %s\n test" using "time"...'
+   true "INFO: Benchmarking \"$SUDO_TO_ROOT printf '%s\\n' 'This is a test printf.'\" using \"time\"..."
    time $SUDO_TO_ROOT printf '%s\n' "This is a test printf."
 
    ## Nowadays done using: ./derivative-update
@@ -177,7 +177,7 @@ build_machine_setup() {
    ## No host-side VirtualBox build-dependencies here: VirtualBox is now
    ## installed into the amd64 cowbuilder chroot (see
    ## 'help-steps/pbuilder-chroot-script-virtualbox'), not on the build
-   ## host. This keeps the host clean and is required when cross-building
+   ## host. This keeps the host clean and is required when building
    ## arm64 VirtualBox OVAs ('Mac M1/M2') from an arm64 Linux host.
 
    $SUDO_TO_ROOT \

@@ -21,7 +21,7 @@
 ##           False positive in the build-step dispatch pattern: each
 ##           build-steps.d/* file defines functions called via the
 ##           file's own bottom-of-file dispatcher, which shellcheck
-##           cannot see statically. ~35 spurious findings.
+##           cannot see statically.
 ##   SC2016  Expressions don't expand in single quotes
 ##           Triggered by intentional literal-'$1' arguments to
 ##           --customize-hook in help-steps/mmdebstrap and 'bash -c'
@@ -38,6 +38,8 @@
 set -o nounset
 set -o errtrace
 set -o pipefail
+## NOT errexit: if one file fails linting, other files should still be
+## checked.
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." || exit 2
 

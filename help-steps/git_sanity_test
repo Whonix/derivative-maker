@@ -225,7 +225,7 @@ split_tag() {
 
   [ "${tag_count}" -gt 0 ] || return 1
 
-  if [ "${tag_lines[$((tag_count - 1))]}" != '-----END PGP SIGNATURE-----' ]; then
+  if [ "${tag_lines[tag_count - 1]}" != '-----END PGP SIGNATURE-----' ]; then
     ## Tag is or appears unsigned
     return 1
   fi

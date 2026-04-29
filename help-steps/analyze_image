@@ -261,7 +261,7 @@ preparation() {
    fi
 
    true "${cyan}INFO: user_name is set to $user_name ${reset}"
-   true "${cyan}INFO: Benchmarking '$SUDO_TO_ROOT time printf \"%s\n\" test' using \"time\"... ${reset}"
+   true "${cyan}INFO: Benchmarking \"$SUDO_TO_ROOT time printf '%s\\n' 'This is a test printf.'\" using \"time\"... ${reset}"
    $SUDO_TO_ROOT time printf '%s\n' "This is a test printf."
 
    ## {{ Sanity Tests.

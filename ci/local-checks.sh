@@ -23,6 +23,7 @@
 set -o nounset
 set -o errtrace
 set -o pipefail
+## NOT errexit: if one test fails, other tests should still be run.
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." || exit 2
 

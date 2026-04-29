@@ -11,13 +11,13 @@
 ## root" check while still letting the build steps that need sudo
 ## (cowbuilder, mkdir under /var/cache/pbuilder) work.
 ##
-## --unsupported-os true: ubuntu-latest's 'debian:bookworm' container
-## *should* identify as bookworm and pass the OS sanity check, but
+## --unsupported-os true: ubuntu-latest's 'debian:trixie' container
+## *should* identify as trixie and pass the OS sanity check, but
 ## the flag protects the workflow from an unexpected codename detected
 ## by a build step computing it from apt sources.
 ##
-## A plain 'timeout' wraps the call as belt-and-suspenders for a step
-## that misses the workflow timeout (e.g. signal-trapping subprocess).
+## A plain 'timeout' wraps the call to ensure this doesn't hang. The
+## workflow timeout should also prevent this.
 ##
 ## Standalone-runnable: from a checked-out source tree with
 ## /usr/libexec/helper-scripts symlinked and the apt deps installed
@@ -40,7 +40,8 @@ fi
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
 timeout 1200 \
-  ./help-steps/run-as-user --chown "$PWD" builder -- \
+  ./help-steps/run-as-user --chown "$PWD" -- \
+    builder \
     ./derivative-maker \
       --dry-run true \
       --unsupported-os true \

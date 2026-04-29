@@ -1,6 +1,6 @@
 #!/bin/bash
 
-## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
 ## Local smoke-test harness for derivative-maker.
@@ -133,7 +133,9 @@ fi
 ## bash can't export arrays, but a scalar env var expands under
 ## '"${var[@]}"' as a one-element array, which is exactly what we want
 ## for narrowing '$flavors_list' to a single flavor.
-"$run_as_user" --chown "$source_dir" "$build_user" -- \
+"$run_as_user" --chown "$source_dir" \
+   -- \
+   "$build_user" \
    env \
       HOME="/home/$build_user" \
       USER="$build_user" \

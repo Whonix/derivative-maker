@@ -58,8 +58,6 @@ ${BASH_SOURCE[0]} INFO: Disabling verbose/debug output (xtrace) (set +x). For mo
    fi
 fi
 
-#set -x
-
 if [ "${CI:-}" = "true" ]; then
    true "${BASH_SOURCE[0]} INFO: CI detected."
    export dist_build_non_interactive=true
