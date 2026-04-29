@@ -1,3 +1,171 @@
+commit 27ee547ed7b1f0c8b1d90f98ed987a40daea5d3b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 05:04:09 2026 -0400
+
+    .
+
+commit 653fcba9f9436a71c6cbfb9ef5e8827669b15ca0
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 04:56:53 2026 -0400
+
+    .
+
+commit af027ac914d543a0d0169dc7e01d571b490ab902
+Merge: 9f57e8708 f01df306d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 04:55:38 2026 -0400
+
+    Merge remote-tracking branch 'ArrayBolt3/arraybolt3/trixie'
+
+commit 9f57e87086816498fe6c661a4cbb1c057050da63
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 04:49:35 2026 -0400
+
+    .
+
+commit 1b066fe238e407db1962e5b9fecee9658283d008
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 04:49:16 2026 -0400
+
+    .
+
+commit f01df306d5c2bf9d11581ef86535f47813d23fb2
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Tue Apr 28 23:51:23 2026 -0400
+
+    Misc fixes
+
+commit 54d8ef4e8bf6f29134a5d5b6416423e9384ab88d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Apr 28 08:35:41 2026 -0400
+
+    .
+
+commit ee846134d1c2315dab25078fe7c21ab596fcdc92
+Merge: c44321b1c e297698aa
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Apr 28 07:14:42 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/add-end-of-options-support-uB6We'
+
+commit c44321b1c773da412974a904ec53353d9dbc155b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Apr 28 06:39:53 2026 -0400
+
+    .
+
+commit e297698aac42a03c29829ed85bd35121b27392be
+Author: Claude <noreply@anthropic.com>
+Date:   Tue Apr 28 09:49:42 2026 +0000
+
+    fix unbound vars / --flavor source rename / CI workflows + hardening
+
+    Bug fixes (under set -u)
+    - target_architecture_pretty_name was unset when dm-tor-update-repository
+      and other dm-* helpers sourced help-steps/variables with
+      dist_build_one_parsed=true. Arch-derived defaults
+      (target_architecture_pretty_name, BUILD_KERNEL_PKGS, BUILD_HEADER_PKGS)
+      moved out of parse-cmd into variables so they always run.
+    - --flavor internal forwarded the literal string "internal" as
+      --architecture internal to cowbuilder / mmdebstrap. Renamed the flavor
+      to --flavor source (the legitimate name); "internal" removed from the
+      architecture validation list.
+    - mmdebstrap's args_filtered string-replacement chain matched against
+      dist_build_target_arch and broke on cross-arch builds. Rewritten as a
+      proper token walker (mmdebstrap_filter_args) that matches by option
+      name, with per-token INFO log under xtrace. The wrapper no longer
+      forwards args_passthrough to mmdebstrap; it constructs the full argv
+      itself so caller --architectures cannot override the wrapper's value.
+    - dist_build_internal_run / "internalrun" abolished, renamed to
+      dist_build_source_run / "source" across the build engine. Pure rename,
+      no behavior change.
+    - --repo false on a redistributable build now errors instead of being
+      silently overridden to true. Override knob:
+      dist_build_redistributable_allow_no_repo=true via env or buildconfig.d.
+    - dist_server_with_upload_location_list_list was unbound in the
+      source-flavor path; added an empty default.
+
+    Config precedence
+    - help-steps/variables: precedence order now documented
+      (CLI > env > buildconfig.d > default).
+    - The unconditional build_remote_repo_enable="true" override converted
+      to a default so CLI / env / buildconfig.d can take effect.
+
+    CI workflows added
+    - .github/workflows/lint.yml: offline lint (yaml + shellcheck) on
+      debian:trixie. Fail-not-skip on missing tooling.
+    - .github/workflows/dry-run.yml: ./derivative-maker --dry-run true
+      --flavor source --target source on tag push.
+    - .github/workflows/codeql.yml: CodeQL Python static analysis (the one
+      Python script in this repo). Bash is covered by shellcheck.
+    - .github/workflows/scorecard.yml: OpenSSF Scorecard weekly audit.
+    - .github/dependabot.yml: weekly bumps for github-actions and docker
+      ecosystems.
+
+    Workflow hardening (every workflow)
+    - permissions: contents: read at top level; per-job overrides (e.g.
+      security-events: write for codeql / scorecard) only when needed.
+    - persist-credentials: false on every actions/checkout.
+    - Fork-PR guard: only runs for PRs from the same repo, or for non-PR
+      triggers (push / tag / cron).
+    - Hard timeout-minutes on every job.
+    - Every uses: <action>@<sha> SHA-pinned, with provenance recorded in
+      agents/github-actions-security.md (re-pin procedure committed).
+    - Container image: lines pinned to multi-arch index digest
+      (debian:trixie@sha256:35b8...). Re-pin curl one-liner committed.
+    - run_automated_builder.yml gated on github.repository ==
+      Whonix/derivative-maker so forks do not fail at vault decrypt.
+      Marked "## XXX: hardcoded".
+
+    ci/ scripts (extracted from inline workflow shell)
+    - ci/lint-install.sh, ci/lint-diagnostics.sh, ci/lint-yaml.sh,
+      ci/lint-shellcheck.sh: lint workflow steps.
+    - ci/dry-run-install.sh, ci/dry-run-derivative-maker.sh: dry-run
+      workflow steps.
+    - ci/local-checks.sh: dispatcher that runs lint-yaml + lint-shellcheck
+      for one-shot local pre-commit-style coverage.
+    - ci/pre-commit-hook: runs lint-yaml.sh; install via
+      ln -s ../../ci/pre-commit-hook .git/hooks/pre-commit
+    - All scripts: CI=true guard with ALLOW_LOCAL=true override; printf
+      instead of echo; end-of-options on cd / cat / tar / rm / git / awk
+      where supported; for file_name (not for file) so the variable does
+      not shadow the file command.
+
+    Lint scope changes
+    - Dropped sections in ci/local-checks.sh that no longer add value:
+      bash_n (subsumed by shellcheck which calls bash -n internally),
+      regression (deprecated tokens dist_build_internal_run, internalrun,
+      --flavor internal are all gone from the tree), actionlint (not
+      packaged in Debian; trust footprint discussed in
+      agents/github-actions-security.md), variables_smoke (superseded by
+      the dry-run.yml workflow which exercises ./derivative-maker --dry-run
+      end-to-end).
+
+    shellcheck cleanup
+    - The codebase is shellcheck-clean at severity=info with three
+      intentional exclusions (SC2086, SC2317, SC2016) - rationales in
+      ci/lint-shellcheck.sh. Real findings (SC2162 read without -r,
+      genuinely missing quotes) are surfaced.
+
+    Documentation
+    - agents/github-actions-security.md: workflow rules + pin provenance
+      table + container digest re-pin procedure + "Why no actionlint".
+
+    Misc
+    - end-of-options -- on pushd / cat / grep call sites in
+      help-steps/* and codespell-wrapper.
+    - codespell-wrapper no longer hardcodes ~/derivative-maker.
+    - Codex review on PR #5 addressed: --flavor callers migrated,
+      args_passthrough not forwarded, --architectures filtered.
+
+    https://claude.ai/code/session_01BAQS9pE9zQYieV6Uys9Reo
+
+commit 9668e498e3e4235405ae12d285769e448ecb24e8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Apr 27 16:35:37 2026 +0000
+
+    bumped changelog version
+
 commit 8879d289ff39c01b9c9f4c66e7a8aa949a26f561
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Mon Apr 27 11:35:19 2026 -0400
