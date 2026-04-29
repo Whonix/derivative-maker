@@ -869,7 +869,7 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
       true
    else
       if [ "${build_machines_counter:-0}" -gt "1" ]; then
-         printf '%s\n' "${red}${bold}You cannot use --flavor multiples times!${reset}"
+         printf '%s\n' "${red}${bold}You cannot use --flavor multiple times!${reset}"
          exit 1
       fi
    fi

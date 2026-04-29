@@ -174,9 +174,9 @@ cowbuilder_setup_do() {
       if [ "${dist_build_virtualbox:-}" = "true" ]; then
          ## Install VirtualBox inside the chroot using 'dist-installer-cli'.
          ## Only install into the amd64 chroot:
-         ## - VirtualBox binaries are available for amd64 / i386 only (no
-         ##   Linux arm64 build exists at time of writing), so installing
-         ##   into any non-amd64 chroot would fail.
+         ## - VirtualBox binaries are available for amd64 only (no Linux arm64
+         ##   build exists at time of writing), so installing into any
+         ##   non-amd64 chroot would fail.
          ## - When '--target virtualbox --arch arm64' (for Mac M1/M2 .ova
          ##   output), an amd64 chroot is explicitly added above; the
          ##   arm64 .vdi is wrapped into an .ova using amd64 'VBoxManage'.

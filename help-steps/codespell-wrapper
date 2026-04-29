@@ -12,7 +12,8 @@ set -o errtrace
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
 ## Resolve to the repo root regardless of where this script lives or is
-## invoked from: BASH_SOURCE[0]/.. is help-steps/, so .. is the repo root.
+## invoked from: the file specified by "${BASH_SOURCE[0]}" is under
+## help-steps/, so .. is the repo root.
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
 skip_patterns=(

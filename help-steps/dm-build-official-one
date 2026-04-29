@@ -36,7 +36,8 @@ elif [ "${build_dry_run:-}" = "true" ]; then
   ## (see 'help-steps/variables' '$rsync_cmd' default for dry-run),
   ## so '~/.ssh' is not used for real uploads and its absence is not
   ## an error. Coordinated with
-  ## 'build-steps.d/1100_sanity-tests:check-redistributable-builds-requirements'.
+  ## 'build-steps.d/1100_sanity-tests'
+  ## 'check-redistributable-builds-requirements()'.
   true "INFO: Skipping test if folder ~/.ssh exists in dry-run mode."
 else
   run_cmd test -d ~/.ssh

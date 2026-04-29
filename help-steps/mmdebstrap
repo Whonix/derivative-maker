@@ -41,7 +41,7 @@ args_original="$*"
 ##
 ## NOTE: The wrapper currently does NOT forward 'args_passthrough' to
 ## mmdebstrap. It hardcodes every mmdebstrap argument explicitly below.
-## The filter exists as scaffolding so that, when grml-debootstrap or
+## The filter exists as scaffolding so that, if grml-debootstrap or
 ## cowbuilder eventually start passing options we want to honor, we can
 ## start forwarding 'args_passthrough' selectively without re-introducing
 ## the brittle string-substitution approach. Forwarding it today would

@@ -14,6 +14,8 @@
 set -o nounset
 set -o errtrace
 set -o pipefail
+## NOT errexit: if one file fails linting, other files should still be
+## checked.
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." || exit 2
 

@@ -13,12 +13,8 @@ main() {
 }
 
 prepare_environment() {
-  ## '--non-interactive' makes sudo refuse to prompt; the next line below
-  ## proves we expect passwordless sudo here. Earlier this line piped
-  ## 'changeme' into 'sudo --stdin' as a "fallback password", but
-  ## '--non-interactive' takes precedence over '--stdin' (sudo --help:
-  ## "If -n is specified ... -S has no effect.") so the pipe was always
-  ## a no-op. Drop both '--stdin' and the pipe.
+  ## We no longer use a default password of 'changeme', so there is no need
+  ## to pipe it in here.
   sudo --non-interactive -- apt-get update -q
   sudo --non-interactive -- apt-get install git python3-behave python3-pip python3-pyatspi -yq
   pip3 install dogtail -q
