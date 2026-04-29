@@ -34,7 +34,8 @@ true "${BASH_SOURCE[0]} INFO: begin"
 ## 'source "${HELPER_SCRIPTS_PATH:-}/usr/libexec/helper-scripts/..."'
 ## references against the in-tree submodule rather than the not-yet-
 ## installed system path '/usr/libexec/helper-scripts'.
-export HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
+HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
+export HELPER_SCRIPTS_PATH
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/xtrace.bsh
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/xtrace.bsh"
 
