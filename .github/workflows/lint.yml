@@ -1,5 +1,5 @@
 ---
-## Offline lint checks. Runs on every PR and on master pushes.
+## Offline lint checks. Runs on every PR and on tag pushes.
 ## Each check is a discrete workflow step so failures are visible
 ## in the GitHub Actions UI without scrolling. The dispatcher script
 ## ci/local-checks.sh reproduces the whole flow on a dev machine.
@@ -13,10 +13,11 @@ name: Lint
 on:
   pull_request:
     branches: [master]
+  ## Branch-push triggers intentionally omitted: a tag-bearing commit
+  ## landing on master would otherwise fire this workflow twice (once
+  ## for the branch push, once for the tag push). Same rationale in
+  ## the other workflows in this directory.
   push:
-    branches:
-      - master
-      - 'ci*'
     tags:
       - '*'
 

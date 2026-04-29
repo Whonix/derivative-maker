@@ -154,4 +154,16 @@ fi
 ## Hand off. 'sudo --preserve-env=PATH' is the conservative default;
 ## callers that want more env vars passed through can prepend
 ## 'env VAR=val ...' inside the command they pass after '--'.
-sudo --non-interactive -u "$target_user" --preserve-env=PATH -- "$@"
+##
+## 'user_name=$target_user' is set as an inline sudo env assignment
+## (sudo's 'VAR=val cmd' syntax) so the target process sees the
+## correct invoking-user identity. Without this, help-steps/variables
+## would fall back to '$SUDO_USER' (= 'root' here, because we are
+## root invoking sudo to drop privileges) and compute
+## HOMEVAR=/home/root, which is nonsensical and breaks downstream
+## 'mkdir -p "$HOMEVAR/..."' calls. variables already documents the
+## precedence "honor a caller-provided user_name first"; this is
+## that caller doing so. Inline assignment (not --preserve-env) so
+## sudo's env-strip cannot drop it.
+sudo --non-interactive -u "$target_user" --preserve-env=PATH \
+   user_name="$target_user" -- "$@"

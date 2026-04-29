@@ -12,8 +12,12 @@ on:
   branch_protection_rule:
   schedule:
     - cron: '0 4 * * 0'
-  push:
-    branches: [master]
+  ## Branch-push trigger intentionally omitted: a tag-bearing commit
+  ## landing on master would otherwise fire this workflow alongside
+  ## the tag-triggered Dry-run / Lint / builder jobs. The weekly
+  ## schedule covers ongoing posture drift; per-commit posture
+  ## changes (branch-protection rules) are caught by the
+  ## branch_protection_rule trigger above.
 
 permissions:
   contents: read

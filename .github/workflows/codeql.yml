@@ -8,12 +8,11 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - '**/*.py'
-      - 'help-steps/extract-openpgp-policy-trusted-certs'
-      - '.github/workflows/codeql.yml'
+  ## Branch-push trigger intentionally omitted: a tag-bearing commit
+  ## landing on master would otherwise fire this workflow alongside
+  ## the tag-triggered Dry-run / Lint / builder jobs. The weekly
+  ## schedule below covers "new CodeQL queries on unchanged code";
+  ## tagged releases are exercised via the dry-run smoke job.
   pull_request:
     branches: [master]
     paths:
