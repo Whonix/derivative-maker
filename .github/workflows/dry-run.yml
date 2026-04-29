@@ -1,4 +1,3 @@
----
 ## End-to-end dry-run smoke. Heavyweight (5-15 min). Tag-push only;
 ## uncomment the pull_request / push-master blocks below to also cover
 ## those triggers (cost: ~10 min per run).
@@ -41,6 +40,16 @@ jobs:
       image: debian:trixie@sha256:35b8ff74ead4880f22090b617372daff0ccae742eb5674455d542bef71ef1999  # debian:trixie as of 2026-04-27
 
     steps:
+      - name: Install git in container (required by actions/checkout)
+        ## debian:trixie ships without git. actions/checkout@v6 detects
+        ## the missing git and falls back to a REST API download that
+        ## does not support `submodules: recursive`, aborting the job.
+        ## Install git (and ca-certificates for its TLS) before
+        ## checkout so it uses the native git client.
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git ca-certificates
+
       - name: Checkout repository (with submodules)
         ## fetch-depth: 0 so the helper-scripts submodule's pinned SHA
         ## is reachable.
