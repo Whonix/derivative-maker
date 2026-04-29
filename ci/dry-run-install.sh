@@ -14,6 +14,12 @@
 ## Build deps: cowbuilder + mmdebstrap + debootstrap (the actual chroot
 ## creation tools the build steps drive).
 ##
+## Runtime deps the build scripts assume are on PATH:
+## - lsb-release: 'help-steps/variables' calls 'lsb_release --short
+##   --id' to detect the host OS. debian:trixie does not ship it.
+## - procps: 'helper-scripts/.../trace.bsh' calls 'ps' from its
+##   backtrace path. debian:trixie does not ship it.
+##
 ## TODO: deduplicate against buildconfig.d/30_dependencies.conf. The
 ## list of build deps overlaps with what
 ## build-steps.d/1200_prepare-build-machine consumes from
@@ -40,5 +46,6 @@ apt-get update -qq
 
 apt-get install -y --no-install-recommends \
   bash sudo git ca-certificates \
+  lsb-release procps \
   python3-yaml shellcheck file moreutils \
   cowbuilder mmdebstrap debootstrap
