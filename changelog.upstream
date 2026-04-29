@@ -1,3 +1,33 @@
+commit 6c47cf623ec2841737e6848818e36aa7aff31470
+Merge: 6d70ee3ae 259f8d59d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 05:45:33 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/fix-dry-run-failure-Gakes'
+
+commit 259f8d59d7346fa9083542e1eaf5d1d7d040b1e1
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Wed Apr 29 05:40:26 2026 -0400
+
+    ci: install git in container before checkout in dry-run workflow
+
+    The debian:trixie container image is minimal and does not include git.
+    actions/checkout@v6 detects this and falls back to its REST API download
+    path, which does not support `submodules: recursive` and aborts with:
+
+      Error: Input 'submodules' not supported when falling back to download
+      using the GitHub REST API.
+
+    Install git (and ca-certificates, required by git's TLS) via apt-get
+    before the checkout step so checkout can use the native git client and
+    fetch the helper-scripts submodule.
+
+commit 6d70ee3ae3a6dfef1fb2e1502d7b22bebc45dc25
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 09:29:36 2026 +0000
+
+    bumped changelog version
+
 commit 27ee547ed7b1f0c8b1d90f98ed987a40daea5d3b
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Wed Apr 29 05:04:09 2026 -0400
