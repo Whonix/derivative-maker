@@ -20,8 +20,8 @@ cd help-steps
 source pre
 source variables
 
-source "$source_code_folder_dist/packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/check_runtime.bsh"
-source "$source_code_folder_dist/packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/strings.bsh"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/check_runtime.bsh"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/strings.bsh"
 
 create-live-build-image() {
    ## Record old umask so it can be restored at the end of this function.
