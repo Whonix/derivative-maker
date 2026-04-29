@@ -11,7 +11,8 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/check_runtime.bsh"
+export HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/check_runtime.bsh"
 
 if was_executed "${BASH_SOURCE[0]}"; then
    parse_cmd_was_sourced='false'

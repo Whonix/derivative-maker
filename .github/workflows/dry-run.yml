@@ -62,12 +62,6 @@ jobs:
       - name: Install build prerequisites in container
         run: bash ci/dry-run-install.sh
 
-      - name: Symlink /usr/libexec/helper-scripts
-        ## help-steps/pre's get_colors.sh hardcodes
-        ## /usr/libexec/helper-scripts/check_runtime.bsh; satisfy it
-        ## with the in-tree submodule.
-        run: ln -sfn "$PWD/packages/kicksecure/helper-scripts/usr/libexec/helper-scripts" /usr/libexec/helper-scripts
-
       - name: Drop privileges and run derivative-maker --dry-run true
         run: bash ci/dry-run-derivative-maker.sh
 

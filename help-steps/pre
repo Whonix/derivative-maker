@@ -30,9 +30,13 @@ true "${BASH_SOURCE[0]} INFO: begin"
 ## must be loaded first because the colors source below is wrapped in
 ## xtrace_off / xtrace_restore (and the trap functions further down
 ## reach for benchmark_format / function_trace / process_backtrace).
-helper_scripts_libexec="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts"
+## HELPER_SCRIPTS_PATH lets helper-scripts resolve their internal
+## 'source "${HELPER_SCRIPTS_PATH:-}/usr/libexec/helper-scripts/..."'
+## references against the in-tree submodule rather than the not-yet-
+## installed system path '/usr/libexec/helper-scripts'.
+export HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/xtrace.bsh
-source "${helper_scripts_libexec}/xtrace.bsh"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/xtrace.bsh"
 
 xtrace_off
 ## help-steps/pre uses color variables (e.g. $red, $bold, $reset) in its
@@ -40,13 +44,12 @@ xtrace_off
 ## colors here so callers don't have to worry about source order.
 ## Sourcing it again later (from the caller) is idempotent.
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/get_colors.sh
-source "${helper_scripts_libexec}/get_colors.sh"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/get_colors.sh"
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/benchmark.bsh
-source "${helper_scripts_libexec}/benchmark.bsh"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/benchmark.bsh"
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/trace.bsh
-source "${helper_scripts_libexec}/trace.bsh"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/trace.bsh"
 xtrace_restore
-unset helper_scripts_libexec
 
 ## Keep xtrace on if '--debug' was passed; otherwise silence it. Cannot be
 ## moved to help-steps/parse-cmd because parse-cmd runs later.

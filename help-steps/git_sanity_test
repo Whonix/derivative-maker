@@ -16,7 +16,8 @@ set -o errtrace
 
 MYDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/get_colors.sh"
+export HELPER_SCRIPTS_PATH="${MYDIR}/../packages/kicksecure/helper-scripts"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/get_colors.sh"
 
 ## This function is defined up here to avoid redundancy between comments and
 ## documentation.
