@@ -1,3 +1,102 @@
+commit b4ae47d3eaea55b27ca9c9f9f45c10a1b928285c
+Merge: cd28f279f db9835054
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 08:58:08 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/run-automated-builder-3J5R6'
+
+commit cd28f279faed148346cbc33ce5f179008c66d154
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 08:56:21 2026 -0400
+
+    .
+
+commit c1c99bfb2ed518c53110f0ceb5d6bdf9f1f3920a
+Merge: f3f8ba393 7df413221
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 08:54:45 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/run-automated-builder-3J5R6'
+
+commit db9835054ff3f1ab4c5d966ec0d47ff2e3df28bf
+Author: Claude <noreply@anthropic.com>
+Date:   Wed Apr 29 12:54:03 2026 +0000
+
+    fix shellcheck SC2155 in HELPER_SCRIPTS_PATH export
+
+    Split 'export VAR=$(...)' into a separate assignment + export to stop
+    the command-substitution exit code from being masked by export's own
+    return value. Surfaced by ci/lint-shellcheck.sh.
+
+    https://claude.ai/code/session_01WELorUvrfG3BBBgGa4TqLQ
+
+commit f3f8ba393cee7e3f98990ea837b9caf1af0e75ee
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 08:52:44 2026 -0400
+
+    .
+
+commit 7df413221e560b3ca2998956c895fa4898ed8147
+Author: Claude <noreply@anthropic.com>
+Date:   Wed Apr 29 12:51:17 2026 +0000
+
+    export HELPER_SCRIPTS_PATH for in-tree helper-scripts resolution
+
+    Set HELPER_SCRIPTS_PATH at every entry-point that sources
+    helper-scripts (help-steps/pre, parse-cmd, mount-raw, git_sanity_test;
+    build-steps.d/2800_create-lb-iso) so helper-scripts' internal
+    'source "${HELPER_SCRIPTS_PATH:-}/usr/libexec/helper-scripts/..."'
+    calls resolve against the in-tree submodule instead of the
+    not-yet-installed /usr/libexec/helper-scripts path.
+
+    Drops the CI symlink workaround in .github/workflows/dry-run.yml
+    that previously satisfied the hardcoded system path.
+
+    https://claude.ai/code/session_01WELorUvrfG3BBBgGa4TqLQ
+
+commit 6373f7701d0504c182561df122cd032542be5e34
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 08:48:41 2026 -0400
+
+    .
+
+commit e896d229bbe3f61ed2426360d7e7654438e23234
+Merge: 2f1f5b3aa c693c138f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 07:14:37 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/fix-dry-run-container-deps'
+
+commit c693c138fa64b304771423f3a8867b701781e999
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Wed Apr 29 07:03:37 2026 -0400
+
+    ci: install lsb-release and procps in dry-run container
+
+    Dry-run regressed past the user_name fix with:
+
+      variables: line 891: lsb_release: command not found
+      trace.bsh: line 91: ps: command not found
+      ERROR detected in script!: ./build-steps.d/1100_sanity-tests
+
+    debian:trixie is a minimal image and does not ship 'lsb_release'
+    (provided by package 'lsb-release') or 'ps' (provided by package
+    'procps'). help-steps/variables line 891 calls 'lsb_release
+    --short --id' to detect the host OS, and helper-scripts trace.bsh
+    shells out to 'ps' from its error backtrace path. Both abort the
+    build under 'set -o errexit' / nounset.
+
+    Add both packages to ci/dry-run-install.sh's apt-get install list.
+    A developer host running derivative-maker normally has these via
+    the build-deps cascade (1200_prepare-build-machine), so this only
+    affects the CI container.
+
+commit 2f1f5b3aa0b4d11d45efbcc8f6817d6799b106cb
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Apr 29 10:51:53 2026 +0000
+
+    bumped changelog version
+
 commit 9a72abbe7906510472fc0a55e39fef8e3f52b9a7
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Wed Apr 29 06:51:22 2026 -0400
