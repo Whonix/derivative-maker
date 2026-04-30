@@ -1,10 +1,13 @@
 #!/bin/bash
 
-#set -x
+set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+
+## Debugging.
+pwd
 
 ## Source help-steps/pre for xtrace_off / xtrace_restore and error-handler
 ## plumbing. Opt into fail-fast mode so pre keeps errexit on:
@@ -14,6 +17,7 @@ set -o errtrace
 ## so the caller's 'set -o errexit' above is preserved.
 export dist_build_auto_retry=0
 export dist_build_non_interactive=true
+
 source ./help-steps/pre
 source ./automated_builder/scripts/functions.bash
 
