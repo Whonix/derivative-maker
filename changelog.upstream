@@ -1,3 +1,68 @@
+commit f8a00834edbf5902ea81be87f4a0395cdf0e0ec1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 07:16:40 2026 -0400
+
+    .
+
+commit dc661617128dd3cdabc281aa53099716131aedd5
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 07:15:26 2026 -0400
+
+    CI
+
+commit 906d3a8fa4d1f32fc60bf440788d071a81cf40a1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 07:15:16 2026 -0400
+
+    .
+
+commit 47e0207e0ce0ac1672a030c5fb8afb96e222f9f4
+Merge: b2afdf682 c3ac8107c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 07:12:45 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/parse-cmd-nounset-fix-K3p7q'
+
+commit c3ac8107cedc2d6f9a4abdac4cee73dc37199712
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 1 11:09:57 2026 +0000
+
+    help-steps/parse-cmd: defensive expansion in CI dry-run diagnostic
+
+    Line 956 referenced \$dist_build_flavor bare inside a "true ..."
+    diagnostic message, but the surrounding logic uses the defensive
+    \${dist_build_flavor:-} form on line 947. Under set -o nounset,
+    the bare reference errors out when --flavor was not passed:
+
+      /.../help-steps/parse-cmd: line 956: dist_build_flavor: unbound variable
+
+    Hit by the automated_builder CI run (no --flavor argument because
+    it is dry-run-driven). Two sibling references (\$CI, \$build_dry_run)
+    on the same line had the same brittleness; all three now use the
+    \${VAR:-} form. Also wraps each value in single quotes in the
+    diagnostic message so trailing/leading whitespace is visible if
+    this triggers again.
+
+    AI-Assisted
+
+commit b2afdf6824d96c42a62d85c9111ad0e6e48be839
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 06:58:36 2026 -0400
+
+    .
+
+commit aa7a9789e20b2da75ef52eda3ce50cc671e7f5c2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 06:58:00 2026 -0400
+
+    .
+
+commit 0f34609087bbd385a7fd22e95732fde13e7c38cc
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 10:36:25 2026 +0000
+
+    bumped changelog version
+
 commit ad0ada272710b088da5ea035cd8d92846b2c3319
 Merge: 18283dd87 d84cf9780
 Author: Patrick Schleizer <adrelanos@whonix.org>
