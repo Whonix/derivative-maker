@@ -25,6 +25,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  ## debian:trixie - Debian 13, current stable. TODO: update for
+  ## forky. Re-pin procedure: agents/github-actions-security.md.
+  DEBIAN_IMAGE: 'debian:trixie@sha256:35b8ff74ead4880f22090b617372daff0ccae742eb5674455d542bef71ef1999'
+
 jobs:
   dry-run:
     name: derivative-maker --dry-run true
@@ -34,36 +39,44 @@ jobs:
 
     timeout-minutes: 25
 
-    container:
-      ## debian:trixie - Debian 13, current stable. TODO: update for
-      ## forky. Re-pin procedure: agents/github-actions-security.md.
-      image: debian:trixie@sha256:35b8ff74ead4880f22090b617372daff0ccae742eb5674455d542bef71ef1999  # debian:trixie as of 2026-04-27
-
+    ## A plain `container:` block runs the steps inside a Docker
+    ## exec'd into the image, NOT under systemd as PID 1. derivative-
+    ## maker's build_machine_setup expects `systemctl start approx`
+    ## to bring up the local apt cache; without systemd as PID 1
+    ## that call is a no-op and `apt-get update` against
+    ## 127.0.0.1:9977 fails.
+    ##
+    ## Option C: run a detached, privileged container with
+    ## /sbin/init as the entrypoint so systemd boots inside; then
+    ## `docker exec` each build step into it. The host runs
+    ## ubuntu-latest (which already has systemd, only used to host
+    ## the docker daemon).
     steps:
-      - name: Install git in container (required by actions/checkout)
-        ## debian:trixie ships without git. actions/checkout@v6 detects
-        ## the missing git and falls back to a REST API download that
-        ## does not support `submodules: recursive`, aborting the job.
-        ## Install git (and ca-certificates for its TLS) before
-        ## checkout so it uses the native git client.
-        run: |
-          apt-get update -qq
-          apt-get install -y --no-install-recommends git ca-certificates
-
       - name: Checkout repository (with submodules)
-        ## fetch-depth: 0 so the helper-scripts submodule's pinned SHA
-        ## is reachable.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           submodules: recursive
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Start systemd-enabled Debian container
+        run: bash ci/dry-run-start-container.sh dryrun "${DEBIAN_IMAGE}"
+
+      - name: Install git inside container (required by submodule paths)
+        run: bash ci/dry-run-install-container-git.sh dryrun
+
       - name: Install build prerequisites in container
-        run: bash ci/dry-run-install.sh
+        ## --env CI=true is required: the in-container scripts'
+        ## guard clauses refuse to run unless CI=true, and `docker
+        ## exec` does not propagate the GHA runner's environment.
+        run: docker exec --env CI=true dryrun bash ci/dry-run-install.sh
 
       - name: Drop privileges and run derivative-maker --dry-run true
-        run: bash ci/dry-run-derivative-maker.sh
+        run: docker exec --env CI=true dryrun bash ci/dry-run-derivative-maker.sh
+
+      - name: Tear down container
+        if: always()
+        run: docker rm --force dryrun || true
 
       ## No artifact upload step: --dry-run prints to stdout (captured
       ## by the Actions step log); nothing in help-steps/ or
