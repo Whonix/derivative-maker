@@ -1,3 +1,93 @@
+commit ad0ada272710b088da5ea035cd8d92846b2c3319
+Merge: 18283dd87 d84cf9780
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 06:33:41 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/agents-bash-style-guide-Y8m2k'
+
+commit 18283dd87eccf5ffec5d001ce23e77ea012b8fee
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 06:30:10 2026 -0400
+
+    .
+
+commit 0b1f1f8e9169f78917f3fa5c53a829f65f26fae5
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 06:29:36 2026 -0400
+
+    debugging
+
+commit d6b3186748e5979b484602df931c073cd33ac4d8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 06:24:00 2026 -0400
+
+    chmod +x
+
+commit 6223fb60dc7f09141f2ce5315592e126febd6b03
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 06:21:55 2026 -0400
+
+    .
+
+commit 69855c8ceeb50b9712d32d5736ee5e1609c8b943
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 05:59:37 2026 -0400
+
+    .
+
+commit d28664878dd4aac51987404aaf5d786aca3d1b36
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 05:51:15 2026 -0400
+
+    .
+
+commit 8f6d0c2c83f36b41139a49092e1cb05e26d27aca
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 05:49:19 2026 -0400
+
+    .
+
+commit d84cf9780d9a90a1f315172ce8e1244bd5611b4d
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 1 09:48:59 2026 +0000
+
+    agents/bash-style-guide.md: capture the AI-Assisted bash style
+
+    Brief by design: the goal is "readable by both human reviewers and
+    AI tools without a 50-page rulebook." Documents the style applied
+    to scripts under the assisted-by-ai org, distilled from the review
+    feedback on the github-org-* / dm-* / helper-scripts work in
+    developer-meta-files.
+
+    Covers strict-mode shell options, variable expansion (\${var} not
+    \$var; no \${var:-} unless required), local declarations, printf
+    '%s\n' style, long-option flags + end-of-options "--", split case
+    arms, sourcing helper-scripts via \${HELPER_SCRIPTS_PATH:-},
+    safe-rm over rm, standalone trap functions, "true MSG" for null
+    ops, pre-computing inline command substitutions, and the
+    validate-at-sinks / sanitize-at-display pattern for API-derived
+    strings.
+
+    AI-Assisted
+
+commit ff3d0b95303981be86360205ac57dd77a7a4ba64
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 05:22:11 2026 -0400
+
+    .
+
+commit 927eb95a3d8f51c88fa7c7454de506d41aa5c30c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 05:12:39 2026 -0400
+
+    .
+
+commit 51cfae94123102086429be1b4e1a6e01255a58a3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Apr 30 22:00:42 2026 +0000
+
+    bumped changelog version
+
 commit 0f22b37c022c43f4cb9a4baa3b75378540a7d373
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Thu Apr 30 17:59:10 2026 -0400
