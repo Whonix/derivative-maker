@@ -44,8 +44,9 @@ fi
 
 apt-get update -qq
 
-apt-get install -y --no-install-recommends \
+apt-get install --yes --no-install-recommends \
   bash sudo git ca-certificates \
   lsb-release procps \
   python3-yaml shellcheck file moreutils \
-  cowbuilder mmdebstrap debootstrap
+  cowbuilder mmdebstrap debootstrap \
+  git sequoia-git sq sqop safe-rm
