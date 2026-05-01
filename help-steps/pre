@@ -39,7 +39,9 @@ export HELPER_SCRIPTS_PATH
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/xtrace.bsh
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/xtrace.bsh"
 
-xtrace_off
+## Debugging.
+#xtrace_off
+
 ## help-steps/pre uses color variables (e.g. $red, $bold, $reset) in its
 ## error messages and in root_check (called at end of this file). Source
 ## colors here so callers don't have to worry about source order.
@@ -50,7 +52,9 @@ source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/get_colors.sh"
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/benchmark.bsh"
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/trace.bsh
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/trace.bsh"
-xtrace_restore
+
+## Debugging.
+#xtrace_restore
 
 ## Keep xtrace on if '--debug' was passed; otherwise silence it. Cannot be
 ## moved to help-steps/parse-cmd because parse-cmd runs later.
