@@ -266,8 +266,13 @@ approx_proxy_setup() {
       $SUDO_TO_ROOT cp --no-preserve=mode -- "$source_code_folder_dist/approx/curlrc-tor" '/etc/approx-derivative-maker/curl-home/.curlrc'
    fi
 
-   $SUDO_TO_ROOT systemctl daemon-reload
-   $SUDO_TO_ROOT systemctl restart approx-derivative-maker.socket
+   if [ "${CI:-}" = "true" ]; then
+      $SUDO_TO_ROOT systemctl daemon-reload || true "WARNING: Failed."
+      $SUDO_TO_ROOT systemctl restart approx-derivative-maker.socket || true "WARNING: Failed."
+   else
+      $SUDO_TO_ROOT systemctl daemon-reload
+      $SUDO_TO_ROOT systemctl restart approx-derivative-maker.socket
+   fi
 
    if [ "${dist_build_redistributable:-}" != "true" ]; then
       return 0
