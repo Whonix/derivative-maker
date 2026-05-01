@@ -953,7 +953,7 @@ ${reset}"
          ## equivalent of '--dry-run true'
          build_dry_run="true"
          export build_dry_run
-         true "${BASH_SOURCE[0]} INFO: CI=$CI and dist_build_flavor ($dist_build_flavor) is NOT kicksecure-cli, therefore setting: build_dry_run=$build_dry_run"
+         true "${BASH_SOURCE[0]} INFO: CI='${CI:-}' and dist_build_flavor='${dist_build_flavor:-}' is NOT kicksecure-cli, therefore setting: build_dry_run='${build_dry_run:-}'"
       fi
    fi
 }
