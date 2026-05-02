@@ -1,3 +1,63 @@
+commit 46a34301c0c6689f3645307f303ebd23caaaa663
+Merge: fc9fbe6e2 32565abac
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 15:06:17 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/automated-builder-diagnostics-Mq8Tn'
+
+commit fc9fbe6e20dcefdc6923f41fbd3d2a7b220a22fd
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 15:01:14 2026 -0400
+
+    .
+
+commit 7d849ef07c753982fab11f14676aaf883012554a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 15:00:35 2026 -0400
+
+    .
+
+commit 32565abac074a8e9bbbda81a7df776719f3054f6
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 2 18:56:15 2026 +0000
+
+    automated_builder: silence python warning + dump build.log on failure
+
+    Two small ergonomic fixes for the automated_builder workflow.
+
+    1) Inventory: pin ansible_python_interpreter=/usr/bin/python3.
+
+       Without the explicit pin, Ansible's interpreter discovery picks
+       /usr/bin/python3.13 on the Debian 13 VPS and emits a
+       "future installation of another Python interpreter could cause a
+       different interpreter to be discovered" warning on every play.
+       Pin to the stable /usr/bin/python3 symlink so a future Debian
+       image bump that lands python3.14 or python3.15 doesn't change
+       the discovered path or re-emit the warning.
+
+    2) build_vms_from_tag.sh: dump tail of /home/ansible/build.log on
+       non-zero exit.
+
+       The Ansible task currently surfaces only the bash xtrace prefix
+       (set -o errexit, etc.) when the build fails, plus the tail of
+       the script's own stdout - which gets cut off well before the
+       actual error from dm-build-official. The full output IS in
+       /home/ansible/build.log on the VPS, but reaching it requires
+       SSH'ing to the (often torn-down) VPS, which defeats CI debugging.
+
+       New EXIT trap dumps the last 200 lines of build.log to stderr on
+       any non-zero exit. Ansible captures stderr and surfaces it in the
+       task output, so the actual error becomes visible in the GitHub
+       Actions log directly.
+
+    https://claude.ai/code/session_01U5dqsVj1msLQMiCemkuddP
+
+commit c885068a52f8a1ef565ae14fcc7a9c57b90e87f1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 18:37:17 2026 +0000
+
+    bumped changelog version
+
 commit 6a0d684c7b95812e96eacdfcbec2170911c1af14
 Merge: add4f0e33 44e5a4c1e
 Author: Patrick Schleizer <adrelanos@whonix.org>
