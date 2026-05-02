@@ -5,6 +5,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 readonly BUILD_LOG='/home/ansible/build.log'
 
@@ -15,10 +17,11 @@ readonly BUILD_LOG='/home/ansible/build.log'
 on_exit() {
   local rc=$?
   if [ "${rc}" -ne 0 ] && [ -r "${BUILD_LOG}" ]; then
-    printf '\n=== build_vms_from_tag.sh: failed (rc=%d). Tail of %s: ===\n' \
-      "${rc}" "${BUILD_LOG}" >&2
+    printf '%s\n' \
+      "" \
+      "=== build_vms_from_tag.sh: failed (rc=${rc}). Tail of '${BUILD_LOG}': ===" >&2
     tail --lines=200 -- "${BUILD_LOG}" >&2 || true
-    printf '=== end of build.log tail ===\n' >&2
+    printf '%s\n' '=== end of build.log tail ===' >&2
   fi
   exit "${rc}"
 }
@@ -35,7 +38,7 @@ main() {
   ## Using 'pipefail' so a non-zero exit from build_command propagates
   ## through the pipe.
   set -o pipefail
-  build_command "$@" 2>&1 | tee -a -- "${BUILD_LOG}"
+  build_command "$@" 2>&1 | tee --append -- "${BUILD_LOG}"
 }
 
 build_command() {
