@@ -1,3 +1,90 @@
+commit 6a0d684c7b95812e96eacdfcbec2170911c1af14
+Merge: add4f0e33 44e5a4c1e
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 14:37:00 2026 -0400
+
+    Merge remote-tracking branch 'assisted-by-ai/claude/dry-run-systemd-ci-Q4t9b'
+
+commit 44e5a4c1e73b189170fedcedd7c029819b45ab30
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 1 19:49:40 2026 +0000
+
+    dry-run.yml: run under systemd in a privileged Debian container
+
+    Two unrelated changes on this branch:
+
+    1) dry-run CI fix (option C: systemd in a privileged Debian container).
+
+    build_machine_setup calls 'systemctl start approx' and the call
+    silently no-ops when no systemd is running as PID 1; later 'apt-get
+    update' against 127.0.0.1:9977 then fails with 'Connection refused'.
+
+    The previous form used 'container: image: debian:trixie' which makes
+    GitHub Actions exec each build step into a non-systemd Docker. Switch
+    to running on the host (ubuntu-latest, used only for hosting Docker)
+    and bring up our own privileged Debian container with /sbin/init as
+    the entrypoint so systemd boots inside. Each build step is then run
+    via 'docker exec' into the running container.
+
+    Concrete changes to .github/workflows/dry-run.yml:
+    - Hoist the image SHA into env.DEBIAN_IMAGE.
+    - Drop the 'container:' block.
+    - Call ci/dry-run-start-container.sh to launch the container with
+      '/sbin/init' as PID 1, mount /sys/fs/cgroup rw, and poll
+      'systemctl is-system-running' until 'running'/'degraded' or 60s.
+    - Call ci/dry-run-install-container-git.sh to apt-get install git
+      ca-certificates inside the container before checkout.
+    - Run the actual build steps via 'docker exec --env CI=true' so the
+      CI=true guard inside the in-container scripts sees it (docker exec
+      does not propagate host env automatically).
+    - Tear-down step removes the container regardless of outcome.
+
+    Both new ci/dry-run-*.sh scripts share the 'dry-run-' prefix with
+    the workflow per the bash-style-guide naming rule, and carry the
+    '## AI-Assisted' file-header marker.
+
+    Trade-off: ~30s extra per run for systemd boot + readiness wait. In
+    return, the existing approx + systemctl plumbing in
+    build_machine_setup works unmodified instead of needing a CI-mode
+    bypass throughout the build steps.
+
+    2) AGENTS.md: cross-link to canonical bash style guide.
+
+    The bash style guide is org-wide, not derivative-maker-specific. It
+    now lives canonically in developer-meta-files/agents/bash-style-guide.md.
+    Delete the local copy that previously lived here and update AGENTS.md
+    to cross-link to the Kicksecure mirror (not the assisted-by-ai
+    working mirror).
+
+    derivative-maker/agents/ retains repo-specific docs only:
+      - security.md            (production-code trust model)
+      - git_sanity_test_*.md   (help-steps/git_sanity_test analysis)
+      - github-actions-security.md (workflow patterns)
+
+    Consolidates what was on the closed PR #11 branch
+    (claude/style-guide-explicit-sourcing-W6r3a); the bash-style-guide
+    content itself shipped via developer-meta-files PR #6.
+
+    https://claude.ai/code/session_01U5dqsVj1msLQMiCemkuddP
+
+commit add4f0e33452e6c3914a283175c1b81b4cb32156
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 07:32:40 2026 -0400
+
+    fix
+
+commit 5041ba0d8abe36a7c44cbd936c81d4b9d1b64ac1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 07:05:30 2026 -0400
+
+    fix
+
+commit ae43f6bd6f3058b99c9f1933751498fb163f6e87
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 10:54:36 2026 +0000
+
+    bumped changelog version
+
 commit 7faa518981d4f72f0b1e6bd614a5d8116ca66f36
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Sat May 2 06:47:19 2026 -0400
