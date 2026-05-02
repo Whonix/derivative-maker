@@ -1,3 +1,45 @@
+commit 7faa518981d4f72f0b1e6bd614a5d8116ca66f36
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 06:47:19 2026 -0400
+
+    fix
+
+commit 51eea75907d07648d990254ca444f294769ecfb7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 04:51:08 2026 -0400
+
+    .
+
+commit b11b3a73a15aaa5a5cd3279abce7cbd4b181309d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 2 04:47:09 2026 -0400
+
+    .
+
+commit 22807d6e808ecaae96eff4ae8f017b0412c5d346
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 17:32:08 2026 -0400
+
+    .
+
+commit 268a336b51bcd0a6f959b9ad5e0162fffba3a005
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 16:44:15 2026 -0400
+
+    add CLAUDE.md
+
+commit 4cd248bf06d450c2c2ce8491ea26f36bf5e18bf6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 16:43:38 2026 -0400
+
+    .
+
+commit ea714bbf1d3c985cd315039f088ce105330b2805
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 1 12:10:39 2026 +0000
+
+    bumped changelog version
+
 commit 9e297a7fc08cd11681573612c97bd3b668d91fb2
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Fri May 1 08:09:15 2026 -0400
