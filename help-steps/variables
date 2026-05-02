@@ -1247,6 +1247,9 @@ set_dist_build_reprepro_folder_options() {
 [ -n "${host_architecture:-}" ] || host_architecture="$(dpkg --print-architecture)"
 export host_architecture
 
+## XXX: Belonging here?
+[ -n "${dist_build_target_arch:-}" ] || dist_build_target_arch="$(dpkg --print-architecture)"
+
 [ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="$dist_build_target_arch"
 #[ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="i386 amd64"
 export make_cross_build_platform_list
