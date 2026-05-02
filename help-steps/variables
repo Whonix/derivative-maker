@@ -1200,11 +1200,11 @@ set_dist_build_reprepro_folder_options() {
    ## derivative_repository_name gets set by packages/kicksecure/genmkfile/usr/share/genmkfile/make-helper-one.bsh
    local derivative_name_item valid_repository_name
    valid_repository_name=false
-   true "derivative_repository_name: $derivative_repository_name"
-   true "make_reprepro_codename_item: $make_reprepro_codename_item"
+
    if [ "${derivative_repository_name:-}" = "" ]; then
       error "derivative_repository_name is empty!"
    fi
+   true "derivative_repository_name: $derivative_repository_name"
 
    for derivative_name_item in $derivative_name_list ; do
       if [ "${derivative_repository_name:-}" = "$derivative_name_item" ]; then
@@ -1218,6 +1218,7 @@ set_dist_build_reprepro_folder_options() {
    fi
 
    [[ -v make_reprepro_codename_item ]] || make_reprepro_codename_item="$dist_build_apt_codename"
+   true "make_reprepro_codename_item: $make_reprepro_codename_item"
 
    if [ ! "${make_reprepro_codename_item:-}" = "local" ]; then
       apt_repo_sub_folder="aptrepo_remote/$derivative_repository_name"
