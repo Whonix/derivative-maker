@@ -6,18 +6,36 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+readonly BUILD_LOG='/home/ansible/build.log'
+
+## On a non-zero exit, dump the tail of /home/ansible/build.log to
+## stderr. Ansible captures the script's stderr and surfaces it in
+## the task output, so the actual build error becomes visible in the
+## CI log without having to SSH back to the VPS to read build.log.
+on_exit() {
+  local rc=$?
+  if [ "${rc}" -ne 0 ] && [ -r "${BUILD_LOG}" ]; then
+    printf '\n=== build_vms_from_tag.sh: failed (rc=%d). Tail of %s: ===\n' \
+      "${rc}" "${BUILD_LOG}" >&2
+    tail --lines=200 -- "${BUILD_LOG}" >&2 || true
+    printf '=== end of build.log tail ===\n' >&2
+  fi
+  exit "${rc}"
+}
+trap on_exit EXIT
+
 true "$0: START"
 
 export CI=true
 
 main() {
   ## Use 'tee' so build output is both logged to file and visible in the
-  ## Ansible task output.  Previously all output was silently redirected,
+  ## Ansible task output. Previously all output was silently redirected,
   ## making CI failures opaque ("non-zero return code" with no details).
   ## Using 'pipefail' so a non-zero exit from build_command propagates
   ## through the pipe.
   set -o pipefail
-  build_command "$@" 2>&1 | tee -a /home/ansible/build.log
+  build_command "$@" 2>&1 | tee -a -- "${BUILD_LOG}"
 }
 
 build_command() {

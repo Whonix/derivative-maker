@@ -1,2 +1,6 @@
 [vps_runner]
-"{{ VPS_IP }}" ansible_connection=ssh ansible_ssh_user=ansible ansible_ssh_private_key_file=~/.ssh/ansible_key ansible_ssh_common_args="-o ForwardX11=yes"
+## ansible_python_interpreter=/usr/bin/python3 silences Ansible's
+## interpreter-discovery warning. Debian 13 (the VPS image) ships
+## Python 3.13 at /usr/bin/python3.13; /usr/bin/python3 is the
+## stable symlink we want pinned.
+"{{ VPS_IP }}" ansible_connection=ssh ansible_ssh_user=ansible ansible_ssh_private_key_file=~/.ssh/ansible_key ansible_ssh_common_args="-o ForwardX11=yes" ansible_python_interpreter=/usr/bin/python3
