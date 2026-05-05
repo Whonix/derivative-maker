@@ -1,5 +1,9 @@
 ---
-name: Run automated builder
+## Sidebar UI ordering: GitHub sorts the Actions tab alphabetically
+## by 'name:'. The '00 ' prefix forces this workflow to the top of
+## the list because it is the canonical release pipeline; operators
+## should see its status first.
+name: 00 Run automated builder
 
 on:
   pull_request:
@@ -21,7 +25,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ## Dry-run smoke must pass before the heavy automated builder
+  ## kicks off. Calls dry-run.yml as a reusable workflow
+  ## (on: workflow_call) so dry-run + build run as ONE Actions UI
+  ## record - one workflow_run with two job nodes - rather than two
+  ## independent workflows whose success states could diverge.
+  ## See agents/github-actions-security.md (workflow_call section)
+  ## for why we prefer 'uses: ./...' over an event-driven
+  ## workflow_run trigger here.
+  dry-run:
+    uses: ./.github/workflows/dry-run.yml
+    ## The reusable workflow only needs contents: read. Pass it
+    ## explicitly so a future tightening of the parent's
+    ## workflow-level permissions block does not silently strip the
+    ## permission the called workflow expects.
+    permissions:
+      contents: read
+
   build:
+    needs: dry-run
     ## XXX: hardcoded
     ## The Ansible vault used by the build is only a repo secret on
     ## upstream Whonix/derivative-maker. Skip this job on every other

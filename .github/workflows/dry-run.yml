@@ -1,6 +1,12 @@
-## End-to-end dry-run smoke. Heavyweight (5-15 min). Tag-push only;
-## uncomment the pull_request / push-master blocks below to also cover
-## those triggers (cost: ~10 min per run).
+## End-to-end dry-run smoke. Heavyweight (5-15 min). Invoked as a
+## reusable workflow from run_automated_builder.yml so the build is
+## gated on the dry-run passing in the same Actions UI run; also
+## available as workflow_dispatch for ad-hoc manual smoke tests.
+##
+## The previous tag-push trigger has been moved to
+## run_automated_builder.yml: a single workflow run on tag now does
+## (dry-run -> build) instead of two parallel runs that did not
+## share success state.
 ##
 ## See agents/github-actions-security.md for the standard
 ## permissions / persist-credentials / fork-PR / SHA-pin patterns.
@@ -8,15 +14,11 @@
 name: Dry-run
 
 on:
-  #pull_request:
-  #  branches: [master]
-  #push:
-  #  branches:
-  #    - master
-  #    - 'ci*'
-  push:
-    tags:
-      - '*'
+  ## Reusable workflow entrypoint - run_automated_builder.yml's
+  ## first job calls this via 'uses: ./.github/workflows/dry-run.yml'.
+  workflow_call:
+  ## Manual ad-hoc trigger from the Actions tab.
+  workflow_dispatch:
 
 permissions:
   contents: read
