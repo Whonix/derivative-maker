@@ -1,4 +1,3 @@
----
 ## OpenSSF Scorecard - weekly posture audit. Publishes findings as
 ## SARIF in the repo's Security tab. See
 ## https://github.com/ossf/scorecard#scorecard-checks for the check
@@ -24,7 +23,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   analysis:
