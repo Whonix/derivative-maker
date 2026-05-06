@@ -39,6 +39,19 @@ fi
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
+## helper-scripts source-tree workaround: extract-openpgp-policy-
+## trusted-certs is committed at mode 100644 in the upstream
+## helper-scripts repo, so a fresh submodule checkout cannot exec it
+## directly. The .deb install path repairs the bit via debhelper, but
+## CI consumes the source tree and so hits:
+##   git_sanity_test: line 303: .../extract-openpgp-policy-trusted-
+##   certs: Permission denied
+## Fix in upstream helper-scripts is org-ai-assisted/helper-scripts
+## branch claude/fix-workflow-syntax-j1LlD; until that lands and the
+## submodule pin in this repo is bumped to it, repair the bit at
+## runtime here.
+chmod +x -- packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/extract-openpgp-policy-trusted-certs
+
 ## help-steps/run-as-user invokes 'sudo --preserve-env=PATH ...' to
 ## drop privileges, which strips every env var except PATH (and the
 ## inline user_name= assignment). The sq_git_* env vars set by the
