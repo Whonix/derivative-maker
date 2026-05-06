@@ -60,6 +60,13 @@ export DEBFULLNAME DEBEMAIL
 ## (1) Generate the ephemeral OpenPGP key. signing-key-create is
 ## idempotent on DEBEMAIL: re-runs are no-ops if a cert with that
 ## email already exists.
+##
+## dist_build_allow_root=true: signing-key-create's pre-flight via
+## help-steps/pre rejects root invocations to protect a developer's
+## real signing keys. In the dry-run container we run as root and
+## the key is ephemeral, so the override is correct here. The script
+## documents this exact escape hatch ("CI / container use only").
+export dist_build_allow_root=true
 bash help-steps/signing-key-create
 
 ## (2) Read the cert fingerprint of the just-generated key. JSON +
