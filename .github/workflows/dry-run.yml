@@ -84,14 +84,17 @@ jobs:
         ## capture that line into $GITHUB_ENV so the next step can
         ## forward it via 'docker exec --env'.
         ##
-        ## binary_build_folder_dist=/tmp/dryrun-ci puts the CI policy
-        ## under /tmp (world-traversable) so the unprivileged 'builder'
-        ## user the next step drops to can open it.
+        ## Runs as the unprivileged 'builder' user via
+        ## help-steps/run-as-user --chown /work (same user the next
+        ## step's derivative-maker invocation drops to, so the keystore
+        ## under /home/builder/.local/share/sequoia is shared). The
+        ## inner 'env CI=true' is needed because sudo strips the env
+        ## when run-as-user drops privileges; sign-and-tag's CI guard
+        ## refuses to run otherwise.
         run: |
-          docker exec \
-             --env CI=true \
-             --env binary_build_folder_dist=/tmp/dryrun-ci \
-             dryrun bash ci/dry-run-sign-and-tag.sh \
+          docker exec --env CI=true dryrun \
+             ./help-steps/run-as-user --chown /work -- \
+             builder env CI=true bash ci/dry-run-sign-and-tag.sh \
              | tee "${RUNNER_TEMP}/sign-stdout.log"
           grep -E '^sq_git_(policy_file|trust_root)=' \
              "${RUNNER_TEMP}/sign-stdout.log" >> "${GITHUB_ENV}"
