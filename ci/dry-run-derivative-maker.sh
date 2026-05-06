@@ -39,9 +39,21 @@ fi
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
+## help-steps/run-as-user invokes 'sudo --preserve-env=PATH ...' to
+## drop privileges, which strips every env var except PATH (and the
+## inline user_name= assignment). The sq_git_* env vars set by the
+## workflow's 'Sign HEAD with ephemeral CI key' step are visible here
+## (docker exec --env), but won't survive the sudo unless we inline
+## them as 'env VAR=val' arguments AFTER 'builder' so they end up in
+## the builder shell's environment. Required by help-steps/variables
+## (which honors a pre-set sq_git_policy_file) and by
+## help-steps/git_sanity_test (which dies if sq_git_policy_file is
+## empty).
 timeout 1200 \
   ./help-steps/run-as-user --chown "$PWD" -- \
     builder \
+    env "sq_git_policy_file=${sq_git_policy_file:-}" \
+        "sq_git_trust_root=${sq_git_trust_root:-}" \
     ./derivative-maker \
       --dry-run true \
       --unsupported-os true \
