@@ -37,6 +37,15 @@
 ##   Switching to a third-party systemd-debian image was rejected
 ##   because we want to keep the trust footprint at "Debian Project
 ##   official base image" and not import a community image.
+##
+## --cgroupns=host:
+##   GitHub-hosted runners (ubuntu-latest) default to cgroups v2 with
+##   docker on default cgroup-namespace=private. systemd >= 247 only
+##   boots cleanly under cgroups v2 when the container shares the
+##   host's cgroup namespace; otherwise it exits 255 silently before
+##   even printing its banner (which is the failure mode iteration 2
+##   of this script hit). Using --cgroupns=host is the standard
+##   systemd-in-docker-on-cgroups-v2 incantation.
 
 set -o errexit
 set -o nounset
@@ -70,6 +79,7 @@ exec /sbin/init'
 docker run \
    --detach \
    --privileged \
+   --cgroupns=host \
    --name "${container_name}" \
    --tmpfs /run \
    --tmpfs /run/lock \
