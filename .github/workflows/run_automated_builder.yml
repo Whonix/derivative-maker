@@ -15,6 +15,19 @@ on:
     tags:
       - '*'
 
+## Upstream-only gate. github.repository == env.CANONICAL_REPO
+## prevents forks (and the org-ai-assisted mirror) from running this
+## workflow's upstream-only paths - the upstream-only secret(s)
+## referenced below (vault password / Coverity token / GHORG_AUDIT_TOKEN)
+## are only set on the canonical repo. A fork would either see those
+## secrets as empty and fail mid-flight, or - worse - run the heavy
+## ops with its own arbitrary-named secret. Keeping the canonical
+## owner/repo at the top of the file as a constant rather than buried
+## in an `if:` expression makes the gate's identity reviewable and
+## avoids drift if it has to change across multiple `if:` checks.
+env:
+  CANONICAL_REPO: Whonix/derivative-maker
+
 ## See agents/github-actions-security.md for the standard
 ## permissions / persist-credentials / fork-PR / SHA-pin patterns.
 permissions:
@@ -44,11 +57,10 @@ jobs:
 
   build:
     needs: dry-run
-    ## XXX: hardcoded
-    ## The Ansible vault used by the build is only a repo secret on
-    ## upstream Whonix/derivative-maker. Skip this job on every other
+    ## Upstream-only: the Ansible vault used by the build is only a
+    ## repo secret on the canonical upstream. Skip on every other
     ## repo so forks don't fail at vault decrypt.
-    if: github.repository == 'Whonix/derivative-maker'
+    if: github.repository == env.CANONICAL_REPO
     runs-on: ubuntu-latest
     env:
       ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
