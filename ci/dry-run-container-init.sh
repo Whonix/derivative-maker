@@ -1,0 +1,34 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Container PID 1 entrypoint for the dry-run workflow's privileged
+## debian:trixie container. Installs systemd-sysv (debian:trixie-slim
+## does not ship /sbin/init by default) and execs systemd as PID 1
+## so the rest of the workflow's docker-exec'd build steps can talk
+## to systemctl (the build's apt cache uses the 'approx' systemd
+## unit).
+##
+## Lives in ci/ rather than embedded as a heredoc inside
+## dry-run-start-container.sh so it can be shellcheck'd, run from a
+## developer machine for reproduction, and reviewed independently of
+## the workflow shape - per agents/bash-style-guide.md, multi-line
+## bash logic does not belong inside a `bash -c "..."` argument.
+##
+## Mounted into the container at /work via the --volume in
+## dry-run-start-container.sh; called by absolute path from there.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update -qq
+apt-get install --yes --no-install-recommends -- \
+   systemd-sysv ca-certificates
+
+exec /sbin/init

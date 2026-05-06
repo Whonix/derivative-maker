@@ -59,23 +59,16 @@ fi
 container_name="$1"
 image="$2"
 
-## Bash heredoc-style entrypoint for the container:
-##   1. apt-get update + apt-get install systemd-sysv (so /sbin/init
-##      exists; the minimal debian:trixie image does not ship it).
-##   2. exec /sbin/init so systemd takes over PID 1.
-## Single-quoted to keep the inner script literal at the docker-cli
-## boundary; no shell expansion happens on the host side.
-entrypoint='set -o errexit; set -o nounset; set -o pipefail; \
-export DEBIAN_FRONTEND=noninteractive; \
-apt-get update -qq; \
-apt-get install --yes --no-install-recommends -- systemd-sysv ca-certificates; \
-exec /sbin/init'
-
 ## NOTE: NO --rm on docker run. If the entrypoint dies (apt failure,
 ## systemd refusing to boot, missing capability, ...), --rm would
 ## immediately delete the container and we would lose `docker logs`
 ## for diagnosis. The workflow's separate `if: always()` teardown
 ## step does the rm explicitly.
+##
+## The entrypoint is a separate script (ci/dry-run-container-init.sh)
+## mounted into the container at /work, not a `bash -c '...'` heredoc
+## inline here. Keeps the script shellcheck-able and reproducible
+## from a dev machine.
 docker run \
    --detach \
    --privileged \
@@ -88,7 +81,7 @@ docker run \
    --workdir /work \
    -- \
    "${image}" \
-   bash -c "${entrypoint}"
+   /work/ci/dry-run-container-init.sh
 
 ## Wait for systemd to reach a usable state. is-system-running returns
 ## "running" or "degraded" once the basic targets are up; both are
