@@ -73,8 +73,36 @@ jobs:
         ## exec` does not propagate the GHA runner's environment.
         run: docker exec --env CI=true dryrun bash ci/dry-run-install.sh
 
+      - name: Sign HEAD with ephemeral CI key (so git_sanity_test passes)
+        ## help-steps/git_sanity_test runs sq-git verification of HEAD
+        ## as an unconditional gate even under --dry-run. On a PR build
+        ## that gate sees GitHub's auto-merge commit (signed by GitHub
+        ## Actions, not by an authorized maintainer key) and fails.
+        ## ci/dry-run-sign-and-tag.sh generates an ephemeral OpenPGP
+        ## key, builds a CI-only policy that trust-roots it, re-signs
+        ## HEAD with it, and prints the policy path on stdout. We
+        ## capture that line into $GITHUB_ENV so the next step can
+        ## forward it via 'docker exec --env'.
+        ##
+        ## binary_build_folder_dist=/tmp/dryrun-ci puts the CI policy
+        ## under /tmp (world-traversable) so the unprivileged 'builder'
+        ## user the next step drops to can open it.
+        run: |
+          docker exec \
+             --env CI=true \
+             --env binary_build_folder_dist=/tmp/dryrun-ci \
+             dryrun bash ci/dry-run-sign-and-tag.sh \
+             | tee "${RUNNER_TEMP}/sign-stdout.log"
+          grep -E '^sq_git_(policy_file|trust_root)=' \
+             "${RUNNER_TEMP}/sign-stdout.log" >> "${GITHUB_ENV}"
+
       - name: Drop privileges and run derivative-maker --dry-run true
-        run: docker exec --env CI=true dryrun bash ci/dry-run-derivative-maker.sh
+        run: |
+          docker exec \
+             --env CI=true \
+             --env "sq_git_policy_file=${sq_git_policy_file}" \
+             --env "sq_git_trust_root=${sq_git_trust_root}" \
+             dryrun bash ci/dry-run-derivative-maker.sh
 
       - name: Tear down container
         if: always()

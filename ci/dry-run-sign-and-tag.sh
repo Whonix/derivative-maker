@@ -104,6 +104,15 @@ sq-git policy authorize \
    "${DEBFULLNAME} <${DEBEMAIL}>" \
    "${ci_cert_pem}"
 rm -f -- "${ci_cert_pem}"
+
+## Make the policy file readable by the unprivileged 'builder' user
+## the dry-run drops to via help-steps/run-as-user. Without a+r the
+## subsequent 'derivative-maker --dry-run' (running as builder) cannot
+## open the policy file root just wrote, and git_sanity_test fails
+## with a confusing 'permission denied' before sq-git is even reached.
+chmod a+rX -- "${binary_build_folder_dist}"
+chmod a+r  -- "${ci_policy}"
+
 printf '%s\n' "${BASH_SOURCE[0]}: wrote CI policy to ${ci_policy}"
 
 ## (5) Configure git for sq-git-wrapper signing. Same wrapper the

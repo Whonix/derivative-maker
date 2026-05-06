@@ -44,9 +44,11 @@ fi
 
 apt-get update -qq
 
+## jq is consumed by ci/dry-run-sign-and-tag.sh to parse 'sq cert
+## list --format json' output (instead of awk-line-grep).
 apt-get install --yes --no-install-recommends \
   bash sudo git ca-certificates \
   lsb-release procps \
   python3-yaml shellcheck file moreutils \
   cowbuilder mmdebstrap debootstrap \
-  git sequoia-git sq sqop safe-rm
+  git sequoia-git sq sqop safe-rm jq
