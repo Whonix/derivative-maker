@@ -90,10 +90,18 @@ mkdir --parents -- "${binary_build_folder_dist}"
 
 ci_policy="${binary_build_folder_dist}/openpgp-policy.toml.ci"
 
-## Initialize an empty policy scaffold (version + empty goodlist).
-## sq-git policy authorize amends an existing policy file; it does
-## not create one from scratch, so we seed the minimum it expects.
-printf '%s\n' 'version = 0' 'commit_goodlist = []' > "${ci_policy}"
+## Seed from the project's existing openpgp-policy.toml so the
+## upstream maintainer keys remain authorized for the submodule
+## verification paths (git_sanity_test --mode all also walks
+## submodules; a from-scratch policy that only trusts the CI key
+## would reject every submodule HEAD signed by a real maintainer
+## with 'Key <FPR> missing'). 'sq-git policy authorize' below adds
+## our ephemeral CI key on top of those upstream authorizations,
+## without removing them.
+project_policy="${PWD}/openpgp-policy.toml"
+[ -r "${project_policy}" ] \
+   || { printf '%s\n' "${BASH_SOURCE[0]}: missing project policy: ${project_policy}" >&2; exit 1; }
+cp -- "${project_policy}" "${ci_policy}"
 
 ## (4) Authorize the CI cert in the policy via sq-git, instead of
 ## hand-rolling the [authorization."..."] TOML block. Keeps the policy
