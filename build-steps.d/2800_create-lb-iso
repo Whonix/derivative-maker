@@ -604,12 +604,12 @@ Not running any chroot scripts.${reset}"
 }
 
 main() {
-   if [ "${dist_build_install_to_root}" = "true" ]; then
+   if [ "${dist_build_install_to_root:-}" = "true" ]; then
       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_install_to_root is set to true.${reset}"
       return 0
    fi
 
-   if [ "${dist_build_iso}" != "true" ]; then
+   if [ "${dist_build_iso:-}" != "true" ]; then
       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_iso is not set to true.${reset}"
       return 0
    fi

@@ -32,6 +32,20 @@ env:
   ## forky. Re-pin procedure: agents/github-actions-security.md.
   DEBIAN_IMAGE: 'debian:trixie@sha256:35b8ff74ead4880f22090b617372daff0ccae742eb5674455d542bef71ef1999'
 
+  ## helper-scripts submodule remote URL. .gitmodules pins
+  ## https://github.com/Kicksecure/helper-scripts.git unconditionally;
+  ## this env var lets the workflow flip the runtime URL without
+  ## touching .gitmodules. Resolves to ${github.repository_owner}/
+  ## helper-scripts so a workflow run on org-ai-assisted/derivative-
+  ## maker pulls from org-ai-assisted/helper-scripts (where in-flight
+  ## fork branches that have not yet landed upstream live), and a
+  ## workflow run on Kicksecure/derivative-maker pulls from
+  ## Kicksecure/helper-scripts (the production source). Both repos
+  ## are explicitly allowed: any other owner falls through to the
+  ## .gitmodules default, the override step below only runs if the
+  ## owner is one of the two we trust.
+  HELPER_SCRIPTS_URL: 'https://github.com/${{ github.repository_owner }}/helper-scripts.git'
+
 jobs:
   dry-run:
     name: derivative-maker --dry-run true
@@ -60,6 +74,32 @@ jobs:
           submodules: recursive
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Repoint helper-scripts submodule to ${{ env.HELPER_SCRIPTS_URL }}
+        ## Re-target the helper-scripts submodule clone at
+        ## HELPER_SCRIPTS_URL (only when that URL belongs to one of the
+        ## two repos we trust as helper-scripts sources: the upstream
+        ## Kicksecure repo and the org-ai-assisted fork). Lets a fork
+        ## CI run pull a not-yet-upstream commit (e.g. fix branches
+        ## tested before they land in Kicksecure) without editing
+        ## .gitmodules. The submodule SHA pin in derivative-maker's
+        ## index continues to govern which commit is checked out;
+        ## both Kicksecure and the org-ai-assisted fork track the same
+        ## commit history, so the pin resolves either way.
+        run: |
+          case "${HELPER_SCRIPTS_URL}" in
+             https://github.com/Kicksecure/helper-scripts.git \
+             |https://github.com/org-ai-assisted/helper-scripts.git)
+                git -C packages/kicksecure/helper-scripts \
+                   remote set-url origin "${HELPER_SCRIPTS_URL}"
+                git -C packages/kicksecure/helper-scripts \
+                   fetch origin
+                ;;
+             *)
+                printf '%s\n' \
+                   "HELPER_SCRIPTS_URL '${HELPER_SCRIPTS_URL}' is not in the allow-list (Kicksecure or org-ai-assisted); leaving submodule pointed at .gitmodules default." >&2
+                ;;
+          esac
 
       - name: Start systemd-enabled Debian container
         run: bash ci/dry-run-start-container.sh dryrun "${DEBIAN_IMAGE}"
