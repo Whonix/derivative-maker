@@ -44,9 +44,6 @@ fi
 
 apt-get update -qq
 
-## jq is consumed by ci/dry-run-sign-and-tag.sh to parse 'sq cert
-## list --format json' output (instead of awk-line-grep).
-##
 ## signify-openbsd is asserted-present by help-steps/signing-key-create's
 ## sanity_tests gate (alongside sq / sqop) even though sign-and-tag
 ## only uses the OpenPGP path. The gate is unconditional, so install
@@ -56,4 +53,4 @@ apt-get install --yes --no-install-recommends \
   lsb-release procps \
   python3-yaml shellcheck file moreutils \
   cowbuilder mmdebstrap debootstrap \
-  git sequoia-git sq sqop signify-openbsd safe-rm jq
+  git sequoia-git sq sqop signify-openbsd safe-rm

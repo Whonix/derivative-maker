@@ -69,18 +69,16 @@ export DEBFULLNAME DEBEMAIL
 ## resorting to the dist_build_allow_root=true escape hatch.
 bash help-steps/signing-key-create
 
-## (2) Read the cert fingerprint of the just-generated key. JSON +
-## jq instead of awk-line-grep so a future change to sq's text layout
-## (e.g. an extra header line) does not silently match the wrong
-## field. Used as user.signingkey in git config below.
-fpr=
-fpr="$(sq cert list --cert-email "${DEBEMAIL}" --format json | jq -r '.[0].fingerprint')"
-[ -n "${fpr}" ] || { printf '%s\n' "${BASH_SOURCE[0]}: failed to read CI cert fingerprint" >&2; exit 1; }
-printf '%s\n' "${BASH_SOURCE[0]}: CI cert fingerprint: ${fpr}"
-
-## (3) Export the armored cert and build the CI-only policy file.
-## binary_build_folder_dist is set by help-steps/variables. Default
-## to $HOME/derivative-binary if unset.
+## (2) Export the armored cert. binary_build_folder_dist is set by
+## help-steps/variables; default to $HOME/derivative-binary if unset.
+##
+## We deliberately do NOT extract the fingerprint here. sq-git policy
+## authorize accepts a cert FILE as its positional argument
+## (synopsis: 'sq-git policy authorize NAME FILE|FINGERPRINT|KEYID'),
+## and sq-git-wrapper resolves a signing identity that contains '@'
+## as --signer-email, so 'git config user.signingkey "${DEBEMAIL}"'
+## is enough for the signing path. This avoids parsing 'sq cert list'
+## output entirely (no JSON flag in the trixie sq, no awk grep).
 ci_cert_pem=
 ci_cert_pem="$(mktemp)"
 sq cert export --cert-email "${DEBEMAIL}" > "${ci_cert_pem}"
@@ -113,10 +111,14 @@ sq-git policy authorize \
 rm -f -- "${ci_cert_pem}"
 printf '%s\n' "${BASH_SOURCE[0]}: wrote CI policy to ${ci_policy}"
 
-## (5) Configure git for sq-git-wrapper signing. Same wrapper the
+## (4) Configure git for sq-git-wrapper signing. Same wrapper the
 ## existing build uses for verification; reusing it keeps the trust
 ## tooling consistent.
-git config user.signingkey "${fpr}"
+##
+## user.signingkey is set to the email; sq-git-wrapper detects the
+## '@' in it and dispatches to 'sq sign --signer-email' (see
+## help-steps/sq-git-wrapper sign-mode dispatch).
+git config user.signingkey "${DEBEMAIL}"
 git config gpg.format openpgp
 git config gpg.openpgp.program "${PWD}/help-steps/sq-git-wrapper"
 git config commit.gpgsign true
@@ -124,12 +126,12 @@ git config tag.gpgsign true
 git config user.email "${DEBEMAIL}"
 git config user.name "${DEBFULLNAME}"
 
-## (6) Re-sign HEAD with the CI key. --amend --no-edit rewrites the
+## (5) Re-sign HEAD with the CI key. --amend --no-edit rewrites the
 ## tip without changing its content; -S forces a signature pass under
 ## the new gpg config.
 git commit --amend --no-edit -S
 
-## (7) Tag HEAD with an annotated signed tag. The dry-run targets
+## (6) Tag HEAD with an annotated signed tag. The dry-run targets
 ## may inspect the latest tag; having one present (and signed) is
 ## more realistic than using --allow-untagged. The tag name embeds
 ## the run id when set, otherwise the short SHA, so re-runs do not
@@ -141,7 +143,7 @@ ci_tag_name="ci-dry-run-${GITHUB_RUN_ID:-${git_short_sha}}"
 git tag -a -s -m 'CI dry-run ephemeral signed tag' "${ci_tag_name}"
 printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${ci_tag_name}"
 
-## (8) Print env exports for the workflow step to capture into
+## (7) Print env exports for the workflow step to capture into
 ## subsequent docker exec calls. The workflow's next step does
 ## `docker exec --env sq_git_policy_file=... --env sq_git_trust_root=HEAD ...`
 ## using these values.
