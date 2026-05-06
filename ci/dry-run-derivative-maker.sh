@@ -62,11 +62,27 @@ chmod +x -- packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/extrac
 ## (which honors a pre-set sq_git_policy_file) and by
 ## help-steps/git_sanity_test (which dies if sq_git_policy_file is
 ## empty).
+## help-steps/parse-cmd only exports dist_build_{install_to_root,
+## virtualbox,qcow2,raw,utm,iso} when the matching --target flag
+## is passed. With --target source the entire group stays unset, but
+## several downstream consumers in the build steps and submodules
+## (e.g. dm-prepare-release, 2800_create-lb-iso) dereference them
+## without the ':-' default-value form. Under set -o nounset
+## (default) those references abort the build with
+## '<var>: unbound variable'. Pre-set them all to empty strings so
+## the unprotected derefs see "" (which compares unequal to "true",
+## i.e. the existing "skip-this-target" branch is taken).
 timeout 1200 \
   ./help-steps/run-as-user --chown "$PWD" -- \
     builder \
     env "sq_git_policy_file=${sq_git_policy_file:-}" \
         "sq_git_trust_root=${sq_git_trust_root:-}" \
+        "dist_build_install_to_root=" \
+        "dist_build_virtualbox=" \
+        "dist_build_qcow2=" \
+        "dist_build_raw=" \
+        "dist_build_utm=" \
+        "dist_build_iso=" \
     ./derivative-maker \
       --dry-run true \
       --unsupported-os true \
