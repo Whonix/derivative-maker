@@ -20,9 +20,32 @@
 ##   $2 - debian image reference (digest-pinned recommended)
 ##
 ## Side effects:
-##   - Pulls and starts the image with /sbin/init as entrypoint.
+##   - Pulls and starts the image, installs systemd-sysv inside it,
+##     then exec()s /sbin/init as PID 1.
 ##   - Polls `systemctl is-system-running` until it reports running
-##     or degraded, or fails after 60s.
+##     or degraded, or fails after 90s.
+##   - The container is started WITHOUT --rm so a failure leaves the
+##     dead container around for `docker logs` to retrieve. The
+##     workflow's separate teardown step (run with `if: always()`)
+##     does the actual `docker rm --force`.
+##
+## Image choice:
+##   The Debian project does not publish an official systemd-enabled
+##   debian:trixie image, so we install systemd-sysv into the
+##   minimal base image inside the container before exec'ing init.
+##   This is one extra apt round-trip (~5-10s) per workflow run.
+##   Switching to a third-party systemd-debian image was rejected
+##   because we want to keep the trust footprint at "Debian Project
+##   official base image" and not import a community image.
+##
+## --cgroupns=host:
+##   GitHub-hosted runners (ubuntu-latest) default to cgroups v2 with
+##   docker on default cgroup-namespace=private. systemd >= 247 only
+##   boots cleanly under cgroups v2 when the container shares the
+##   host's cgroup namespace; otherwise it exits 255 silently before
+##   even printing its banner (which is the failure mode iteration 2
+##   of this script hit). Using --cgroupns=host is the standard
+##   systemd-in-docker-on-cgroups-v2 incantation.
 
 set -o errexit
 set -o nounset
@@ -36,10 +59,27 @@ fi
 container_name="$1"
 image="$2"
 
+## Bash heredoc-style entrypoint for the container:
+##   1. apt-get update + apt-get install systemd-sysv (so /sbin/init
+##      exists; the minimal debian:trixie image does not ship it).
+##   2. exec /sbin/init so systemd takes over PID 1.
+## Single-quoted to keep the inner script literal at the docker-cli
+## boundary; no shell expansion happens on the host side.
+entrypoint='set -o errexit; set -o nounset; set -o pipefail; \
+export DEBIAN_FRONTEND=noninteractive; \
+apt-get update -qq; \
+apt-get install --yes --no-install-recommends -- systemd-sysv ca-certificates; \
+exec /sbin/init'
+
+## NOTE: NO --rm on docker run. If the entrypoint dies (apt failure,
+## systemd refusing to boot, missing capability, ...), --rm would
+## immediately delete the container and we would lose `docker logs`
+## for diagnosis. The workflow's separate `if: always()` teardown
+## step does the rm explicitly.
 docker run \
    --detach \
-   --rm \
    --privileged \
+   --cgroupns=host \
    --name "${container_name}" \
    --tmpfs /run \
    --tmpfs /run/lock \
@@ -48,13 +88,14 @@ docker run \
    --workdir /work \
    -- \
    "${image}" \
-   /sbin/init
+   bash -c "${entrypoint}"
 
 ## Wait for systemd to reach a usable state. is-system-running returns
 ## "running" or "degraded" once the basic targets are up; both are
 ## acceptable for our purposes (we don't need every target up, just
-## the ability to start units like approx).
-for attempt in $(seq 1 60); do
+## the ability to start units like approx). 90s budget covers a
+## ~10s apt install + normal boot.
+for attempt in $(seq 1 90); do
    state="$(docker exec "${container_name}" systemctl is-system-running 2>/dev/null || true)"
    case "${state}" in
       running|degraded)
@@ -65,6 +106,17 @@ for attempt in $(seq 1 60); do
    sleep 1
 done
 
-printf '%s\n' "ERROR: systemd did not become ready within 60s" >&2
-docker exec "${container_name}" systemctl --failed || true
+## --- diagnostics on failure ---
+## docker ps -a   shows the container's exit status / state.
+## docker logs ... captures the entrypoint's stdout/stderr (the
+##   apt-get update/install output AND any systemd boot messages
+##   before init died). Without this, --rm + silent docker exec
+##   left us blind in CI.
+printf '%s\n' "ERROR: systemd did not become ready within 90s" >&2
+printf '\n--- docker ps -a (container state) ---\n' >&2
+docker ps -a --filter "name=^${container_name}\$" --no-trunc >&2 || true
+printf '\n--- docker logs %s (entrypoint output) ---\n' "${container_name}" >&2
+docker logs "${container_name}" >&2 || true
+printf '\n--- systemctl --failed (best-effort, may fail if container is dead) ---\n' >&2
+docker exec "${container_name}" systemctl --failed >&2 || true
 exit 1

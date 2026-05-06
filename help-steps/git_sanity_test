@@ -300,7 +300,7 @@ classify_tag() {
       || die "failed to create directory: ${verify_tag_dir}/certs"
    chmod 0700 -- "${verify_tag_dir}" \
       || die "failed to set permissions on: ${verify_tag_dir}"
-   "$MYDIR/extract-openpgp-policy-trusted-certs" "${sq_git_policy_file}" 'sign_tag' "${verify_tag_dir}/certs" \
+   "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/extract-openpgp-policy-trusted-certs" "${sq_git_policy_file}" 'sign_tag' "${verify_tag_dir}/certs" \
       || die "failed to extract trusted certificates from policy file: ${sq_git_policy_file}"
 
    local tag_contents
