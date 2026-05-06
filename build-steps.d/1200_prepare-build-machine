@@ -404,7 +404,7 @@ packages_installation_from_backports_repository() {
 }
 
 signing_key() {
-   true "INFO: GPG_AGENT_INFO: $GPG_AGENT_INFO"
+   true "INFO: GPG_AGENT_INFO: ${GPG_AGENT_INFO:-}"
    if [ "${GPG_AGENT_INFO:-}" = "" ]; then
       true "${cyan}${bold}INFO: Environment variable ${under}GPG_AGENT_INFO${eunder} is not set. gnupg-agent will not be available.${reset}"
    fi
