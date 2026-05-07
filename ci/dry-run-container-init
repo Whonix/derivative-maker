@@ -31,11 +31,7 @@ apt-get update -qq
 apt-get install --yes --no-install-recommends -- \
    systemd-sysv ca-certificates
 
-## 'exec' is REQUIRED here, not stylistic. This script IS the
-## container's PID 1 (set as the 'docker run' command). Without
-## exec, bash forks /sbin/init as a child (PID > 1) and systemd's
-## boot-check ('systemctl is-system-running') times out:
-##   "ERROR: systemd did not become ready within 90s"
-## With exec, bash is replaced in place and /sbin/init takes over
-## PID 1, which is what systemd-sysv requires.
+## exec is REQUIRED: this script is the container's PID 1 (set
+## as the 'docker run' command); without exec, /sbin/init runs as
+## PID > 1 and systemd's boot-check times out.
 exec /sbin/init
