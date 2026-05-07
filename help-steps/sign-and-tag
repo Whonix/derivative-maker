@@ -7,10 +7,20 @@
 
 ## Generate an ephemeral OpenPGP signing key, build an
 ## openpgp-policy.toml that authorizes that key on top of the
-## upstream maintainer keys, re-sign HEAD with it, and tag HEAD.
-## Pairs with help-steps/sign-submodule-head, which the caller
-## invokes via 'git submodule foreach --recursive' to extend the
-## same signing across each fork-overlaid submodule.
+## upstream maintainer keys, re-sign HEAD with it, tag HEAD,
+## and recurse into every submodule so each fork-overlaid
+## submodule HEAD ends up signed against the same policy.
+##
+## Auto-dispatch:
+##   When invoked top-level, runs the bootstrap (mint key, build
+##   policy, write --global git config, amend HEAD, tag, foreach).
+##   When invoked from 'git submodule foreach', recognizes the
+##   foreach-set $sha1 env var (= the parent's recorded sha for
+##   the current submodule), checks whether the working-tree HEAD
+##   diverges from that pin, and only amends on divergence.
+##   Submodules still at their canonical pin are left alone -
+##   their HEAD is signed by an upstream maintainer cert that the
+##   bootstrap kept authorized in the seeded policy.
 ##
 ## Why this exists:
 ##   git_sanity_test runs sq-git verification of HEAD as an
@@ -34,12 +44,12 @@
 ## Side effects this script HAS:
 ##   - Mints a new OpenPGP cert in the caller's sq keystore.
 ##   - Rewrites HEAD via 'git commit --amend -S' (changes the
-##     commit's SHA).
-##   - Adds a signed annotated tag.
+##     commit's SHA) - on the parent and on each fork-overlaid
+##     submodule.
+##   - Adds a signed annotated tag on the parent.
 ##   - Writes --global git config (user.signingkey, gpg.format,
 ##     etc.) so the same signing config flows into submodule git
-##     contexts when help-steps/sign-submodule-head is invoked
-##     via foreach.
+##     contexts the foreach dispatch lands in.
 ##
 ## The caller is responsible for guarding against running this on
 ## a developer machine if those side effects aren't wanted.
@@ -48,6 +58,21 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+
+## ----- submodule-mode dispatch -------------------------------------
+## $sha1 is exported by 'git submodule foreach'; treat its presence
+## as the signal that we are a per-submodule invocation. The
+## recursion below ('git submodule foreach --recursive' at the
+## bottom of root mode) calls this same script and lands here.
+if [ -n "${sha1:-}" ]; then
+   if [ "$(git rev-parse HEAD)" = "${sha1}" ]; then
+      exit 0
+   fi
+   git commit --amend --no-edit -S
+   exit 0
+fi
+
+## ----- root mode --------------------------------------------------
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
@@ -114,14 +139,14 @@ rm -f -- "${ephemeral_cert_pem}"
 printf '%s\n' "${BASH_SOURCE[0]}: wrote policy to ${ephemeral_policy}"
 
 ## (5) Configure git for sq-git-wrapper signing. --global so the
-## settings inherit into submodule git contexts (the per-submodule
-## amend in help-steps/sign-submodule-head relies on this).
-## user.signingkey is set to the email; sq-git-wrapper detects the
-## '@' in it and dispatches to 'sq sign --signer-email'.
+## settings inherit into submodule git contexts (the foreach
+## recursion below lands in submodule contexts that need to find
+## the same signingkey, gpg.format, etc.). user.signingkey is set
+## to the email; sq-git-wrapper detects the '@' and dispatches to
+## 'sq sign --signer-email'.
 ##
 ## Build the (key, value) list as an array and apply in one loop -
-## avoids seven near-identical 'git config --global ...' lines and
-## makes adding/removing settings a one-line edit.
+## avoids seven near-identical 'git config --global ...' lines.
 git_global_settings=(
    user.signingkey       "${DEBEMAIL}"
    gpg.format            openpgp
@@ -143,9 +168,15 @@ git commit --amend --no-edit -S
 ## (7) Tag HEAD. Some build steps inspect the latest tag; having
 ## one present (and signed) is more realistic than --allow-untagged.
 ## Tag name is the post-amend full commit SHA: globally unique,
-## deterministic from HEAD, no environment-variable plumbing
-## (GITHUB_RUN_ID, etc.) needed.
+## deterministic from HEAD, no environment-variable plumbing.
 commit_full_sha=
 commit_full_sha="$(git rev-parse HEAD)"
 git tag -a -s -m 'Signed by sign-and-tag' "${commit_full_sha}"
 printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${commit_full_sha}"
+
+## (8) Recurse into submodules. Each foreach call exports $sha1,
+## landing the called script in the submodule-mode branch at the
+## top of this file. Single-quoted so '$toplevel' is expanded by
+## foreach's child shell, not this one.
+# shellcheck disable=SC2016
+git submodule foreach --recursive '"$toplevel/help-steps/sign-and-tag"'
