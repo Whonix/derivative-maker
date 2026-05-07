@@ -1,0 +1,52 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Re-sign HEAD of the current git repo with the signing config
+## from help-steps/variables, but only when HEAD does not already
+## verify against sq_git_policy_file.
+##
+## Called from two places by help-steps/sign-and-tag:
+##   1. Top-level for the parent repo's HEAD.
+##   2. Per submodule via 'git submodule foreach --recursive'.
+##
+## Both paths share the same code; no internal dispatch. The caller
+## is expected to have run sign-and-tag's setup phase first (mint
+## ephemeral key, build policy, sq-git policy authorize the cert)
+## - this script does NOT do any of that. The 'sq_git_policy_file'
+## env var must point at the policy that authorizes the signing
+## cert.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+
+repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
+
+## Source variables.bsh for git_signing_command_wrapper +
+## DEBEMAIL/DEBFULLNAME. Save+restore CWD because variables.bsh:153
+## does 'cd -- "$source_code_folder_dist"' as a side effect, which
+## would break the foreach-recursed submodule context (CWD has to
+## stay at the submodule's working tree so 'git rev-parse HEAD'
+## and 'git commit --amend' operate on the submodule's git db).
+saved_cwd="$PWD"
+export dist_build_source_run=true
+export dist_build_one_parsed=true
+# shellcheck source=help-steps/pre
+source "${repo_root}/help-steps/pre"
+# shellcheck source=help-steps/variables
+source "${repo_root}/help-steps/variables"
+cd -- "${saved_cwd}"
+
+# shellcheck source=help-steps/verify-ref
+source "${repo_root}/help-steps/verify-ref"
+
+if verify_ref HEAD commit "${displaypath:-main repo} HEAD"; then
+   exit 0
+fi
+
+"${git_signing_command_wrapper[@]}" commit --amend --no-edit -S

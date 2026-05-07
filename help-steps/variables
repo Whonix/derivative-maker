@@ -1179,6 +1179,23 @@ export DEBEMAIL
 [ -n "${sq_git_wrapper:-}" ] || sq_git_wrapper="$dist_source_help_steps_folder/sq-git-wrapper"
 [ -n "${git_verify_command_wrapper:-}" ] || git_verify_command_wrapper=( git -c "gpg.openpgp.program=$sq_git_wrapper" )
 
+## Per-call 'git -c key=value' options that configure sq-git-wrapper
+## signing without writing to ~/.gitconfig. Used by help-steps/sign-
+## and-tag (parent setup + tag) and help-steps/sign-head (per-ref
+## amend). user.signingkey is set to DEBEMAIL; sq-git-wrapper's
+## case statement detects '@' and dispatches to 'sq sign --signer-
+## email'. Defined here so both consumers share one source of truth.
+git_signing_command_wrapper=(
+   git
+   -c "user.signingkey=${DEBEMAIL}"
+   -c gpg.format=openpgp
+   -c "gpg.openpgp.program=${sq_git_wrapper}"
+   -c commit.gpgsign=true
+   -c tag.gpgsign=true
+   -c "user.email=${DEBEMAIL}"
+   -c "user.name=${DEBFULLNAME}"
+)
+
 [ -n "${make_debsign_opts:-}" ] || make_debsign_opts="-p $debsign_wrapper"
 export make_debsign_opts
 
