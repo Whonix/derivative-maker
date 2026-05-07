@@ -37,16 +37,16 @@ context_label="${displaypath:-main repo}"
 
 ## Phase 1: sign HEAD if unsigned.
 if verify_ref HEAD commit "${context_label} HEAD"; then
-   printf '%s: %s HEAD already signed\n' "${BASH_SOURCE[0]}" "${context_label}"
+   printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} HEAD already signed"
 else
    "${git_signing_command_wrapper[@]}" commit --amend --no-edit -S
-   printf '%s: %s HEAD re-signed\n' "${BASH_SOURCE[0]}" "${context_label}"
+   printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} HEAD re-signed"
 fi
 
 ## Phase 2: tag HEAD if no signed tag points at it.
 for existing_tag in $(git tag --points-at HEAD); do
    if verify_ref "${existing_tag}" tag "${context_label} tag"; then
-      printf '%s: %s already has signed tag: %s\n' "${BASH_SOURCE[0]}" "${context_label}" "${existing_tag}"
+      printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} already has signed tag: ${existing_tag}"
       exit 0
    fi
 done
@@ -58,4 +58,4 @@ else
    signed_tag="tag_${commit_full_sha}"
 fi
 "${git_signing_command_wrapper[@]}" tag -a -s -m 'Signed by sign-tag-head' "${signed_tag}"
-printf '%s: tagged %s as %s\n' "${BASH_SOURCE[0]}" "${context_label}" "${signed_tag}"
+printf '%s\n' "${BASH_SOURCE[0]}: tagged ${context_label} as ${signed_tag}"

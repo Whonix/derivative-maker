@@ -13,7 +13,7 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 
 if [ "${CI:-}" != "true" ]; then
-   printf '%s: refusing to run outside CI (CI != "true")\n' "${BASH_SOURCE[0]}" >&2
+   printf '%s\n' "${BASH_SOURCE[0]}: refusing to run outside CI (CI != \"true\")" >&2
    exit 1
 fi
 

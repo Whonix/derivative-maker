@@ -58,5 +58,4 @@ git config --global --add \
    "url.https://github.com/${whonix_mirror}/.insteadOf" \
    "https://github.com/Whonix/"
 
-printf '%s: rewrote Kicksecure/ -> %s/, Whonix/ -> %s/\n' \
-   "${BASH_SOURCE[0]}" "${kicksecure_mirror}" "${whonix_mirror}"
+printf '%s\n' "${BASH_SOURCE[0]}: rewrote Kicksecure/ -> ${kicksecure_mirror}/, Whonix/ -> ${whonix_mirror}/"

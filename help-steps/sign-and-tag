@@ -46,7 +46,7 @@ sq-git policy authorize \
    "${DEBFULLNAME}" \
    "${ephemeral_cert_pem}"
 safe-rm --force -- "${ephemeral_cert_pem}"
-printf '%s: wrote policy to %s\n' "${BASH_SOURCE[0]}" "${ephemeral_policy}"
+printf '%s\n' "${BASH_SOURCE[0]}: wrote policy to ${ephemeral_policy}"
 
 export sq_git_policy_file="${ephemeral_policy}"
 
