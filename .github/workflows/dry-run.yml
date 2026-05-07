@@ -71,13 +71,17 @@ jobs:
       - name: Repoint cross-org submodule origins to ${{ github.repository_owner }}
         ## On forks (owner != Whonix && != Kicksecure), rewrite each
         ## submodule's origin URL from its canonical Kicksecure/<name>
-        ## or Whonix/<name> upstream to ${{ github.repository_owner }}/<name>.
-        ## Each submodule's own .git/config now explicitly points at
-        ## the fork so the next step's per-submodule git fetch
-        ## reaches the right host. Implementation in
-        ## ci/configure-fork-mirror.sh; replayable from a dev clone.
+        ## or Whonix/<name> upstream to <fork-org>/<name>. The script
+        ## takes two args (kicksecure-mirror, whonix-mirror) so a
+        ## forker who keeps separate Kicksecure-mirror and Whonix-mirror
+        ## orgs can pass them distinctly. The single-org case (e.g.
+        ## org-ai-assisted) passes the same value twice. Each
+        ## submodule's own .git/config now explicitly points at the
+        ## fork so the next step's per-submodule git fetch reaches
+        ## the right host. Implementation in ci/configure-fork-mirror.sh;
+        ## replayable from a dev clone.
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
-        run: bash ci/configure-fork-mirror.sh "${{ github.repository_owner }}"
+        run: ./ci/configure-fork-mirror.sh "${{ github.repository_owner }}" "${{ github.repository_owner }}"
 
       - name: Check out matching fork branch in cross-org submodules (if present)
         ## After the canonical SHA pins are checked out and origins
@@ -99,19 +103,19 @@ jobs:
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
         env:
           FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: bash ci/checkout-fork-submodule-branches.sh "${FORK_BRANCH}"
+        run: ./ci/checkout-fork-submodule-branches.sh "${FORK_BRANCH}"
 
       - name: Start systemd-enabled Debian container
-        run: bash ci/dry-run-start-container.sh dryrun "${DEBIAN_IMAGE}"
+        run: ./ci/dry-run-start-container.sh dryrun "${DEBIAN_IMAGE}"
 
       - name: Install git inside container (required by submodule paths)
-        run: bash ci/dry-run-install-container-git.sh dryrun
+        run: ./ci/dry-run-install-container-git.sh dryrun
 
       - name: Install build prerequisites in container
         ## --env CI=true is required: the in-container scripts'
         ## guard clauses refuse to run unless CI=true, and `docker
         ## exec` does not propagate the GHA runner's environment.
-        run: docker exec --env CI=true dryrun bash ci/dry-run-install.sh
+        run: docker exec --env CI=true dryrun ./ci/dry-run-install.sh
 
       - name: Sign HEAD with ephemeral CI key (so git_sanity_test passes)
         ## help-steps/git_sanity_test runs sq-git verification of HEAD
@@ -120,32 +124,21 @@ jobs:
         ## Actions, not by an authorized maintainer key) and fails.
         ## ci/dry-run-sign-and-tag.sh generates an ephemeral OpenPGP
         ## key, builds a CI-only policy that trust-roots it, re-signs
-        ## HEAD with it, and prints the policy path on stdout. We
-        ## capture that line into $GITHUB_ENV so the next step can
-        ## forward it via 'docker exec --env'.
-        ##
-        ## Runs as the unprivileged 'builder' user via
-        ## help-steps/run-as-user --chown /work (same user the next
-        ## step's derivative-maker invocation drops to, so the keystore
-        ## under /home/builder/.local/share/sequoia is shared). The
-        ## inner 'env CI=true' is needed because sudo strips the env
-        ## when run-as-user drops privileges; sign-and-tag's CI guard
-        ## refuses to run otherwise.
-        run: |
-          docker exec --env CI=true dryrun \
-             ./help-steps/run-as-user --chown /work -- \
-             builder env CI=true bash ci/dry-run-sign-and-tag.sh \
-             | tee "${RUNNER_TEMP}/sign-stdout.log"
-          grep -E '^sq_git_(policy_file|trust_root)=' \
-             "${RUNNER_TEMP}/sign-stdout.log" >> "${GITHUB_ENV}"
+        ## HEAD with it, and prints the policy path on stdout.
+        ## ci/dry-run-sign-step.sh is the workflow-side driver:
+        ## docker-execs into the container, tees stdout to a log
+        ## file, and forwards 'sq_git_policy_file=...' to
+        ## $GITHUB_ENV via 'tee --append' (visible in xtrace, unlike
+        ## a '>>' redirection).
+        run: ./ci/dry-run-sign-step.sh dryrun
 
       - name: Drop privileges and run derivative-maker --dry-run true
-        run: |
-          docker exec \
-             --env CI=true \
-             --env "sq_git_policy_file=${sq_git_policy_file}" \
-             --env "sq_git_trust_root=${sq_git_trust_root}" \
-             dryrun bash ci/dry-run-derivative-maker.sh
+        ## ci/dry-run-build-step.sh wraps the docker exec with the
+        ## sq_git_policy_file env-flag composition. sq_git_trust_root
+        ## is NOT forwarded: help-steps/variables defaults it to
+        ## "HEAD" for non-redistributable builds, which the dry-run
+        ## is, so passing it would be redundant.
+        run: ./ci/dry-run-build-step.sh dryrun
 
       - name: Tear down container
         if: always()

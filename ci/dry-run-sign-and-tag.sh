@@ -47,15 +47,22 @@ fi
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
-## Rely on the project's standard DEBFULLNAME / DEBEMAIL defaults
-## from help-steps/variables (which signing-key-create also sources).
-## The default email is descriptive enough that a leaked copy of this
-## ephemeral cert is obvious (no real maintainer would ever sign with
-## "derivative-distribution@local-signing.key"), so we don't override
-## with a CI-specific identity.
-: "${DEBFULLNAME:=derivative distribution auto generated local APT signing key}"
-: "${DEBEMAIL:=derivative-distribution@local-signing.key}"
-export DEBFULLNAME DEBEMAIL
+## Source help-steps/variables to inherit DEBFULLNAME / DEBEMAIL
+## (the defaults that 'signing-key-create' will use to mint the
+## ephemeral cert). Single source of truth: variables.bsh's
+## fallbacks at lines ~1168-1172. Hardcoding the literals here
+## would duplicate those defaults and rot if upstream ever
+## changed them.
+##
+## dist_build_one_parsed=true short-circuits variables.bsh's
+## auto-source of help-steps/parse-cmd, which would otherwise call
+## dist_build_one_parse_cmd "$@" (no args from this caller) and
+## error out on the missing --target / --flavor.
+export dist_build_one_parsed=true
+# shellcheck source=help-steps/pre
+source ./help-steps/pre
+# shellcheck source=help-steps/variables
+source ./help-steps/variables
 
 ## (1) Generate the ephemeral OpenPGP key. signing-key-create is
 ## idempotent on DEBEMAIL: re-runs are no-ops if a cert with that
