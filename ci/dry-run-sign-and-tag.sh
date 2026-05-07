@@ -172,31 +172,42 @@ printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${ci_tag_name}"
 ## The case-glob below matches the '+' lines.
 submodule_status_line=
 submodule_sha=
-submodule_path_field=
+submodule_path_rest=
+submodule_path=
 while read -r submodule_status_line; do
    case "${submodule_status_line}" in
       +*) ;;
       *) continue ;;
    esac
 
-   ## Strip leading '+', then split off SHA (first whitespace-delimited
-   ## field). 'git submodule status --recursive' format:
+   ## Strip leading '+', then split off SHA and path. Format:
    ##   '+<sha> <path> (<describe>)'
    submodule_sha="${submodule_status_line#+}"
-   submodule_path_field="${submodule_sha#* }"
+   submodule_path_rest="${submodule_sha#* }"
    submodule_sha="${submodule_sha%% *}"
+   submodule_path="${submodule_path_rest%% *}"
 
    case "${submodule_sha}" in
-      [0-9a-f]*)
-         sq-git policy goodlist \
-            --policy-file "${ci_policy}" \
-            -- "${submodule_sha}"
-         printf '%s: goodlisted %s (%s)\n' "${BASH_SOURCE[0]}" "${submodule_sha}" "${submodule_path_field%% *}"
-         ;;
+      [0-9a-f]*) ;;
       *)
          printf '%s: skipping non-SHA status line: %s\n' "${BASH_SOURCE[0]}" "${submodule_status_line}" >&2
+         continue
          ;;
    esac
+
+   ## sq-git policy goodlist resolves the SHA against the CWD's git
+   ## repository. The submodule's HEAD SHA only exists in the
+   ## submodule's git db, not the parent's, so the call has to run
+   ## with the submodule as CWD - otherwise sq-git aborts with
+   ## "revspec '<sha>' not found". Subshell + cd scopes the cwd
+   ## change to this single command.
+   (
+      cd -- "${submodule_path}"
+      sq-git policy goodlist \
+         --policy-file "${ci_policy}" \
+         -- "${submodule_sha}"
+   )
+   printf '%s: goodlisted %s (%s)\n' "${BASH_SOURCE[0]}" "${submodule_sha}" "${submodule_path}"
 done < <(git submodule status --recursive)
 
 ## (8) Print env exports for the workflow step to capture into
