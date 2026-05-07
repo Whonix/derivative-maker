@@ -142,14 +142,13 @@ fi
 ## project's existing tag namespace ('git tag -l' shows the new
 ## tag grouped near the release it came from) with the post-amend
 ## full HEAD SHA so the suffix is globally unique per run.
-existing_signed_tag=
 for existing_tag in $(git tag --points-at HEAD); do
    if verify_ref "${existing_tag}" tag "main repo tag"; then
       existing_signed_tag="${existing_tag}"
       break
    fi
 done
-if [ -z "${existing_signed_tag}" ]; then
+if [ -z "${existing_signed_tag:-}" ]; then
    nearest_git_tag="$(git describe --abbrev=0)"
    commit_full_sha="$(git rev-parse HEAD)"
    signed_tag="${nearest_git_tag}_${commit_full_sha}"
