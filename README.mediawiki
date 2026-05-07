@@ -4,7 +4,7 @@
 -->
 <!--
 EDITORS NOTE:
-Please do not use relative links here, because this file is mirrored on github https://github.com/derivative-maker/derivative-maker/blob/master/README.mediawiki and relative links won't work there.
+Please do not use relative links here, because this file is mirrored on github https://github.com/Kicksecure/derivative-maker/blob/master/README.mediawiki and relative links won't work there.
 -->
 
 derivative-maker can create Debian derivatives such as Kicksecure and Whonix.

@@ -27,7 +27,7 @@ SOURCE_VOLUME="$( dirname -- "${DOCKER_DIR}" )"
 BINARY_VOLUME="$HOME/binary_mnt"
 CACHER_VOLUME="$HOME/approx_cache_mnt"
 KEY_VOLUME="$HOME/.key_mnt"
-IMG="derivative-maker/derivative-maker-docker"
+IMG="Kicksecure/derivative-maker-docker"
 [[ -v CI ]] || CI=""
 
 if [ "${CI:-}" = "true" ]; then

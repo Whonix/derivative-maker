@@ -6,9 +6,9 @@ Section: misc
 Priority: optional
 Maintainer: Patrick Schleizer <adrelanos@whonix.org>
 Build-Depends: debhelper (>= 9), ruby-ronn
-Homepage: https://github.com/derivative-maker/derivative-maker
-Vcs-Browser: https://github.com/derivative-maker/derivative-maker
-Vcs-Git: https://github.com/derivative-maker/derivative-maker.git
+Homepage: https://github.com/Kicksecure/derivative-maker
+Vcs-Browser: https://github.com/Kicksecure/derivative-maker
+Vcs-Git: https://github.com/Kicksecure/derivative-maker.git
 Standards-Version: 3.9.4
 
 Package: derivative-maker
