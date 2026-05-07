@@ -6,22 +6,20 @@
 ## AI-Assisted
 
 ## Driver for the 'Drop privileges and run derivative-maker
-## --dry-run true' workflow step.
+## --dry-run true' workflow step. docker-execs into the running
+## container and runs ci/dry-run-derivative-maker.sh.
 ##
-## Lives as a script (not inline in the workflow YAML) per
-## agents/bash-style-guide.md: multi-line 'docker exec' with
-## env-flag composition belongs in a shellcheck'd file. Lets a
-## developer reproduce the exact CI invocation as
-##   bash ci/dry-run-build-step.sh dryrun
-## from a clone with sq_git_policy_file in the environment.
+## Forwards sq_git_policy_file via --env so help-steps/variables
+## honors it (variables.bsh defaults sq_git_policy_file to
+## ${source_code_folder_dist}/openpgp-policy.toml; the CI policy
+## that authorizes the ephemeral key lives elsewhere - see
+## ci/dry-run-sign-and-tag.sh). The path is fixed and predictable
+## (matches binary_build_folder_dist's default for the 'builder'
+## user inside the container), no need to discover it from the
+## sign step's stdout.
 ##
 ## Inputs:
 ##   $1 - container name to docker-exec into.
-##
-## Required environment:
-##   sq_git_policy_file - absolute path inside the container to
-##                        the CI policy file produced by
-##                        ci/dry-run-sign-and-tag.sh.
 
 set -o errexit
 set -o nounset
@@ -41,16 +39,8 @@ fi
 container_name=
 container_name="$1"
 
-if [ -z "${sq_git_policy_file:-}" ]; then
-   printf '%s\n' "${BASH_SOURCE[0]}: sq_git_policy_file must be set (produced by ci/dry-run-sign-and-tag.sh)" >&2
-   exit 1
-fi
-
-## sq_git_trust_root is NOT forwarded: help-steps/variables defaults
-## it to "HEAD" for non-redistributable builds, which the dry-run is.
-## Forwarding it would be redundant.
 docker exec \
    --env CI=true \
-   --env "sq_git_policy_file=${sq_git_policy_file}" \
+   --env sq_git_policy_file=/home/builder/derivative-binary/openpgp-policy.toml \
    "${container_name}" \
    ./ci/dry-run-derivative-maker.sh

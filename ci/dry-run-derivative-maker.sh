@@ -41,24 +41,20 @@ cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
 ## help-steps/run-as-user invokes 'sudo --preserve-env=PATH ...' to
 ## drop privileges, which strips every env var except PATH (and the
-## inline user_name= assignment). The sq_git_policy_file env var set
-## by the workflow's 'Sign HEAD with ephemeral CI key' step is
-## visible here (docker exec --env), but won't survive the sudo
-## unless we inline it as an 'env VAR=val' argument AFTER 'builder'
-## so it ends up in the builder shell's environment. Required by
-## help-steps/variables (which honors a pre-set sq_git_policy_file)
-## and by help-steps/git_sanity_test (which dies if it's empty).
+## inline user_name= assignment). The sq_git_policy_file env var
+## set by the workflow's docker exec --env doesn't survive that
+## sudo unless we re-inline it as an 'env VAR=val' argument after
+## 'builder'. Path is fixed and predictable (matches
+## binary_build_folder_dist's default for the 'builder' user inside
+## the container, where ci/dry-run-sign-and-tag.sh wrote the CI
+## policy).
 ##
 ## sq_git_trust_root is NOT forwarded: help-steps/variables defaults
-## it to "HEAD" for non-redistributable builds (the dry-run is one),
-## and forwarding an empty string would *prevent* that default
-## (variables.bsh checks '[[ -v sq_git_trust_root ]]' which passes
-## for empty-but-set, skipping the default and leaving git_sanity_test
-## to die on the now-empty value).
+## it to "HEAD" for non-redistributable builds (the dry-run is one).
 timeout 1200 \
   ./help-steps/run-as-user --chown "$PWD" -- \
     builder \
-    env "sq_git_policy_file=${sq_git_policy_file:-}" \
+    env sq_git_policy_file=/home/builder/derivative-binary/openpgp-policy.toml \
     ./derivative-maker \
       --dry-run true \
       --unsupported-os true \
