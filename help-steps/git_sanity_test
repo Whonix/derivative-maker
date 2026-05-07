@@ -171,11 +171,7 @@ fi
 ## Pre-flight dependency checks. Explicit guards here are necessary because
 ## help-steps/pre does 'set +e' and functions called from '|| cls=$?' have
 ## errexit AND ERR trap suppressed for all commands inside them.
-command -v git    >/dev/null || die 1 "git is required but not installed"
-command -v sq >/dev/null || die 1 "sq is required for tag signature verification but is not installed. Install package 'sq' (Debian: apt install sq)."
-command -v sqop >/dev/null || die 1 "sqop (Stateless OpenPGP) is required for tag signature verification but is not installed. Install package 'sqop' (Debian: apt install sqop)."
-command -v sq-git >/dev/null || die 1 "sq-git (sequoia-git) is required for commit signature verification but is not installed. Install package 'sequoia-git' (Debian: apt install sequoia-git)."
-command -v safe-rm >/dev/null || die 1 "safe-rm missing. (Debian: apt install safe-rm)."
+die_if_not_has git sq sqop sq-git safe-rm
 
 ## ----------------------------------------------------------------------------
 ## Verification primitives
