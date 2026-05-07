@@ -39,7 +39,7 @@ image="$2"
 ## because the docker-run command runs before --workdir.
 host_repo="${PWD}"
 container_repo=/work
-container_entrypoint="${container_repo}/ci/dry-run-container-init"
+container_entrypoint="${container_repo}/docker/dry-run-entrypoint"
 
 docker run \
    --detach \

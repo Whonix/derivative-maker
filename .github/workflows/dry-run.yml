@@ -74,7 +74,7 @@ jobs:
         run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
 
       - name: Start systemd-enabled Debian container
-        run: ./ci/dry-run-start-container dryrun "${DEBIAN_IMAGE}"
+        run: ./docker/dry-run-start-container dryrun "${DEBIAN_IMAGE}"
 
       - name: Run dry-run inside container
         ## docker-execs into ./ci/dry-run, which run-parts walks
