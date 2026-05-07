@@ -1247,11 +1247,6 @@ set_dist_build_reprepro_folder_options() {
 [ -n "${host_architecture:-}" ] || host_architecture="$(dpkg --print-architecture)"
 export host_architecture
 
-## Default the build architecture to the host architecture. Owner
-## of this initialization is now variables.bsh exclusively; the
-## previous parse-cmd 'dist_build_target_arch=""' assignments for
-## --target source / --flavor source were dead writes (-n "" is
-## false, so this default ran anyway) and have been removed.
 [ -n "${dist_build_target_arch:-}" ] || dist_build_target_arch="$(dpkg --print-architecture)"
 
 [ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="$dist_build_target_arch"

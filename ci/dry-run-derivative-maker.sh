@@ -39,22 +39,27 @@ fi
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
+## Compute the path to the CI policy file from builder's home dir
+## via getent (matches binary_build_folder_dist's default in
+## help-steps/variables when run as builder). Avoids a literal
+## '/home/builder/' string and survives a future user.add elsewhere
+## that picked a non-/home prefix. Single ': '-delimited field
+## extraction is standard Unix, not awk.
+builder_home=
+builder_home="$(getent passwd builder | cut -d: -f6)"
+
 ## help-steps/run-as-user invokes 'sudo --preserve-env=PATH ...' to
 ## drop privileges, which strips every env var except PATH (and the
-## inline user_name= assignment). The sq_git_policy_file env var
-## set by the workflow's docker exec --env doesn't survive that
-## sudo unless we re-inline it as an 'env VAR=val' argument after
-## 'builder'. Path is fixed and predictable (matches
-## binary_build_folder_dist's default for the 'builder' user inside
-## the container, where ci/dry-run-sign-and-tag.sh wrote the CI
-## policy).
+## inline user_name= assignment). sq_git_policy_file has to be
+## re-inlined as an 'env VAR=val' argument after 'builder' so it
+## ends up in the builder shell's environment.
 ##
 ## sq_git_trust_root is NOT forwarded: help-steps/variables defaults
 ## it to "HEAD" for non-redistributable builds (the dry-run is one).
 timeout 1200 \
   ./help-steps/run-as-user --chown "$PWD" -- \
     builder \
-    env sq_git_policy_file=/home/builder/derivative-binary/openpgp-policy.toml \
+    env "sq_git_policy_file=${builder_home}/derivative-binary/openpgp-policy.toml" \
     ./derivative-maker \
       --dry-run true \
       --unsupported-os true \

@@ -9,14 +9,10 @@
 ## --dry-run true' workflow step. docker-execs into the running
 ## container and runs ci/dry-run-derivative-maker.sh.
 ##
-## Forwards sq_git_policy_file via --env so help-steps/variables
-## honors it (variables.bsh defaults sq_git_policy_file to
-## ${source_code_folder_dist}/openpgp-policy.toml; the CI policy
-## that authorizes the ephemeral key lives elsewhere - see
-## ci/dry-run-sign-and-tag.sh). The path is fixed and predictable
-## (matches binary_build_folder_dist's default for the 'builder'
-## user inside the container), no need to discover it from the
-## sign step's stdout.
+## sq_git_policy_file is NOT forwarded across docker exec - the
+## inner script computes the path itself from getent passwd builder
+## so we avoid a hardcoded '/home/builder/' literal at the host
+## boundary.
 ##
 ## Inputs:
 ##   $1 - container name to docker-exec into.
@@ -39,8 +35,5 @@ fi
 container_name=
 container_name="$1"
 
-docker exec \
-   --env CI=true \
-   --env sq_git_policy_file=/home/builder/derivative-binary/openpgp-policy.toml \
-   "${container_name}" \
+docker exec --env CI=true "${container_name}" \
    ./ci/dry-run-derivative-maker.sh

@@ -8,8 +8,9 @@
 ## Generate an ephemeral CI OpenPGP signing key, build an
 ## openpgp-policy.toml that authorizes that key on top of the
 ## upstream maintainer keys, re-sign HEAD with it, tag HEAD, and
-## re-sign each fork-branch-overlaid submodule HEAD with the same
-## key so they verify against the same policy.
+## then delegate to ci/dry-run-resign-submodules.sh to re-sign
+## each fork-branch-overlaid submodule HEAD with the same key so
+## they all verify against the same policy.
 ##
 ## Why this exists:
 ##   The dry-run runs derivative-maker --dry-run which calls
@@ -53,24 +54,22 @@ fi
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
-## Mirror help-steps/variables's DEBFULLNAME / DEBEMAIL fallbacks
-## (lines ~1168-1172). The signing-key-create call below sources
-## variables.bsh in its own subshell to mint the ephemeral cert
-## with these values; we set them in our parent shell so the
-## subsequent 'sq cert export --cert-email "${DEBEMAIL}"' knows
-## what email to query.
+## DEBEMAIL: needed *after* signing-key-create returns. signing-key-
+## create runs as a separate bash process that sources variables.bsh
+## in its own subshell, so the default DEBEMAIL it picks for the
+## ephemeral cert never reaches our shell. Two consumers below need
+## to know it: (1) git config user.signingkey, which sq-git-wrapper
+## reads to dispatch to 'sq sign --signer-email' (./help-steps/sq-
+## git-wrapper rejects empty signing keys); (2) git config user.email
+## so 'git commit --amend' has an author identity.
 ##
-## Why duplicate the literals instead of 'source ./help-steps/variables'
-## here: variables.bsh has unprotected '${var}' derefs of vars
-## normally set by parse-cmd (e.g. dist_build_type_long at line 537,
-## R-010 violations from before nounset-hardening) that abort under
-## set -o nounset when sourced from a non-build context. Pre-setting
-## every required var would be more brittle than mirroring two
-## defaults; once variables.bsh is fully ':-}-protected, this block
-## can be replaced with the source.
-: "${DEBFULLNAME:=derivative distribution auto generated local APT signing key}"
+## The duplication of variables.bsh:1171's literal is annotated;
+## a 'source ./help-steps/variables' would be cleaner but trips
+## variables.bsh's own R-010 violations under nounset (unprotected
+## ${dist_build_type_long} at line 537, etc.). The duplication is
+## scheduled for removal once variables.bsh is fully ':-}-protected.
 : "${DEBEMAIL:=derivative-distribution@local-signing.key}"
-export DEBFULLNAME DEBEMAIL
+export DEBEMAIL
 
 ## (1) Generate the ephemeral OpenPGP key. signing-key-create is
 ## idempotent on DEBEMAIL: re-runs are no-ops if a cert with that
@@ -84,19 +83,15 @@ export DEBFULLNAME DEBEMAIL
 ## resorting to the dist_build_allow_root=true escape hatch.
 ./help-steps/signing-key-create
 
-## (2) Export the armored cert. binary_build_folder_dist is set by
-## help-steps/variables; default to $HOME/derivative-binary if unset.
-##
-## We deliberately do NOT extract the fingerprint here. sq-git policy
-## authorize accepts a cert FILE as its positional argument
-## (synopsis: 'sq-git policy authorize NAME FILE|FINGERPRINT|KEYID'),
-## and sq-git-wrapper resolves a signing identity that contains '@'
-## as --signer-email, so 'git config user.signingkey "${DEBEMAIL}"'
-## is enough for the signing path. This avoids parsing 'sq cert list'
-## output entirely (no JSON flag in the trixie sq, no awk grep).
+## (2) Export every cert in the keystore. On a fresh CI container the
+## keystore has exactly one cert (the ephemeral one signing-key-
+## create just minted), so '--all' picks it without us having to know
+## the cert's email or fingerprint. Avoids the 'sq cert list --format
+## json | jq' parse the trixie sq does not support and the awk grep
+## the bash style guide rejects (R-010 / no parsing).
 ci_cert_pem=
 ci_cert_pem="$(mktemp)"
-sq cert export --cert-email "${DEBEMAIL}" > "${ci_cert_pem}"
+sq cert export --all > "${ci_cert_pem}"
 
 if [ -z "${binary_build_folder_dist:-}" ]; then
    binary_build_folder_dist="${HOME}/derivative-binary"
@@ -122,92 +117,56 @@ project_policy="${PWD}/openpgp-policy.toml"
 cp -- "${project_policy}" "${ci_policy}"
 
 ## (4) Authorize the CI cert in the policy via sq-git, instead of
-## hand-rolling the [authorization."..."] TOML block. Keeps the policy
-## file's exact shape (capability flag names, escaping of the user-id
-## string, future schema bumps) the responsibility of sq-git rather
-## than this script. --project-maintainer grants the full set
-## (sign_commit, sign_tag, sign_archive, add_user, retire_user,
-## audit) which is what the dry-run needs to walk the commit chain
-## and authenticate any tag the build may inspect.
+## hand-rolling the [authorization."..."] TOML block. Keeps the
+## policy file's exact shape (capability flag names, escaping of
+## the user-id string, future schema bumps) the responsibility of
+## sq-git rather than this script. --project-maintainer grants the
+## full set (sign_commit, sign_tag, sign_archive, add_user,
+## retire_user, audit) which is what the dry-run needs to walk the
+## commit chain and authenticate any tag the build may inspect.
+##
+## NAME is just the policy-file label; it does NOT have to match
+## the cert's userid. Use a fixed CI label so we don't have to
+## know DEBFULLNAME in this shell.
 sq-git policy authorize \
    --policy-file "${ci_policy}" \
    --project-maintainer \
-   "${DEBFULLNAME} <${DEBEMAIL}>" \
+   "ci-ephemeral-key" \
    "${ci_cert_pem}"
 rm -f -- "${ci_cert_pem}"
 printf '%s\n' "${BASH_SOURCE[0]}: wrote CI policy to ${ci_policy}"
 
 ## (5) Configure git for sq-git-wrapper signing. --global so the
 ## settings inherit into submodule git contexts (the per-submodule
-## amend loop in step 7 below relies on this). user.signingkey is
-## set to the email; sq-git-wrapper detects the '@' in it and
-## dispatches to 'sq sign --signer-email' (see help-steps/sq-git-
-## wrapper sign-mode dispatch).
+## amend in ci/dry-run-resign-submodules.sh relies on this).
+## user.signingkey is set to the email; sq-git-wrapper detects the
+## '@' in it and dispatches to 'sq sign --signer-email' (see
+## help-steps/sq-git-wrapper sign-mode dispatch).
 git config --global user.signingkey "${DEBEMAIL}"
 git config --global gpg.format openpgp
 git config --global gpg.openpgp.program "${PWD}/help-steps/sq-git-wrapper"
 git config --global commit.gpgsign true
 git config --global tag.gpgsign true
 git config --global user.email "${DEBEMAIL}"
-git config --global user.name "${DEBFULLNAME}"
 
 ## (6) Re-sign HEAD with the CI key. --amend --no-edit rewrites the
-## tip without changing its content; -S forces a signature pass under
-## the new gpg config.
+## tip without changing its content; -S forces a signature pass
+## under the new gpg config.
 git commit --amend --no-edit -S
 
 ## Tag HEAD with an annotated signed tag. The dry-run targets may
 ## inspect the latest tag; having one present (and signed) is more
 ## realistic than using --allow-untagged. The tag name embeds the
 ## run id when set, otherwise the short SHA, so re-runs do not
-## conflict. Hoisted out of a single-line ${VAR:-$(cmd)} form so the
-## subshell is its own assignment (R-022 / bash-style-guide).
+## conflict. Hoisted out of a single-line ${VAR:-$(cmd)} form so
+## the subshell is its own assignment (R-022 / bash-style-guide).
 git_short_sha=
 git_short_sha="$(git rev-parse --short HEAD)"
 ci_tag_name="ci-dry-run-${GITHUB_RUN_ID:-${git_short_sha}}"
 git tag -a -s -m 'CI dry-run ephemeral signed tag' "${ci_tag_name}"
 printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${ci_tag_name}"
 
-## (7) Re-sign each fork-branch-overlaid submodule's HEAD with the
-## CI key. The workflow's checkout-fork-submodule-branches.sh step
-## switches some submodules off their pinned (signed by upstream
-## maintainer, in policy) SHAs onto fork branch tips - which on
-## this PR are SSH-signed by the contributor's session key. sq-git
-## only validates OpenPGP, so those SSH-signed commits look
-## unsigned to it and would fail submodule verification.
-##
-## Re-signing is preferred over the previous goodlist-the-SHA
-## approach because the resulting commit is genuinely signed by a
-## cert in the policy - matches how a real maintainer-signed commit
-## flows, no commit_goodlist policy hack required.
-##
-## 'git submodule status' prefixes:
-##   ' ' (space) - HEAD matches the index pin
-##   '+'         - HEAD differs from the index pin
-##   '-'         - submodule not initialized
-##   'U'         - merge conflict
-## We amend on '+' lines (overlaid). Pin-stable submodules are left
-## alone: their HEAD is already signed by a maintainer key in the
-## seeded policy, no work needed.
-submodule_status_line=
-submodule_path=
-submodule_path_rest=
-while read -r submodule_status_line; do
-   case "${submodule_status_line}" in
-      +*) ;;
-      *) continue ;;
-   esac
-
-   ## Format: '+<sha> <path> (<describe>)' - we want the path field.
-   submodule_path_rest="${submodule_status_line#+* }"
-   submodule_path="${submodule_path_rest%% *}"
-
-   ## --global git config from step 5 means signing settings carry
-   ## into the submodule's git context; no per-submodule git config
-   ## needed.
-   (
-      cd -- "${submodule_path}"
-      git commit --amend --no-edit -S
-   )
-   printf '%s: re-signed submodule HEAD: %s\n' "${BASH_SOURCE[0]}" "${submodule_path}"
-done < <(git submodule status --recursive)
+## (7) Re-sign each fork-branch-overlaid submodule's HEAD. Walks
+## the submodule tree in its own script; isolates the per-iteration
+## state and keeps this driver linear.
+./ci/dry-run-resign-submodules.sh

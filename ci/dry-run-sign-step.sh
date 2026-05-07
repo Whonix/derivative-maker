@@ -8,7 +8,16 @@
 ## Driver for the 'Sign HEAD with ephemeral CI key' workflow step.
 ## docker-execs into the running container as 'builder' and runs
 ## ci/dry-run-sign-and-tag.sh, which writes the CI policy file at
-## a fixed path under ${binary_build_folder_dist}/openpgp-policy.toml.
+## ${binary_build_folder_dist}/openpgp-policy.toml.
+##
+## Why docker exec (not run on the host runner directly):
+##   sign-and-tag.sh needs sq, sequoia-git, sqop, signify-openbsd
+##   from Debian. The host (ubuntu-latest GHA runner) ships sq in
+##   universe but not sequoia-git (Debian-only); installing it
+##   would require a Debian apt source on Ubuntu, which is more
+##   plumbing than reusing the debian:trixie container we already
+##   bring up for the build itself. Run inside the container
+##   keeps the toolchain consistent.
 ##
 ## Lives as a script (not inline in the workflow YAML) per
 ## agents/bash-style-guide.md: docker exec composition + run-as-user
