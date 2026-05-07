@@ -7,20 +7,19 @@
 
 ## Phase 400: run derivative-maker --dry-run as 'builder'.
 ##
-## Compute the path to the CI policy file from builder's home dir
-## via getent (matches binary_build_folder_dist's default in
+## Compute the path to the policy file from builder's home dir via
+## getent (matches binary_build_folder_dist's default in
 ## help-steps/variables when run as builder). Avoids a literal
 ## '/home/builder/' string and survives a future user-add that
 ## picked a non-/home prefix. Single ': '-delimited field
 ## extraction is standard Unix, not awk.
 ##
-## help-steps/run-as-user invokes 'sudo --preserve-env=PATH ...'
-## which strips every env var except PATH (and the inline
-## user_name= assignment). sq_git_policy_file has to be re-inlined
-## as an 'env VAR=val' argument after 'builder'.
+## --policy-file is consumed by parse-cmd, which exports
+## sq_git_policy_file for git_sanity_test - cleaner than passing
+## across the run-as-user sudo via 'env VAR=val'.
 ##
-## sq_git_trust_root is NOT forwarded: help-steps/variables
-## defaults it to "HEAD" for non-redistributable builds.
+## sq_git_trust_root is NOT set: help-steps/variables defaults it
+## to "HEAD" for non-redistributable builds.
 
 set -o errexit
 set -o nounset
@@ -32,11 +31,11 @@ cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.."
 builder_home=
 builder_home="$(getent passwd builder | cut -d: -f6)"
 
-exec timeout 1200 \
+timeout 1200 \
    ./help-steps/run-as-user --chown "$PWD" -- \
       builder \
-      env "sq_git_policy_file=${builder_home}/derivative-binary/openpgp-policy.toml" \
       ./derivative-maker \
+         --policy-file "${builder_home}/derivative-binary/openpgp-policy.toml" \
          --dry-run true \
          --unsupported-os true \
          --allow-uncommitted true \

@@ -5,33 +5,23 @@
 
 ## AI-Assisted
 
-## After parent-side submodule init from fork remotes (insteadOf
-## rewrites in place via ci/configure-fork-mirror), check out
-## the matching branch in each submodule when one exists. Lets
-## fork-side fixes flow into CI before they land upstream and get
-## pinned: a PR on derivative-maker's claude/foo-bar branch can
-## simultaneously test claude/foo-bar in helper-scripts and
-## developer-meta-files, even though the parent's submodule SHA
-## pins still point at the upstream-stable history.
+## After parent-side submodule init, walk every submodule via
+## 'git submodule foreach' and switch to the same-named branch
+## on its origin remote when one exists. Submodules without a
+## matching branch keep the SHA pin from the parent's index.
+##
+## Same pattern as help-steps/git_sanity_test's mode_submodules:
+## 'foreach --recursive' delegates the per-submodule action to
+## ci/checkout-fork-branch.
 ##
 ## Caller contract:
-##   - Pass the branch name to look for as the only argument
-##     (typically ${{ github.head_ref || github.ref_name }} from
-##     the workflow).
-##   - Run from the parent repo's working tree.
-##
-## Behaviour:
-##   - For each submodule listed in .gitmodules, try to fetch the
-##     named branch from its origin. If the fetch succeeds and the
-##     ref exists, checkout the fetched HEAD. If either fails, the
-##     submodule keeps the SHA pin from the parent's index.
-##   - All fetch/checkout failures are silently swallowed: a fork
-##     without a matching branch is the common case, not an error.
+##   - Pass the branch name as the only argument.
+##   - Run after 'git submodule update --init --recursive' so each
+##     submodule's .git/config exists.
 ##
 ## Reusable from a developer machine:
+##   git submodule update --init --recursive
 ##   ./ci/checkout-fork-submodule-branches my-feature-branch
-## (run after './ci/configure-fork-mirror <fork-org>
-##  && git submodule update --init --recursive')
 
 set -o errexit
 set -o nounset
@@ -46,8 +36,6 @@ fi
 branch=
 branch="$1"
 
-## Reject anything that wouldn't be a valid git ref name. Defends
-## against accidental shell metachars from a workflow expression.
 case "${branch}" in
    *[!a-zA-Z0-9._/-]*|"")
       printf '%s\n' "${BASH_SOURCE[0]}: refusing suspicious branch name: '${branch}'" >&2
@@ -55,36 +43,11 @@ case "${branch}" in
       ;;
 esac
 
-## Iterate submodule paths from .gitmodules in plain bash. 'git
-## submodule foreach' would require an embedded shell snippet as
-## its argument; reading paths via 'git config --file .gitmodules
-## --get-regexp' keeps each step a normal command in this script.
-##
-## Diagnostic: every per-submodule decision (skipped, fetch failed,
-## branch missing, switched) is printed so a failed lookup is
-## visible in the workflow log instead of disappearing into 2>/dev/null.
-submodule_path=
-submodule_url=
-fetch_log=
-while read -r _ submodule_path; do
-   ## A submodule that hasn't been init'd has no .git dir/file.
-   if [ ! -e "${submodule_path}/.git" ]; then
-      printf 'skip   %s: not initialized\n' "${submodule_path}"
-      continue
-   fi
+cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
-   submodule_url="$(git -C "${submodule_path}" remote get-url origin 2>&1 || printf '<no-origin>')"
-   fetch_log=
-   if ! fetch_log="$(git -C "${submodule_path}" fetch origin "${branch}" 2>&1)"; then
-      printf 'no-ref %s (origin: %s): %s\n' "${submodule_path}" "${submodule_url}" "${fetch_log}"
-      continue
-   fi
-
-   if git -C "${submodule_path}" checkout --quiet "origin/${branch}" 2>&1; then
-      printf 'switch %s (origin: %s) -> origin/%s\n' "${submodule_path}" "${submodule_url}" "${branch}"
-   else
-      printf 'fail   %s (origin: %s): checkout origin/%s failed after fetch ok\n' "${submodule_path}" "${submodule_url}" "${branch}"
-   fi
-done < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$')
-
-printf '%s\n' "${BASH_SOURCE[0]}: done"
+## $toplevel is exported by 'git submodule foreach' for its child
+## shell to expand per-submodule. Single quotes intentional;
+## expanding now would substitute this shell's (empty) value.
+# shellcheck disable=SC2016
+FORK_BRANCH="${branch}" \
+   git submodule foreach --recursive '"$toplevel/ci/checkout-fork-branch"'

@@ -5,23 +5,8 @@
 
 ## AI-Assisted
 
-## Entry point for the dry-run smoke test. Invoked via 'docker
-## exec' from the workflow:
-##   docker exec --env CI=true dryrun ./ci/dry-run
-##
-## Walks ci/dry-run.d/* via run-parts. Numbered files there are
-## the actual phases (install build prereqs, sign HEAD, resign
-## submodules, run derivative-maker --dry-run). Each file is
-## responsible for any user-context switching it needs (most
-## drop privileges via help-steps/run-as-user). The pattern
-## mirrors derivative-maker's own build-steps.d/ dispatcher.
-##
-## --exit-on-error stops at the first failed phase rather than
-## continuing through later phases on a broken build.
-##
-## run-parts on Debian skips files containing dots in their
-## names by default, which matches our convention of no
-## extensions on numbered phase files.
+## Walks ci/dry-run.d/* via run-parts. Mirrors derivative-maker's
+## own build-steps.d/ dispatcher.
 
 set -o errexit
 set -o nounset
@@ -35,4 +20,4 @@ fi
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
-exec run-parts --exit-on-error -- ./ci/dry-run.d
+run-parts --exit-on-error --verbose -- ./ci/dry-run.d

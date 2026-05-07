@@ -21,4 +21,4 @@ set -o errtrace
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.."
 
-exec ./help-steps/run-as-user --chown /work -- builder ./help-steps/sign-and-tag
+./help-steps/run-as-user --chown /work -- builder ./help-steps/sign-and-tag
