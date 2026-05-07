@@ -41,12 +41,21 @@ git_sanity_test="${repo_root}/help-steps/git_sanity_test"
 ##                                   from --flavor source defaults.
 ##   dist_build_one_parsed=true   -> skip parse-cmd auto-source
 ##                                   (no positional args here).
+##
+## variables.bsh:153 does 'cd -- "$source_code_folder_dist"' as a
+## side effect of sourcing. That breaks the submodule-mode dispatch
+## below: 'git submodule foreach' lands us in the submodule's
+## working tree, the cd would yank us back to /work, and the
+## subsequent 'git commit --amend' would then amend the PARENT's
+## HEAD. Save + restore CWD around the source.
+saved_cwd="$PWD"
 export dist_build_source_run=true
 export dist_build_one_parsed=true
 # shellcheck source=help-steps/pre
 source "${repo_root}/help-steps/pre"
 # shellcheck source=help-steps/variables
 source "${repo_root}/help-steps/variables"
+cd -- "${saved_cwd}"
 
 git_options=(
    -c user.signingkey="${DEBEMAIL}"
