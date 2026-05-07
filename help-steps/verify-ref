@@ -11,19 +11,15 @@
 ## sq_git_trust_root, and the dist_build_ignore_* booleans set in
 ## env (sourcing help-steps/variables provides defaults).
 
+verify_ref_self_dir="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+verify_ref_git_sanity_test="${verify_ref_self_dir}/git_sanity_test"
+test -x "${verify_ref_git_sanity_test}"
+
 verify_ref() {
    local ref="$1"
    local ref_type="$2"
    local context="$3"
-   local self_dir
-   ## BASH_SOURCE[0] inside a function is the path of THIS file,
-   ## not the caller's, so the lookup works regardless of where
-   ## verify_ref was called from.
-   self_dir="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
-   local git_sanity_test="${self_dir}/git_sanity_test"
-   [ -x "${git_sanity_test}" ] \
-      || { printf '%s: missing or not executable: %s\n' "${BASH_SOURCE[0]}" "${git_sanity_test}" >&2; return 1; }
-   "${git_sanity_test}" \
+   "${verify_ref_git_sanity_test}" \
       --mode ref --ref "${ref}" --ref-type "${ref_type}" --context "${context}" \
       >/dev/null 2>&1
 }
