@@ -5,42 +5,39 @@
 
 ## AI-Assisted
 
-## After parent-side 'git submodule update --init', rewrite each
-## submodule's origin remote URL from its canonical Kicksecure/* or
-## Whonix/* upstream to the corresponding fork-org mirror.
+## Install global git url.<fork>.insteadOf rewrites so URLs targeting
+## the upstream Kicksecure/* and Whonix/* orgs resolve to the
+## corresponding fork-org mirrors instead. derivative-maker's
+## submodules straddle two upstream orgs, so two rewrites cover
+## every cross-org submodule the build reaches; adding new ones
+## requires no further config.
 ##
-## Two-arg API: separate mirrors per upstream. derivative-maker's
-## submodules straddle two upstream orgs (Kicksecure for the
-## hardening-distribution side, Whonix for the gateway/workstation
-## side). A single-org mirror like org-ai-assisted/* collapses both
-## into one namespace - in that case pass the same arg twice. A
-## forker who maintains separate Kicksecure-mirror and Whonix-mirror
-## orgs passes them distinctly. Either layout falls out of two
-## positional args.
+## Two-arg API: <kicksecure-mirror> <whonix-mirror>. A forker who
+## keeps separate Kicksecure-mirror and Whonix-mirror orgs passes
+## them distinctly. The single-org case (org-ai-assisted/* mirrors
+## both) passes the same value twice. Each mirror org must contain
+## every Kicksecure/* (resp. Whonix/*) repo this parent reaches.
 ##
-## Why this approach instead of git's url.<base>.insteadOf:
-##   --local insteadOf in the parent's .git/config rewrites the
-##   network endpoint only when the *parent's* git context issues
-##   the command. 'git submodule update' clones via the rewrite,
-##   but each submodule's own .git/config records the canonical
-##   URL. A later in-submodule 'git fetch origin <branch>' executes
-##   in the submodule's git context, where the parent's local
-##   rewrite is invisible - so the fetch hits the canonical host
-##   and 404s on any fork-only branch. Direct 'remote set-url'
-##   avoids that layering surprise: the per-submodule URL is the
-##   source of truth, no rewrite needed.
+## --global, not --local: a parent-repo --local insteadOf rewrites
+## only operations issued by the parent's git context. 'git
+## submodule update --init' clones via the rewrite, but each
+## submodule's own git context (used by a later 'git -C <submodule>
+## fetch origin <branch>') would not see the parent's --local
+## config, leaving fetches to hit the canonical host. --global is
+## loaded by every git process - parent and submodule alike - so
+## the rewrite applies uniformly.
 ##
-## Caller contract:
-##   - Run after 'git submodule update --init --recursive' so each
-##     submodule's .git/config exists.
-##   - Pass <kicksecure-mirror-org> and <whonix-mirror-org>. Same
-##     value twice for the single-org case.
-##   - Each mirror org must contain every Kicksecure/* (resp.
-##     Whonix/*) submodule this parent reaches.
+## Trade-off: --global writes to ~/.gitconfig. On an ephemeral CI
+## runner this is harmless (runner is destroyed at end of job).
+## On a developer machine the rewrite persists across all repos
+## until manually undone with
+##   git config --global --unset-all url.https://github.com/<fork>/.insteadOf
+## (one line per fork-org). Documented here so the cleanup step is
+## discoverable.
 ##
 ## Reusable from a developer machine:
-##   git submodule update --init --recursive
 ##   bash ci/configure-fork-mirror.sh org-ai-assisted org-ai-assisted
+##   git submodule update --init --recursive
 ##   bash ci/checkout-fork-submodule-branches.sh my-feature-branch
 
 set -o errexit
@@ -71,39 +68,13 @@ case "${whonix_mirror}" in
       ;;
 esac
 
-submodule_path=
-old_url=
-new_url=
-while read -r _ submodule_path; do
-   if [ ! -e "${submodule_path}/.git" ]; then
-      printf 'skip   %s: not initialized\n' "${submodule_path}"
-      continue
-   fi
+git config --global \
+   "url.https://github.com/${kicksecure_mirror}/.insteadOf" \
+   "https://github.com/Kicksecure/"
 
-   old_url="$(git -C "${submodule_path}" remote get-url origin 2>/dev/null || printf '')"
-   if [ -z "${old_url}" ]; then
-      printf 'skip   %s: no origin remote configured\n' "${submodule_path}"
-      continue
-   fi
+git config --global \
+   "url.https://github.com/${whonix_mirror}/.insteadOf" \
+   "https://github.com/Whonix/"
 
-   ## Rewrite Kicksecure/<name> -> ${kicksecure_mirror}/<name> and
-   ## Whonix/<name> -> ${whonix_mirror}/<name>. Anything else (e.g.
-   ## third-party submodules) is left alone.
-   case "${old_url}" in
-      https://github.com/Kicksecure/*)
-         new_url="https://github.com/${kicksecure_mirror}/${old_url#https://github.com/Kicksecure/}"
-         ;;
-      https://github.com/Whonix/*)
-         new_url="https://github.com/${whonix_mirror}/${old_url#https://github.com/Whonix/}"
-         ;;
-      *)
-         printf 'leave  %s: not Kicksecure/* or Whonix/* (origin: %s)\n' "${submodule_path}" "${old_url}"
-         continue
-         ;;
-   esac
-
-   git -C "${submodule_path}" remote set-url origin "${new_url}"
-   printf 'rewrite %s: %s -> %s\n' "${submodule_path}" "${old_url}" "${new_url}"
-done < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$')
-
-printf '%s\n' "${BASH_SOURCE[0]}: done"
+printf '%s: rewrote Kicksecure/ -> %s/, Whonix/ -> %s/\n' \
+   "${BASH_SOURCE[0]}" "${kicksecure_mirror}" "${whonix_mirror}"

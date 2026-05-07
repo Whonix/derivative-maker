@@ -76,7 +76,7 @@ export DEBFULLNAME DEBEMAIL
 ## root invocations to protect a developer's real signing keys, so
 ## running as builder is also what keeps that gate happy without
 ## resorting to the dist_build_allow_root=true escape hatch.
-bash help-steps/signing-key-create
+./help-steps/signing-key-create
 
 ## (2) Export the armored cert. binary_build_folder_dist is set by
 ## help-steps/variables; default to $HOME/derivative-binary if unset.

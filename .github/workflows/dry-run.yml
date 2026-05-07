@@ -65,23 +65,21 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Initialize submodules
-        run: git submodule update --init --recursive
-
-      - name: Repoint cross-org submodule origins to ${{ github.repository_owner }}
-        ## On forks (owner != Whonix && != Kicksecure), rewrite each
-        ## submodule's origin URL from its canonical Kicksecure/<name>
-        ## or Whonix/<name> upstream to <fork-org>/<name>. The script
-        ## takes two args (kicksecure-mirror, whonix-mirror) so a
-        ## forker who keeps separate Kicksecure-mirror and Whonix-mirror
-        ## orgs can pass them distinctly. The single-org case (e.g.
-        ## org-ai-assisted) passes the same value twice. Each
-        ## submodule's own .git/config now explicitly points at the
-        ## fork so the next step's per-submodule git fetch reaches
-        ## the right host. Implementation in ci/configure-fork-mirror.sh;
-        ## replayable from a dev clone.
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        ## On forks (owner != Whonix && != Kicksecure), install
+        ## global git url.<fork>.insteadOf rewrites so any subsequent
+        ## git operation - parent OR submodule - that targets a
+        ## Kicksecure/* or Whonix/* upstream gets routed to the
+        ## fork-org mirror instead. Two 'git config --global' lines
+        ## in ci/configure-fork-mirror.sh cover every cross-org
+        ## submodule the build reaches. Must run BEFORE the submodule
+        ## init below so the clones go through the rewrite from the
+        ## start. Replayable from a dev clone (writes ~/.gitconfig).
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
         run: ./ci/configure-fork-mirror.sh "${{ github.repository_owner }}" "${{ github.repository_owner }}"
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
 
       - name: Check out matching fork branch in cross-org submodules (if present)
         ## After the canonical SHA pins are checked out and origins
