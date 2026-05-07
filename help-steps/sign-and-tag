@@ -15,69 +15,39 @@
 ##   When invoked top-level, runs the bootstrap (mint key, build
 ##   policy, amend HEAD if not already verifiable, tag, foreach).
 ##   When invoked from 'git submodule foreach', recognizes the
-##   foreach-set $sha1 env var (= the parent's recorded sha for
-##   the current submodule), checks via help-steps/git_sanity_test
-##   whether HEAD already verifies against the policy, and only
-##   amends when verification fails.
+##   foreach-set $toplevel env var and takes the per-submodule
+##   branch: verify HEAD against the policy and amend only on
+##   verification failure.
 ##
 ## Idempotent: re-running on an already-signed tree is a no-op.
 ## Both root and submodule branches gate the amend/tag operations
-## on a help-steps/git_sanity_test --mode ref check, so the script
-## never duplicates a signature that already passes the policy.
-##
-## Side effects this script HAS when work is needed:
-##   - Mints a new OpenPGP cert in the caller's sq keystore.
-##   - Rewrites HEAD via 'git commit --amend -S' (changes the
-##     commit's SHA) - on the parent and on each fork-overlaid
-##     submodule.
-##   - Adds a signed annotated tag on the parent.
-##   - Does NOT write to global git config; signing settings are
-##     applied per-invocation via 'git -c key=value'.
+## on a help-steps/git_sanity_test --mode ref check.
 
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
 
-repo_root=
 repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
+git_sanity_test="${repo_root}/help-steps/git_sanity_test"
 
-## ----------------------------------------------------------------------------
-## Identity setup
-## ----------------------------------------------------------------------------
+[ -x "${git_sanity_test}" ] \
+   || { printf '%s: missing or not executable: %s\n' "${BASH_SOURCE[0]}" "${git_sanity_test}" >&2; exit 1; }
 
-## DEBFULLNAME / DEBEMAIL come from help-steps/variables (lines
-## ~1168-1172) - source it once here so this script doesn't
-## duplicate the literals. dist_build_source_run=true selects
-## the --flavor source path inside variables.bsh (line ~522 fills
-## VMNAME, dist_build_type_*, etc. with sentinels), and
-## dist_build_one_parsed=true short-circuits the auto-source of
-## parse-cmd that would otherwise fire with no positional args.
-##
-## Do this BEFORE the submodule-mode dispatch so DEBEMAIL is
-## available in both branches; root's foreach below relies on the
-## same exports flowing into the recursed invocations.
-##
-## Sourced only when DEBEMAIL is unset, so a foreach-recursed
-## invocation (which already has DEBEMAIL exported by the parent
-## invocation) skips the sourcing - keeps per-submodule overhead
-## low and avoids re-running variables.bsh's mkdir / etc.
-## side effects per submodule.
-if [ -z "${DEBEMAIL:-}" ]; then
-   export dist_build_source_run=true
-   export dist_build_one_parsed=true
-   # shellcheck source=help-steps/pre
-   source "${repo_root}/help-steps/pre"
-   # shellcheck source=help-steps/variables
-   source "${repo_root}/help-steps/variables"
-fi
+## Source identity defaults from variables.bsh (DEBFULLNAME /
+## DEBEMAIL at lines ~1168-1172). Sentinels:
+##   dist_build_source_run=true   -> variables.bsh ~522 fills
+##                                   VMNAME / dist_build_type_*
+##                                   from --flavor source defaults.
+##   dist_build_one_parsed=true   -> skip parse-cmd auto-source
+##                                   (no positional args here).
+export dist_build_source_run=true
+export dist_build_one_parsed=true
+# shellcheck source=help-steps/pre
+source "${repo_root}/help-steps/pre"
+# shellcheck source=help-steps/variables
+source "${repo_root}/help-steps/variables"
 
-## ----------------------------------------------------------------------------
-## Per-call git config: -c key=value pairs that configure sq-git-
-## wrapper signing without touching the caller's persistent git
-## config. user.signingkey is set to the email; sq-git-wrapper
-## detects the '@' and dispatches to 'sq sign --signer-email'.
-## ----------------------------------------------------------------------------
 git_options=(
    -c user.signingkey="${DEBEMAIL}"
    -c gpg.format=openpgp
@@ -90,28 +60,21 @@ git_options=(
 
 ## verify_ref: thin wrapper around help-steps/git_sanity_test
 ## --mode ref. Returns 0 if the ref passes policy verification,
-## non-zero otherwise. Used by both branches below to gate the
-## amend/tag operations - signs only when needed, no signature
-## duplication on re-run.
-##
-## --mode ref needs sq_git_policy_file, sq_git_trust_root, and
-## the dist_build_ignore_* booleans set (env-var checks at
-## git_sanity_test:167-174). variables.bsh defaults them when
-## sourced; the foreach recursion below inherits them via env.
+## non-zero otherwise.
 verify_ref() {
    local ref="$1"
    local ref_type="$2"
    local context="$3"
-   "${repo_root}/help-steps/git_sanity_test" \
+   "${git_sanity_test}" \
       --mode ref --ref "${ref}" --ref-type "${ref_type}" --context "${context}" \
       >/dev/null 2>&1
 }
 
 ## ----- submodule-mode dispatch -------------------------------------
-## $sha1 is exported by 'git submodule foreach'; treat its presence
-## as the signal that we are a per-submodule invocation. The
-## recursion at the end of root mode lands here.
-if [ -n "${sha1:-}" ]; then
+## $toplevel is exported by 'git submodule foreach' (absolute path
+## of the superproject's working tree) - presence is the cleanest
+## signal that we are a per-submodule invocation.
+if [ -n "${toplevel:-}" ]; then
    if verify_ref HEAD commit "submodule HEAD"; then
       exit 0
    fi
@@ -134,7 +97,6 @@ cd -- "${repo_root}"
 ## keystore has exactly one cert (the ephemeral one signing-key-
 ## create just minted), so '--all' picks it without us having to
 ## know the cert's email or fingerprint.
-ephemeral_cert_pem=
 ephemeral_cert_pem="$(mktemp)"
 sq cert export --all > "${ephemeral_cert_pem}"
 
@@ -188,9 +150,7 @@ for existing_tag in $(git tag --points-at HEAD); do
    fi
 done
 if [ -z "${existing_signed_tag}" ]; then
-   nearest_git_tag=
    nearest_git_tag="$(git describe --abbrev=0)"
-   commit_full_sha=
    commit_full_sha="$(git rev-parse HEAD)"
    signed_tag="${nearest_git_tag}_${commit_full_sha}"
    git "${git_options[@]}" tag -a -s -m 'Signed by sign-and-tag' "${signed_tag}"
@@ -199,7 +159,7 @@ else
    printf '%s\n' "${BASH_SOURCE[0]}: HEAD already has signed tag: ${existing_signed_tag}"
 fi
 
-## (7) Recurse into submodules. Each foreach call exports $sha1,
+## (7) Recurse into submodules. Each foreach call exports $toplevel,
 ## landing the called script in the submodule-mode branch at the
 ## top of this file. Single quotes intentional; '$toplevel' is
 ## expanded by foreach's child shell, not this one.

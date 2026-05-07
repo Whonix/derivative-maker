@@ -5,20 +5,22 @@
 
 ## AI-Assisted
 
-## Phase 200: drop to the unprivileged 'builder' user and run
+## Phase 200: drop to the unprivileged target user and run
 ## help-steps/sign-and-tag, which mints the ephemeral CI key,
 ## builds the policy file, and re-signs HEAD. signing-key-create
 ## refuses to run as root, so the privilege drop is mandatory.
 ##
-## help-steps/run-as-user creates the 'builder' user with
-## passwordless sudo on first call (idempotent on subsequent
-## phases) and chowns /work to it.
+## help-steps/run-as-user creates the user with passwordless sudo
+## on first call (idempotent on subsequent phases) and chowns
+## /work to it.
 
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
 
+target_user=builder
+
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.."
 
-./help-steps/run-as-user --chown /work -- builder ./help-steps/sign-and-tag
+./help-steps/run-as-user --chown /work -- "${target_user}" ./help-steps/sign-and-tag

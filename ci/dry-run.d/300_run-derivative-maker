@@ -5,14 +5,14 @@
 
 ## AI-Assisted
 
-## Phase 400: run derivative-maker --dry-run as 'builder'.
+## Phase 300: run derivative-maker --dry-run as the unprivileged
+## target user.
 ##
-## Compute the path to the policy file from builder's home dir via
-## getent (matches binary_build_folder_dist's default in
-## help-steps/variables when run as builder). Avoids a literal
-## '/home/builder/' string and survives a future user-add that
-## picked a non-/home prefix. Single ': '-delimited field
-## extraction is standard Unix, not awk.
+## Compute the path to the policy file from the target user's home
+## dir via getent (matches binary_build_folder_dist's default in
+## help-steps/variables when run as that user). Avoids a literal
+## '/home/<user>/' string. Single ': '-delimited field extraction
+## is standard Unix, not awk.
 ##
 ## --policy-file is consumed by parse-cmd, which exports
 ## sq_git_policy_file for git_sanity_test - cleaner than passing
@@ -26,16 +26,17 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+target_user=builder
+
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.."
 
-builder_home=
-builder_home="$(getent passwd builder | cut -d: -f6)"
+target_home="$(getent passwd "${target_user}" | cut -d: -f6)"
 
 timeout 1200 \
    ./help-steps/run-as-user --chown "$PWD" -- \
-      builder \
+      "${target_user}" \
       ./derivative-maker \
-         --policy-file "${builder_home}/derivative-binary/openpgp-policy.toml" \
+         --policy-file "${target_home}/derivative-binary/openpgp-policy.toml" \
          --dry-run true \
          --unsupported-os true \
          --allow-uncommitted true \

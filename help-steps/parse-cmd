@@ -454,12 +454,6 @@ dist_build_one_parse_cmd() {
                shift 2
                ;;
            --policy-file)
-               ## sq-git policy file. Sets sq_git_policy_file, which
-               ## help-steps/variables would otherwise default to
-               ## ${source_code_folder_dist}/openpgp-policy.toml.
-               ## Useful when the caller has prepared a custom policy
-               ## elsewhere (e.g. an ephemeral CI key authorized in
-               ## ${binary_build_folder_dist}/openpgp-policy.toml).
                if [ "${2:-}" = "" ]; then
                   printf '%s\n' "${red}${bold}ERROR: --policy-file must not be empty.${reset}"
                   exit 1
