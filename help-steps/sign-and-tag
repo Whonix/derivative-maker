@@ -163,12 +163,21 @@ git "${git_options[@]}" commit --amend --no-edit -S
 
 ## (6) Tag HEAD. Some build steps inspect the latest tag; having
 ## one present (and signed) is more realistic than --allow-untagged.
-## Tag name is 'commit_<full-sha>': prefixed to avoid colliding
-## with any branch / tag / ref of the same shape, deterministic
-## from HEAD, no environment-variable plumbing.
+##
+## Tag name is "<nearest-tag>_<full-sha>": composes the project's
+## existing tag namespace (so a developer reading 'git tag -l' sees
+## the new tag grouped near the release it came from) with the
+## post-amend full HEAD SHA (so the suffix is globally unique per
+## run, no environment-variable plumbing needed).
+##
+## 'git describe --abbrev=0' returns the nearest reachable tag as
+## a plain name (no -<n>-g<sha> suffix). After the amend in (5),
+## HEAD's sha is post-amend.
+nearest_git_tag=
+nearest_git_tag="$(git describe --abbrev=0)"
 commit_full_sha=
 commit_full_sha="$(git rev-parse HEAD)"
-ephemeral_tag="commit_${commit_full_sha}"
+ephemeral_tag="${nearest_git_tag}_${commit_full_sha}"
 git "${git_options[@]}" tag -a -s -m 'Signed by sign-and-tag' "${ephemeral_tag}"
 printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${ephemeral_tag}"
 
