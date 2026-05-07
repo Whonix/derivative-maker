@@ -5,12 +5,8 @@
 
 ## AI-Assisted
 
-## Per-submodule action invoked from ci/checkout-fork-submodule-
-## branches via 'git submodule foreach'. Reads $FORK_BRANCH (set
-## by the caller) and $displaypath (set by foreach). Tries to fetch
-## the named branch; on success switches HEAD to it. On absence
-## exits 0 silently so the SHA pin stays. Diagnostic line emitted
-## per outcome.
+## A missing fork branch must exit 0 (not fail the foreach) so
+## submodules without a matching branch keep the parent's SHA pin.
 
 set -o errexit
 set -o nounset

@@ -5,10 +5,8 @@
 
 ## AI-Assisted
 
-## PID 1 entrypoint of the dry-run container. Installs systemd-sysv
-## (debian:trixie-slim does not ship /sbin/init) and hands over to
-## systemd so later 'docker exec' steps can use systemctl (the
-## build's apt cache uses the 'approx' systemd unit).
+## debian:trixie does not ship /sbin/init; install systemd-sysv
+## here rather than baking it into a custom image.
 
 set -o errexit
 set -o nounset

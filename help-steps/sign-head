@@ -5,10 +5,7 @@
 
 ## AI-Assisted
 
-## Sign HEAD of the current repo unless it already verifies against
-## sq_git_policy_file. Called both for the parent repo and per
-## submodule via 'git submodule foreach'. Caller (sign-and-tag) is
-## expected to have set up the policy and exported sq_git_policy_file.
+## Caller (sign-and-tag) must have exported sq_git_policy_file.
 
 set -o errexit
 set -o nounset

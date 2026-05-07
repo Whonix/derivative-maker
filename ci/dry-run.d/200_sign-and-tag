@@ -5,8 +5,7 @@
 
 ## AI-Assisted
 
-## Drop privileges and run help-steps/sign-and-tag.
-## signing-key-create refuses to run as root.
+## signing-key-create refuses to run as root, so drop to builder.
 
 set -o errexit
 set -o nounset

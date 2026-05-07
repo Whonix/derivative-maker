@@ -5,15 +5,11 @@
 
 ## AI-Assisted
 
-## Bring up a privileged Debian container with systemd booted as
-## PID 1 for .github/workflows/dry-run.yml. The workflow's other
-## steps docker-exec into it.
-##
 ## Inputs:
 ##   $1 - container name (e.g. "dryrun")
 ##   $2 - debian image reference (digest-pinned recommended)
 ##
-## Notes on a few flags that aren't obvious:
+## Non-obvious flags:
 ##   no --rm    : leave the container around on failure so the
 ##                workflow's teardown step can pull 'docker logs'.
 ##   --cgroupns=host : systemd >= 247 only boots cleanly under
@@ -32,11 +28,8 @@ fi
 container_name="$1"
 image="$2"
 
-## Bind-mount the host's checkout (${PWD} on the runner) at a
-## fixed path inside the container. Every later 'docker exec
-## --workdir ${container_repo} ... ./<relpath>' resolves relative
-## paths under it. The entrypoint below uses the absolute path
-## because the docker-run command runs before --workdir.
+## container_entrypoint is absolute: docker-run resolves the entry
+## command before --workdir takes effect.
 host_repo="${PWD}"
 container_repo=/work
 container_entrypoint="${container_repo}/docker/dry-run-entrypoint"
@@ -55,10 +48,9 @@ docker run \
    "${image}" \
    "${container_entrypoint}"
 
-## Wait for systemd to reach a usable state. 'running' or 'degraded'
-## both mean the basic targets are up (we don't need every target,
-## just the ability to start units like approx). 90s covers ~10s
-## apt install + boot.
+## 'degraded' counts: a non-essential unit failure is fine, we just
+## need basic targets up so 'systemctl start approx' works. 90s
+## covers ~10s apt install + boot.
 for attempt in $(seq 1 90); do
    state="$(docker exec "${container_name}" systemctl is-system-running 2>/dev/null || true)"
    case "${state}" in

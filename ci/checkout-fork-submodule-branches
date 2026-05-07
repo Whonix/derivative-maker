@@ -5,11 +5,8 @@
 
 ## AI-Assisted
 
-## After 'git submodule update --init', walk every submodule and
-## switch to the same-named branch on its origin remote when one
-## exists; submodules without a matching branch keep the SHA pin
-## from the parent's index. Per-submodule action lives in
-## ci/checkout-fork-branch.
+## Submodules without a matching <branch> on origin keep the SHA
+## pin from the parent's index (see ci/checkout-fork-branch).
 
 set -o errexit
 set -o nounset

@@ -5,11 +5,8 @@
 
 ## AI-Assisted
 
-## Drop privileges and run derivative-maker --dry-run. The
-## --policy-file value is computed from the target user's home
-## (via getent so there's no '/home/<user>/' literal); --policy-file
-## is consumed by parse-cmd which exports sq_git_policy_file for
-## git_sanity_test.
+## Resolve target_home via getent rather than '/home/<user>/' to
+## avoid baking the OS's home-dir convention into this script.
 
 set -o errexit
 set -o nounset
