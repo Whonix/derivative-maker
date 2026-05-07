@@ -41,6 +41,21 @@ With the convenience of a debian:trixie docker container, `derivative-maker-dock
     ```
     docker rmi -f derivative-maker/derivative-maker-docker:latest
     ```
+
+### Multi-arch builds (arm64, amd64, ...)
+The Dockerfile is arch-agnostic: `FROM debian:trixie-slim` is a multi-arch
+manifest list, and arch-specific packages (e.g. `grub-efi-arm64`,
+`grub-efi-amd64`) are pulled in by `build-steps.d/1100_sanity-tests` at
+**build time** based on `--arch`, not baked into the image. To target a
+specific platform, pass `--platform` to buildx:
+```sh
+docker buildx build --platform linux/arm64 -t derivative-maker/derivative-maker-docker:latest ./docker
+docker buildx build --platform linux/amd64 -t derivative-maker/derivative-maker-docker:latest ./docker
+```
+On Apple Silicon hosts, the default platform already matches
+(`linux/arm64`); no extra flags needed. Cross-arch builds require
+`qemu-user-static` registered with binfmt_misc.
+
 ### Volumes
 1. By default three folders are generated in the user's home directory
    ```sh
