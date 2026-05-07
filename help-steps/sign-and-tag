@@ -13,7 +13,7 @@
 ##
 ## Auto-dispatch:
 ##   When invoked top-level, runs the bootstrap (mint key, build
-##   policy, write --global git config, amend HEAD, tag, foreach).
+##   policy, amend HEAD, tag, foreach).
 ##   When invoked from 'git submodule foreach', recognizes the
 ##   foreach-set $sha1 env var (= the parent's recorded sha for
 ##   the current submodule), checks whether the working-tree HEAD
@@ -47,9 +47,9 @@
 ##     commit's SHA) - on the parent and on each fork-overlaid
 ##     submodule.
 ##   - Adds a signed annotated tag on the parent.
-##   - Writes --global git config (user.signingkey, gpg.format,
-##     etc.) so the same signing config flows into submodule git
-##     contexts the foreach dispatch lands in.
+##   - Does NOT write to global git config; signing settings are
+##     applied per-invocation via 'git -c key=value' so the
+##     caller's persistent ~/.gitconfig is untouched.
 ##
 ## The caller is responsible for guarding against running this on
 ## a developer machine if those side effects aren't wanted.
@@ -59,36 +59,54 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+repo_root=
+repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
+
+## DEBFULLNAME / DEBEMAIL: needed by git_options below in BOTH the
+## root-mode and submodule-mode branches. signing-key-create runs
+## as a separate bash process that sources variables in its own
+## subshell, so the defaults it picks for the ephemeral cert never
+## reach our shell. Mirror the defaults from help-steps/variables
+## (lines ~1168-1172) here; a 'source ./help-steps/variables'
+## would be cleaner but trips variables.bsh's own R-010 violations
+## under nounset (unprotected ${dist_build_type_long} at line 537,
+## etc.). Exported so the foreach recursion below sees them in
+## the submodule-mode invocation.
+: "${DEBFULLNAME:=derivative distribution auto generated local APT signing key}"
+: "${DEBEMAIL:=derivative-distribution@local-signing.key}"
+export DEBFULLNAME DEBEMAIL
+
+## git invocation prefix: per-call '-c key=value' pairs that
+## configure sq-git-wrapper signing without touching the caller's
+## persistent git config. user.signingkey is set to the email;
+## sq-git-wrapper detects the '@' and dispatches to 'sq sign
+## --signer-email'. Built once and applied to every git command
+## that needs to commit / tag.
+git_options=(
+   -c user.signingkey="${DEBEMAIL}"
+   -c gpg.format=openpgp
+   -c gpg.openpgp.program="${repo_root}/help-steps/sq-git-wrapper"
+   -c commit.gpgsign=true
+   -c tag.gpgsign=true
+   -c user.email="${DEBEMAIL}"
+   -c user.name="${DEBFULLNAME}"
+)
+
 ## ----- submodule-mode dispatch -------------------------------------
 ## $sha1 is exported by 'git submodule foreach'; treat its presence
 ## as the signal that we are a per-submodule invocation. The
-## recursion below ('git submodule foreach --recursive' at the
-## bottom of root mode) calls this same script and lands here.
+## recursion at the end of root mode lands here.
 if [ -n "${sha1:-}" ]; then
    if [ "$(git rev-parse HEAD)" = "${sha1}" ]; then
       exit 0
    fi
-   git commit --amend --no-edit -S
+   git "${git_options[@]}" commit --amend --no-edit -S
    exit 0
 fi
 
 ## ----- root mode --------------------------------------------------
 
-cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
-
-## DEBFULLNAME / DEBEMAIL: needed *after* signing-key-create returns.
-## signing-key-create runs as a separate bash process that sources
-## variables in its own subshell, so the defaults it picks for the
-## ephemeral cert never reach our shell. Multiple consumers below
-## need to know them: git config user.signingkey, sq-git policy
-## authorize NAME, git config user.email/user.name. Mirror the
-## defaults from help-steps/variables (lines ~1168-1172) here; a
-## 'source ./help-steps/variables' would be cleaner but trips
-## variables.bsh's own R-010 violations under nounset (unprotected
-## ${dist_build_type_long} at line 537, etc.).
-: "${DEBFULLNAME:=derivative distribution auto generated local APT signing key}"
-: "${DEBEMAIL:=derivative-distribution@local-signing.key}"
-export DEBFULLNAME DEBEMAIL
+cd -- "${repo_root}"
 
 ## (1) Generate the ephemeral OpenPGP key. signing-key-create is
 ## idempotent on DEBEMAIL: re-runs are no-ops if a cert with that
@@ -138,45 +156,25 @@ sq-git policy authorize \
 rm -f -- "${ephemeral_cert_pem}"
 printf '%s\n' "${BASH_SOURCE[0]}: wrote policy to ${ephemeral_policy}"
 
-## (5) Configure git for sq-git-wrapper signing. --global so the
-## settings inherit into submodule git contexts (the foreach
-## recursion below lands in submodule contexts that need to find
-## the same signingkey, gpg.format, etc.). user.signingkey is set
-## to the email; sq-git-wrapper detects the '@' and dispatches to
-## 'sq sign --signer-email'.
-##
-## Build the (key, value) list as an array and apply in one loop -
-## avoids seven near-identical 'git config --global ...' lines.
-git_global_settings=(
-   user.signingkey       "${DEBEMAIL}"
-   gpg.format            openpgp
-   gpg.openpgp.program   "${PWD}/help-steps/sq-git-wrapper"
-   commit.gpgsign        true
-   tag.gpgsign           true
-   user.email            "${DEBEMAIL}"
-   user.name             "${DEBFULLNAME}"
-)
-for ((i=0; i<${#git_global_settings[@]}; i+=2)); do
-   git config --global -- "${git_global_settings[i]}" "${git_global_settings[i+1]}"
-done
+## (5) Re-sign HEAD. --amend --no-edit rewrites the tip without
+## changing its content; -S forces a signature pass under the
+## inline gpg config from git_options.
+git "${git_options[@]}" commit --amend --no-edit -S
 
-## (6) Re-sign HEAD. --amend --no-edit rewrites the tip without
-## changing its content; -S forces a signature pass under the new
-## gpg config.
-git commit --amend --no-edit -S
-
-## (7) Tag HEAD. Some build steps inspect the latest tag; having
+## (6) Tag HEAD. Some build steps inspect the latest tag; having
 ## one present (and signed) is more realistic than --allow-untagged.
-## Tag name is the post-amend full commit SHA: globally unique,
-## deterministic from HEAD, no environment-variable plumbing.
+## Tag name is 'commit_<full-sha>': prefixed to avoid colliding
+## with any branch / tag / ref of the same shape, deterministic
+## from HEAD, no environment-variable plumbing.
 commit_full_sha=
 commit_full_sha="$(git rev-parse HEAD)"
-git tag -a -s -m 'Signed by sign-and-tag' "${commit_full_sha}"
-printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${commit_full_sha}"
+ephemeral_tag="commit_${commit_full_sha}"
+git "${git_options[@]}" tag -a -s -m 'Signed by sign-and-tag' "${ephemeral_tag}"
+printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${ephemeral_tag}"
 
-## (8) Recurse into submodules. Each foreach call exports $sha1,
+## (7) Recurse into submodules. Each foreach call exports $sha1,
 ## landing the called script in the submodule-mode branch at the
-## top of this file. Single-quoted so '$toplevel' is expanded by
-## foreach's child shell, not this one.
+## top of this file. Single quotes intentional; '$toplevel' is
+## expanded by foreach's child shell, not this one.
 # shellcheck disable=SC2016
 git submodule foreach --recursive '"$toplevel/help-steps/sign-and-tag"'
