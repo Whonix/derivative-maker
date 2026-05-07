@@ -59,20 +59,31 @@ esac
 ## submodule foreach' would require an embedded shell snippet as
 ## its argument; reading paths via 'git config --file .gitmodules
 ## --get-regexp' keeps each step a normal command in this script.
+##
+## Diagnostic: every per-submodule decision (skipped, fetch failed,
+## branch missing, switched) is printed so a failed lookup is
+## visible in the workflow log instead of disappearing into 2>/dev/null.
 submodule_path=
+submodule_url=
+fetch_log=
 while read -r _ submodule_path; do
    ## A submodule that hasn't been init'd has no .git dir/file.
    if [ ! -e "${submodule_path}/.git" ]; then
+      printf 'skip   %s: not initialized\n' "${submodule_path}"
       continue
    fi
 
-   if ! git -C "${submodule_path}" fetch --quiet origin "${branch}" 2>/dev/null; then
-      ## Branch absent on the fork's remote - leave the SHA pin alone.
+   submodule_url="$(git -C "${submodule_path}" remote get-url origin 2>&1 || printf '<no-origin>')"
+   fetch_log=
+   if ! fetch_log="$(git -C "${submodule_path}" fetch origin "${branch}" 2>&1)"; then
+      printf 'no-ref %s (origin: %s): %s\n' "${submodule_path}" "${submodule_url}" "${fetch_log}"
       continue
    fi
 
-   if git -C "${submodule_path}" checkout --quiet "origin/${branch}" 2>/dev/null; then
-      printf '%s: switched to origin/%s\n' "${submodule_path}" "${branch}"
+   if git -C "${submodule_path}" checkout --quiet "origin/${branch}" 2>&1; then
+      printf 'switch %s (origin: %s) -> origin/%s\n' "${submodule_path}" "${submodule_url}" "${branch}"
+   else
+      printf 'fail   %s (origin: %s): checkout origin/%s failed after fetch ok\n' "${submodule_path}" "${submodule_url}" "${branch}"
    fi
 done < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$')
 
