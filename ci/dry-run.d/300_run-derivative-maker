@@ -12,6 +12,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 target_user=builder
 
@@ -20,7 +22,7 @@ cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.."
 target_home="$(getent passwd "${target_user}" | cut -d: -f6)"
 
 timeout 1200 \
-   ./help-steps/run-as-user --chown "$PWD" -- \
+   ./help-steps/run-as-user --chown "${PWD}" -- \
       "${target_user}" \
       ./derivative-maker \
          --policy-file "${target_home}/derivative-binary/openpgp-policy.toml" \

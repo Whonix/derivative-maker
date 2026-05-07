@@ -19,6 +19,9 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 if [ "$#" -ne 2 ]; then
    printf '%s\n' "usage: ${BASH_SOURCE[0]} <container-name> <image>" >&2
@@ -70,10 +73,10 @@ for attempt in $(seq 1 90); do
 done
 
 printf '%s\n' "ERROR: systemd did not become ready within 90s" >&2
-printf '\n--- docker ps -a (container state) ---\n' >&2
+printf '%s\n' "" "--- docker ps -a (container state) ---" >&2
 docker ps -a --filter "name=^${container_name}\$" --no-trunc >&2 || true
-printf '\n--- docker logs %s (entrypoint output) ---\n' "${container_name}" >&2
+printf '%s\n' "" "--- docker logs ${container_name} (entrypoint output) ---" >&2
 docker logs "${container_name}" >&2 || true
-printf '\n--- systemctl --failed (best-effort, may fail if container is dead) ---\n' >&2
+printf '%s\n' "" "--- systemctl --failed (best-effort, may fail if container is dead) ---" >&2
 docker exec "${container_name}" systemctl --failed >&2 || true
 exit 1

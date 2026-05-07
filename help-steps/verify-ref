@@ -16,9 +16,11 @@ verify_ref_git_sanity_test="${verify_ref_self_dir}/git_sanity_test"
 test -x "${verify_ref_git_sanity_test}"
 
 verify_ref() {
-   local ref="$1"
-   local ref_type="$2"
-   local context="$3"
+   local ref ref_type context
+
+   ref="$1"
+   ref_type="$2"
+   context="$3"
    "${verify_ref_git_sanity_test}" \
       --mode ref --ref "${ref}" --ref-type "${ref_type}" --context "${context}" \
       >/dev/null 2>&1

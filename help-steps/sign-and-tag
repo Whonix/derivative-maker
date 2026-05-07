@@ -15,6 +15,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 
@@ -43,7 +45,7 @@ sq-git policy authorize \
    --project-maintainer \
    "${DEBFULLNAME}" \
    "${ephemeral_cert_pem}"
-rm -f -- "${ephemeral_cert_pem}"
+safe-rm --force -- "${ephemeral_cert_pem}"
 printf '%s: wrote policy to %s\n' "${BASH_SOURCE[0]}" "${ephemeral_policy}"
 
 export sq_git_policy_file="${ephemeral_policy}"

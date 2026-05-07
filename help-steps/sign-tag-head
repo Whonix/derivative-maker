@@ -13,13 +13,15 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 
 ## variables.bsh's source cds away as a side effect. CWD must stay
 ## at the caller's working tree (= the submodule when foreach lands
 ## us there) so git operates on the right git db.
-saved_cwd="$PWD"
+saved_cwd="${PWD}"
 export dist_build_source_run=true
 export dist_build_one_parsed=true
 # shellcheck source=help-steps/pre

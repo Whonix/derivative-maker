@@ -12,6 +12,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 if [ -z "${FORK_BRANCH:-}" ]; then
    ## $FORK_BRANCH in the message is the env-var name, not a value.

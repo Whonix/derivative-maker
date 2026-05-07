@@ -22,6 +22,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 if [ "$#" -ne 2 ]; then
    printf '%s\n' "usage: ${BASH_SOURCE[0]} <kicksecure-mirror-org> <whonix-mirror-org>" >&2
