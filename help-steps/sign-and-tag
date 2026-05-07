@@ -43,8 +43,7 @@ sq cert export --all > "${ephemeral_cert_pem}"
 mkdir --parents -- "${binary_build_folder_dist}"
 ephemeral_policy="${binary_build_folder_dist}/openpgp-policy.toml"
 project_policy="${repo_root}/openpgp-policy.toml"
-[ -r "${project_policy}" ] \
-   || { printf '%s\n' "${BASH_SOURCE[0]}: missing project policy: ${project_policy}" >&2; exit 1; }
+test -r "${project_policy}"
 cp -- "${project_policy}" "${ephemeral_policy}"
 
 sq-git policy authorize \
