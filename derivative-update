@@ -66,11 +66,11 @@ abort_update() {
       git reset --hard --recurse-submodules "${branch_reset_commit}" || true "ERROR: 'git reset --hard --recurse-submodules' failed."
     fi
 
-    ## NOTE: Cannot use end-of-options ("--").
-    ## NOTE: 'git checkout' will prefer branch or commit IDs over tags when
-    ## not using 'refs/tags/'. recover_commit will refer to either a commit
-    ## hash, or a 'ref^{commit}'.
-    git checkout --recurse-submodules "${recover_commit}" || true "ERROR: 'git checkout --recurse-submodules' failed."
+    ## recover_commit is peeled to a commit object via '^{commit}' above,
+    ## so detached HEAD is the only sensible target. 'git switch --detach'
+    ## also unlocks '--' end-of-options (which 'git checkout' treats as
+    ## a pathspec separator instead).
+    git switch --recurse-submodules --detach -- "${recover_commit}" || true "ERROR: 'git switch --recurse-submodules --detach' failed."
   fi
 
   error "${error_msg}"
@@ -148,10 +148,11 @@ update_repo() {
     if [ "${update_only:-}" = "true" ]; then
       true "INFO: --update-only. Not running git checkout."
     else
-      ## NOTE: Cannot use end-of-options ("--").
-      ## NOTE: 'refs/tags/' is necessary to prevent ambiguity in the event of a
-      ## tag with the same name as a branch.
-      git checkout --recurse-submodules "refs/tags/${target_tag}" || abort_update 'Tag checkout failed!'
+      ## 'refs/tags/' prevents ambiguity if a same-named branch / remote-
+      ## tracking ref exists. 'git switch --detach' also unlocks '--'
+      ## end-of-options (which 'git checkout' treats as a pathspec
+      ## separator instead).
+      git switch --recurse-submodules --detach -- "refs/tags/${target_tag}" || abort_update 'Tag checkout failed!'
     fi
 
     ## Safe.
