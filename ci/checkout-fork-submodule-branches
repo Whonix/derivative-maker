@@ -6,7 +6,7 @@
 ## AI-Assisted
 
 ## After parent-side submodule init from fork remotes (insteadOf
-## rewrites in place via ci/configure-fork-mirror.sh), check out
+## rewrites in place via ci/configure-fork-mirror), check out
 ## the matching branch in each submodule when one exists. Lets
 ## fork-side fixes flow into CI before they land upstream and get
 ## pinned: a PR on derivative-maker's claude/foo-bar branch can
@@ -29,8 +29,8 @@
 ##     without a matching branch is the common case, not an error.
 ##
 ## Reusable from a developer machine:
-##   bash ci/checkout-fork-submodule-branches.sh my-feature-branch
-## (run after 'bash ci/configure-fork-mirror.sh <fork-org>
+##   ./ci/checkout-fork-submodule-branches my-feature-branch
+## (run after './ci/configure-fork-mirror <fork-org>
 ##  && git submodule update --init --recursive')
 
 set -o errexit

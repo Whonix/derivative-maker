@@ -33,7 +33,7 @@
 ## 'bash -n' on every file, so a separate bash_n check is redundant.
 ##
 ## Runs in CI as the 'shellcheck' step of lint.yml. Standalone-runnable
-## via 'bash ci/lint-shellcheck.sh'.
+## via './ci/lint-shellcheck'.
 
 set -o nounset
 set -o errtrace

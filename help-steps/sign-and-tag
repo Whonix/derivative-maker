@@ -1,0 +1,156 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Generate an ephemeral OpenPGP signing key, build an
+## openpgp-policy.toml that authorizes that key on top of the
+## upstream maintainer keys, re-sign HEAD with it, and tag HEAD
+## with a signed annotated tag. Pairs with help-steps/sign-
+## submodule-head, which the caller invokes via 'git submodule
+## foreach --recursive' to extend the same signing across each
+## fork-overlaid submodule.
+##
+## Why this exists:
+##   git_sanity_test runs sq-git verification of HEAD as an
+##   unconditional cryptographic gate. Three classes of commits
+##   fail at it:
+##     * GitHub's auto-generated PR merge commit at HEAD - no
+##       OpenPGP signature at all.
+##     * Fork-side branch tips overlaid into submodules - SSH-
+##       signed by the contributor's session key, but sq-git only
+##       validates OpenPGP, so they look unsigned to it.
+##     * Tags created during the build - need a signature from a
+##       cert authorized for sign_tag in the policy.
+##   Mint an ephemeral OpenPGP key, authorize it as
+##   --project-maintainer in a policy file (seeded from the
+##   project's openpgp-policy.toml so upstream maintainer keys
+##   carry over for unmodified submodules), re-sign HEAD + the
+##   new tag + each overlaid submodule HEAD with that key, and
+##   point sq_git_policy_file at the policy. Every gate verifies
+##   against one consistent policy.
+##
+## Side effects this script HAS:
+##   - Mints a new OpenPGP cert in the caller's sq keystore.
+##   - Rewrites HEAD via 'git commit --amend -S' (changes the
+##     commit's SHA).
+##   - Adds a signed annotated tag.
+##   - Writes --global git config (user.signingkey, gpg.format,
+##     etc.) so the same signing config flows into submodule git
+##     contexts when help-steps/sign-submodule-head is invoked
+##     via foreach.
+##
+## Caller is responsible for guarding against running this on a
+## developer machine if those side effects aren't wanted (the CI
+## driver in ci/dry-run.d/200_sign-and-tag does the CI=true check).
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+
+cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
+
+## DEBEMAIL: needed *after* signing-key-create returns. signing-key-
+## create runs as a separate bash process that sources variables in
+## its own subshell, so the default DEBEMAIL it picks for the
+## ephemeral cert never reaches our shell. git config user.signingkey
+## below needs to know it (sq-git-wrapper rejects empty signing keys),
+## and so does git config user.email.
+##
+## The literal duplicates help-steps/variables:1171; a 'source ./help-
+## steps/variables' would be cleaner but trips variables.bsh's own
+## R-010 violations under nounset (unprotected ${dist_build_type_long}
+## at line 537, etc.). Drop this block once variables.bsh is fully
+## ':-}-protected.
+: "${DEBEMAIL:=derivative-distribution@local-signing.key}"
+export DEBEMAIL
+
+## (1) Generate the ephemeral OpenPGP key. signing-key-create is
+## idempotent on DEBEMAIL: re-runs are no-ops if a cert with that
+## email already exists.
+##
+## Must run as a non-root user. signing-key-create's pre-flight
+## rejects root invocations to protect a developer's real signing
+## keys.
+./help-steps/signing-key-create
+
+## (2) Export every cert in the keystore. On a fresh container the
+## keystore has exactly one cert (the ephemeral one signing-key-
+## create just minted), so '--all' picks it without us having to
+## know the cert's email or fingerprint. Avoids the 'sq cert list
+## --format json | jq' parse the trixie sq does not support and
+## the awk grep the bash style guide rejects.
+ci_cert_pem=
+ci_cert_pem="$(mktemp)"
+sq cert export --all > "${ci_cert_pem}"
+
+if [ -z "${binary_build_folder_dist:-}" ]; then
+   binary_build_folder_dist="${HOME}/derivative-binary"
+fi
+mkdir --parents -- "${binary_build_folder_dist}"
+
+## (3) Build the policy file at a predictable path so callers
+## (sq_git_policy_file env, /etc/buildconfig-dist.d snippet, etc.)
+## can compute the location without grepping this script's stdout.
+##
+## Seed from the project's existing openpgp-policy.toml so the
+## upstream maintainer keys remain authorized for any submodule
+## HEAD still at its canonical SHA pin. 'sq-git policy authorize'
+## below adds our ephemeral key on top, without removing them.
+ci_policy="${binary_build_folder_dist}/openpgp-policy.toml"
+project_policy="${PWD}/openpgp-policy.toml"
+[ -r "${project_policy}" ] \
+   || { printf '%s\n' "${BASH_SOURCE[0]}: missing project policy: ${project_policy}" >&2; exit 1; }
+cp -- "${project_policy}" "${ci_policy}"
+
+## (4) Authorize the cert via sq-git. NAME is just the policy-
+## file label; it does NOT have to match the cert's userid. Use
+## a fixed label so we don't have to know DEBFULLNAME here.
+## --project-maintainer grants the full set (sign_commit, sign_tag,
+## sign_archive, add_user, retire_user, audit) - the build needs
+## sign_commit and sign_tag at minimum.
+sq-git policy authorize \
+   --policy-file "${ci_policy}" \
+   --project-maintainer \
+   "ci-ephemeral-key" \
+   "${ci_cert_pem}"
+rm -f -- "${ci_cert_pem}"
+printf '%s\n' "${BASH_SOURCE[0]}: wrote policy to ${ci_policy}"
+
+## (5) Configure git for sq-git-wrapper signing. --global so the
+## settings inherit into submodule git contexts (the per-submodule
+## amend in help-steps/sign-submodule-head relies on this).
+## user.signingkey is set to the email; sq-git-wrapper detects the
+## '@' in it and dispatches to 'sq sign --signer-email'.
+##
+## user.name: any non-empty string; git aborts the amend below with
+## 'fatal: empty ident name' if user.name is unset. Use the same
+## fixed label we passed to 'sq-git policy authorize' so the
+## author identity in the rewritten commit lines up.
+git config --global user.signingkey "${DEBEMAIL}"
+git config --global gpg.format openpgp
+git config --global gpg.openpgp.program "${PWD}/help-steps/sq-git-wrapper"
+git config --global commit.gpgsign true
+git config --global tag.gpgsign true
+git config --global user.email "${DEBEMAIL}"
+git config --global user.name "ci-ephemeral-key"
+
+## (6) Re-sign HEAD. --amend --no-edit rewrites the tip without
+## changing its content; -S forces a signature pass under the new
+## gpg config.
+git commit --amend --no-edit -S
+
+## (7) Tag HEAD. Some build steps inspect the latest tag; having
+## one present (and signed) is more realistic than --allow-untagged.
+## The tag name embeds the run id when set, otherwise the short
+## SHA, so re-runs do not conflict. Hoisted out of a single-line
+## ${VAR:-$(cmd)} form so the subshell is its own assignment
+## (R-022 / bash-style-guide).
+git_short_sha=
+git_short_sha="$(git rev-parse --short HEAD)"
+ci_tag_name="ci-dry-run-${GITHUB_RUN_ID:-${git_short_sha}}"
+git tag -a -s -m 'CI dry-run ephemeral signed tag' "${ci_tag_name}"
+printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${ci_tag_name}"

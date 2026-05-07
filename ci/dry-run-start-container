@@ -65,7 +65,7 @@ image="$2"
 ## for diagnosis. The workflow's separate `if: always()` teardown
 ## step does the rm explicitly.
 ##
-## The entrypoint is a separate script (ci/dry-run-container-init.sh)
+## The entrypoint is a separate script (ci/dry-run-container-init)
 ## mounted into the container at /work, not a `bash -c '...'` heredoc
 ## inline here. Keeps the script shellcheck-able and reproducible
 ## from a dev machine.
@@ -81,7 +81,7 @@ docker run \
    --workdir /work \
    -- \
    "${image}" \
-   /work/ci/dry-run-container-init.sh
+   /work/ci/dry-run-container-init
 
 ## Wait for systemd to reach a usable state. is-system-running returns
 ## "running" or "degraded" once the basic targets are up; both are

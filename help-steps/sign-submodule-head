@@ -1,0 +1,50 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Per-submodule action invoked via 'git submodule foreach
+## --recursive' from a caller that has previously run
+## help-steps/sign-and-tag (which sets up the --global signing
+## git config).
+##
+## Skip if the submodule's HEAD matches the parent's index pin
+## (= no fork-branch overlay applied; the canonical SHA is already
+## signed by an upstream maintainer cert that sign-and-tag kept
+## authorized in the seeded policy). Otherwise, amend the HEAD
+## commit with the parent's CI signing key so it verifies against
+## the policy too.
+##
+## 'git submodule foreach' exports $sha1 as the parent's recorded
+## sha for this submodule; we compare the working tree's HEAD
+## against that to detect overlay.
+##
+## Caller invokes as:
+##   git submodule foreach --recursive '"$toplevel/help-steps/sign-submodule-head"'
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+
+## $sha1 is set by 'git submodule foreach' (parent's index pin).
+## Bail loudly if invoked outside that context - the script has
+## no other reasonable use.
+if [ -z "${sha1:-}" ]; then
+   ## $sha1 in the message is the literal env-var name being reported,
+   ## not a value to interpolate.
+   # shellcheck disable=SC2016
+   printf '%s: $sha1 not set; call from "git submodule foreach"\n' "${BASH_SOURCE[0]}" >&2
+   exit 64
+fi
+
+current_head=
+current_head="$(git rev-parse HEAD)"
+
+if [ "${current_head}" = "${sha1}" ]; then
+   exit 0
+fi
+
+git commit --amend --no-edit -S

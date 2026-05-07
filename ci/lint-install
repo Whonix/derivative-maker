@@ -10,7 +10,7 @@
 ##   shellcheck     - bash linting
 ##   python3-yaml   - workflow YAML parsing
 ##   file           - mime-type detection (used elsewhere in lint surface)
-##   moreutils      - 'sponge' used by ci/local-checks.sh
+##   moreutils      - 'sponge' used by ci/local-checks
 ##
 ## git + ca-certificates are needed by actions/checkout to work inside
 ## this container. sudo is needed by help-steps/variables: it runs

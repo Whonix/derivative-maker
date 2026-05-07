@@ -1,0 +1,57 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Phase 100: install Debian apt dependencies inside the dry-run
+## container. Runs as root (run-parts inherits ci/dry-run's uid;
+## the workflow docker-execs as root).
+##
+## Container starts as root with a minimal Debian image. Use
+## passwordless apt and skip Recommends to keep the layer thin.
+## sudo is needed because help-steps/pre and several build steps
+## invoke 'sudo --non-interactive' even in dry-run.
+##
+## Build deps: cowbuilder + mmdebstrap + debootstrap (the actual
+## chroot creation tools the build steps drive).
+##
+## Runtime deps the build scripts assume on PATH:
+##   lsb-release - help-steps/variables calls 'lsb_release --short
+##                 --id'. debian:trixie does not ship it.
+##   procps      - helper-scripts trace.bsh calls 'ps' from its
+##                 backtrace path. debian:trixie does not ship it.
+##
+## Sign-and-tag deps:
+##   sequoia-git - sq-git policy authorize / log invocations.
+##   sq + sqop   - cert minting / packet ops.
+##   signify-openbsd - signing-key-create's sanity_tests gate
+##                 asserts its presence even though sign-and-tag
+##                 only takes the OpenPGP path.
+##
+## TODO: deduplicate against buildconfig.d/30_dependencies.conf.
+## The list overlaps with what
+## build-steps.d/1200_prepare-build-machine consumes. Right shape:
+## extract apt-install logic from 1200 into a help-steps/install-
+## build-deps that prepare-build-machine sources AND this script
+## calls.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+
+if [ "${CI:-}" != "true" ]; then
+   printf '%s: refusing to run outside CI\n' "${BASH_SOURCE[0]}" >&2
+   exit 1
+fi
+
+apt-get update -qq
+
+apt-get install --yes --no-install-recommends \
+   bash sudo git ca-certificates \
+   lsb-release procps \
+   python3-yaml shellcheck file moreutils \
+   cowbuilder mmdebstrap debootstrap \
+   sequoia-git sq sqop signify-openbsd safe-rm

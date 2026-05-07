@@ -36,9 +36,9 @@
 ## discoverable.
 ##
 ## Reusable from a developer machine:
-##   bash ci/configure-fork-mirror.sh org-ai-assisted org-ai-assisted
+##   ./ci/configure-fork-mirror org-ai-assisted org-ai-assisted
 ##   git submodule update --init --recursive
-##   bash ci/checkout-fork-submodule-branches.sh my-feature-branch
+##   ./ci/checkout-fork-submodule-branches my-feature-branch
 
 set -o errexit
 set -o nounset

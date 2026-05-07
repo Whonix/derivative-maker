@@ -71,12 +71,12 @@ jobs:
         ## git operation - parent OR submodule - that targets a
         ## Kicksecure/* or Whonix/* upstream gets routed to the
         ## fork-org mirror instead. Two 'git config --global' lines
-        ## in ci/configure-fork-mirror.sh cover every cross-org
+        ## in ci/configure-fork-mirror cover every cross-org
         ## submodule the build reaches. Must run BEFORE the submodule
         ## init below so the clones go through the rewrite from the
         ## start. Replayable from a dev clone (writes ~/.gitconfig).
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
-        run: ./ci/configure-fork-mirror.sh "${{ github.repository_owner }}" "${{ github.repository_owner }}"
+        run: ./ci/configure-fork-mirror "${{ github.repository_owner }}" "${{ github.repository_owner }}"
 
       - name: Initialize submodules
         run: git submodule update --init --recursive
@@ -101,42 +101,25 @@ jobs:
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
         env:
           FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: ./ci/checkout-fork-submodule-branches.sh "${FORK_BRANCH}"
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
 
       - name: Start systemd-enabled Debian container
-        run: ./ci/dry-run-start-container.sh dryrun "${DEBIAN_IMAGE}"
+        run: ./ci/dry-run-start-container dryrun "${DEBIAN_IMAGE}"
 
-      - name: Install git inside container (required by submodule paths)
-        run: ./ci/dry-run-install-container-git.sh dryrun
-
-      - name: Install build prerequisites in container
-        ## --env CI=true is required: the in-container scripts'
-        ## guard clauses refuse to run unless CI=true, and `docker
-        ## exec` does not propagate the GHA runner's environment.
-        run: docker exec --env CI=true dryrun ./ci/dry-run-install.sh
-
-      - name: Sign HEAD with ephemeral CI key (so git_sanity_test passes)
-        ## help-steps/git_sanity_test runs sq-git verification of HEAD
-        ## as an unconditional gate even under --dry-run. On a PR build
-        ## that gate sees GitHub's auto-merge commit (signed by GitHub
-        ## Actions, not by an authorized maintainer key) and fails.
-        ## ci/dry-run-sign-and-tag.sh generates an ephemeral OpenPGP
-        ## key, builds a CI-only policy that trust-roots it, re-signs
-        ## HEAD with it, and prints the policy path on stdout.
-        ## ci/dry-run-sign-step.sh is the workflow-side driver:
-        ## docker-execs into the container, tees stdout to a log
-        ## file, and forwards 'sq_git_policy_file=...' to
-        ## $GITHUB_ENV via 'tee --append' (visible in xtrace, unlike
-        ## a '>>' redirection).
-        run: ./ci/dry-run-sign-step.sh dryrun
-
-      - name: Drop privileges and run derivative-maker --dry-run true
-        ## ci/dry-run-build-step.sh wraps the docker exec with the
-        ## sq_git_policy_file env-flag composition. sq_git_trust_root
-        ## is NOT forwarded: help-steps/variables defaults it to
-        ## "HEAD" for non-redistributable builds, which the dry-run
-        ## is, so passing it would be redundant.
-        run: ./ci/dry-run-build-step.sh dryrun
+      - name: Run dry-run inside container
+        ## Single docker exec drops into ./ci/dry-run, which uses
+        ## run-parts to walk ci/dry-run.d/ in numeric order:
+        ##   100_install         - apt-get install build prereqs
+        ##   200_sign-and-tag    - help-steps/sign-and-tag (as builder)
+        ##   300_resign-submodules - foreach -> help-steps/sign-submodule-head
+        ##   400_run-derivative-maker - ./derivative-maker --dry-run true
+        ## Per-phase user switching (root for install, builder for the
+        ## rest via help-steps/run-as-user) is each phase's own concern.
+        ## Trade-off vs separate workflow steps: per-phase visibility
+        ## moves into the consolidated step's log; per-phase failure
+        ## still surfaces because run-parts --exit-on-error stops at
+        ## the first non-zero exit.
+        run: docker exec --env CI=true dryrun ./ci/dry-run
 
       - name: Tear down container
         if: always()

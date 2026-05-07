@@ -13,13 +13,13 @@
 ## unit).
 ##
 ## Lives in ci/ rather than embedded as a heredoc inside
-## dry-run-start-container.sh so it can be shellcheck'd, run from a
+## dry-run-start-container so it can be shellcheck'd, run from a
 ## developer machine for reproduction, and reviewed independently of
 ## the workflow shape - per agents/bash-style-guide.md, multi-line
 ## bash logic does not belong inside a `bash -c "..."` argument.
 ##
 ## Mounted into the container at /work via the --volume in
-## dry-run-start-container.sh; called by absolute path from there.
+## dry-run-start-container; called by absolute path from there.
 
 set -o errexit
 set -o nounset
