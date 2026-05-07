@@ -104,12 +104,6 @@ Forwarded arguments:
 ##   agents/git_sanity_test_design.md
 ##   agents/git_sanity_test_security.md
 
-## die() must be defined before the bootstrap (which uses it in cd-restore).
-die() {
-   printf '%s\n' "${bold}${red}${0##*/}: ERROR: $*${reset}" >&2
-   exit 1
-}
-
 ## ----------------------------------------------------------------------------
 ## Argument parsing
 ## ----------------------------------------------------------------------------
@@ -155,7 +149,7 @@ if [ "${dist_build_one_parsed:-}" != "true" ]; then
    dist_build_source_run="true"
    source "$MYDIR/pre"
    source "$MYDIR/variables"
-   cd -- "$orig_pwd" || die "cannot restore original cwd: $orig_pwd"
+   cd -- "$orig_pwd" || die 1 "cannot restore original cwd: $orig_pwd"
    unset orig_pwd
 elif [ "${#forwarded_args[@]}" -gt 0 ]; then
    ## Not re-running parse-cmd in build context.
@@ -165,23 +159,23 @@ elif [ "${#forwarded_args[@]}" -gt 0 ]; then
 fi
 
 ## Env var validation.
-[ -n "${sq_git_policy_file:-}" ]            || die "env var sq_git_policy_file must be set"
-[ -n "${sq_git_trust_root:-}" ]             || die "env var sq_git_trust_root must be set"
-[ -n "${dist_build_ignore_untagged:-}" ]    || die "env var dist_build_ignore_untagged must be set ('true' or 'false')"
-[ -n "${dist_build_ignore_uncommitted:-}" ] || die "env var dist_build_ignore_uncommitted must be set ('true' or 'false')"
-[[ "${sq_git_policy_file}" =~ ^/ ]]         || die "sq_git_policy_file must be an absolute path, got: '${sq_git_policy_file}'"
-[ -r "${sq_git_policy_file}" ]              || die "sq_git_policy_file is not readable: '${sq_git_policy_file}'"
-[[ "${dist_build_ignore_untagged}"    =~ ^(true|false)$ ]] || die "dist_build_ignore_untagged must be 'true' or 'false', got: '${dist_build_ignore_untagged}'"
-[[ "${dist_build_ignore_uncommitted}" =~ ^(true|false)$ ]] || die "dist_build_ignore_uncommitted must be 'true' or 'false', got: '${dist_build_ignore_uncommitted}'"
+[ -n "${sq_git_policy_file:-}" ]            || die 1 "env var sq_git_policy_file must be set"
+[ -n "${sq_git_trust_root:-}" ]             || die 1 "env var sq_git_trust_root must be set"
+[ -n "${dist_build_ignore_untagged:-}" ]    || die 1 "env var dist_build_ignore_untagged must be set ('true' or 'false')"
+[ -n "${dist_build_ignore_uncommitted:-}" ] || die 1 "env var dist_build_ignore_uncommitted must be set ('true' or 'false')"
+[[ "${sq_git_policy_file}" =~ ^/ ]]         || die 1 "sq_git_policy_file must be an absolute path, got: '${sq_git_policy_file}'"
+[ -r "${sq_git_policy_file}" ]              || die 1 "sq_git_policy_file is not readable: '${sq_git_policy_file}'"
+[[ "${dist_build_ignore_untagged}"    =~ ^(true|false)$ ]] || die 1 "dist_build_ignore_untagged must be 'true' or 'false', got: '${dist_build_ignore_untagged}'"
+[[ "${dist_build_ignore_uncommitted}" =~ ^(true|false)$ ]] || die 1 "dist_build_ignore_uncommitted must be 'true' or 'false', got: '${dist_build_ignore_uncommitted}'"
 
 ## Pre-flight dependency checks. Explicit guards here are necessary because
 ## help-steps/pre does 'set +e' and functions called from '|| cls=$?' have
 ## errexit AND ERR trap suppressed for all commands inside them.
-command -v git    >/dev/null || die "git is required but not installed"
-command -v sq >/dev/null || die "sq is required for tag signature verification but is not installed. Install package 'sq' (Debian: apt install sq)."
-command -v sqop >/dev/null || die "sqop (Stateless OpenPGP) is required for tag signature verification but is not installed. Install package 'sqop' (Debian: apt install sqop)."
-command -v sq-git >/dev/null || die "sq-git (sequoia-git) is required for commit signature verification but is not installed. Install package 'sequoia-git' (Debian: apt install sequoia-git)."
-command -v safe-rm >/dev/null || die "safe-rm missing. (Debian: apt install safe-rm)."
+command -v git    >/dev/null || die 1 "git is required but not installed"
+command -v sq >/dev/null || die 1 "sq is required for tag signature verification but is not installed. Install package 'sq' (Debian: apt install sq)."
+command -v sqop >/dev/null || die 1 "sqop (Stateless OpenPGP) is required for tag signature verification but is not installed. Install package 'sqop' (Debian: apt install sqop)."
+command -v sq-git >/dev/null || die 1 "sq-git (sequoia-git) is required for commit signature verification but is not installed. Install package 'sequoia-git' (Debian: apt install sequoia-git)."
+command -v safe-rm >/dev/null || die 1 "safe-rm missing. (Debian: apt install safe-rm)."
 
 ## ----------------------------------------------------------------------------
 ## Verification primitives
@@ -258,7 +252,7 @@ classify_tag() {
    local tag_objtype tag_body
 
    if ! tag_objtype="$(git cat-file -t "${tag_ref}")"; then
-      die "cannot inspect tag ref '${tag_ref}' in ${context_label}"
+      die 1 "cannot inspect tag ref '${tag_ref}' in ${context_label}"
    fi
 
    case "$tag_objtype" in
@@ -269,12 +263,12 @@ classify_tag() {
       tag)
          ;;
       *)
-         die "tag ref '${tag_ref}' resolves to unrecognized object type '${tag_objtype}' in ${context_label}"
+         die 1 "tag ref '${tag_ref}' resolves to unrecognized object type '${tag_objtype}' in ${context_label}"
          ;;
    esac
 
    if ! tag_body="$(git cat-file tag "${tag_ref}")"; then
-      die "cannot read tag object for '${tag_ref}' in ${context_label}"
+      die 1 "cannot read tag object for '${tag_ref}' in ${context_label}"
    fi
    ## Only OpenPGP signatures are supported (not SSH, not PGP MESSAGE).
    case "$tag_body" in
@@ -296,21 +290,21 @@ classify_tag() {
    local verify_tag_dir
    verify_tag_dir="${binary_build_folder_dist}/verify_tag_temp"
    safe-rm --recursive --force -- "${verify_tag_dir}" \
-      || die "failed to clean verify_tag_dir: ${verify_tag_dir}"
+      || die 1 "failed to clean verify_tag_dir: ${verify_tag_dir}"
    mkdir --parents -- "${verify_tag_dir}/certs" \
-      || die "failed to create directory: ${verify_tag_dir}/certs"
+      || die 1 "failed to create directory: ${verify_tag_dir}/certs"
    chmod 0700 -- "${verify_tag_dir}" \
-      || die "failed to set permissions on: ${verify_tag_dir}"
+      || die 1 "failed to set permissions on: ${verify_tag_dir}"
    "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/extract-openpgp-policy-trusted-certs" "${sq_git_policy_file}" 'sign_tag' "${verify_tag_dir}/certs" \
-      || die "failed to extract trusted certificates from policy file: ${sq_git_policy_file}"
+      || die 1 "failed to extract trusted certificates from policy file: ${sq_git_policy_file}"
 
    local tag_contents
    tag_contents="$(git cat-file tag "${tag_ref}")" \
-      || die "cannot read tag object for '${tag_ref}' in ${context_label}"
+      || die 1 "cannot read tag object for '${tag_ref}' in ${context_label}"
    mkdir --parents -- "${verify_tag_dir}/tag" \
-      || die "failed to create directory: ${verify_tag_dir}/tag"
+      || die 1 "failed to create directory: ${verify_tag_dir}/tag"
    split_tag "${tag_contents}" "${verify_tag_dir}/tag" \
-      || die "failed to extract signature from tag '${tag_ref}' in ${context_label}"
+      || die 1 "failed to extract signature from tag '${tag_ref}' in ${context_label}"
 
    ## Verify the tag against any one of the extracted certs
    local verify_tag_cert
@@ -335,12 +329,12 @@ classify_tag() {
 ## ----------------------------------------------------------------------------
 
 mode_working_tree() {
-   [ -n "${context:-}" ] || die "--context is required for --mode working-tree"
+   [ -n "${context:-}" ] || die 1 "--context is required for --mode working-tree"
 
    local head git_status git_tags_output
    local -a tags_at_head git_tags_cmd
 
-   head="$(git rev-parse HEAD)" || die "Failed to get HEAD for: ${context}"
+   head="$(git rev-parse HEAD)" || die 1 "Failed to get HEAD for: ${context}"
 
    ## Commit authentication via sq-git log.
    sq_git_verify "${head}^{commit}" "${context} (commit ${head})" || exit 1
@@ -351,7 +345,7 @@ mode_working_tree() {
    ## naming collisions when the value is fed back into git commands.
    git_tags_cmd=( git for-each-ref --points-at=HEAD --format='%(refname)' refs/tags )
    if ! git_tags_output="$( "${git_tags_cmd[@]}" )"; then
-      die "'${git_tags_cmd[*]}' failed in ${context}"
+      die 1 "'${git_tags_cmd[*]}' failed in ${context}"
    fi
    if [ -n "${git_tags_output:-}" ]; then
       readarray -t tags_at_head <<< "$git_tags_output"
@@ -440,11 +434,11 @@ mode_working_tree() {
 }
 
 mode_ref() {
-   [ -n "${ref:-}" ]      || die "--ref is required for --mode ref"
-   [ -n "${ref_type:-}" ] || die "--ref-type is required for --mode ref"
+   [ -n "${ref:-}" ]      || die 1 "--ref is required for --mode ref"
+   [ -n "${ref_type:-}" ] || die 1 "--ref-type is required for --mode ref"
    case "$ref_type" in
       tag|commit) ;;
-      *) die "--ref-type must be 'tag' or 'commit'" ;;
+      *) die 1 "--ref-type must be 'tag' or 'commit'" ;;
    esac
 
    local resolve_ref ref_commit
@@ -454,17 +448,17 @@ mode_ref() {
    if [ "${ref_type:-}" = 'tag' ]; then
       case "$ref" in
          refs/tags/*)  resolve_ref="$ref" ;;
-         refs/*)       die "ref '${ref}' is declared as --ref-type tag but is not under refs/tags/" ;;
+         refs/*)       die 1 "ref '${ref}' is declared as --ref-type tag but is not under refs/tags/" ;;
          *)            resolve_ref="refs/tags/${ref}" ;;
       esac
       git show-ref --verify --quiet "${resolve_ref}" \
-         || die "tag ref not found: '${resolve_ref}'"
+         || die 1 "tag ref not found: '${resolve_ref}'"
       local cls=0
       classify_tag "${resolve_ref}" "ref '${ref}'" || cls=$?
       case "$cls" in
          0) : ;;
-         1) die "ref '${resolve_ref}' is a lightweight tag - not an annotated signed tag" ;;
-         2) die "ref '${resolve_ref}' is annotated but not signed by a trusted developer - release tags must be signed" ;;
+         1) die 1 "ref '${resolve_ref}' is a lightweight tag - not an annotated signed tag" ;;
+         2) die 1 "ref '${resolve_ref}' is annotated but not signed by a trusted developer - release tags must be signed" ;;
       esac
    else
       resolve_ref="${ref}"
@@ -472,7 +466,7 @@ mode_ref() {
 
    ## Resolve to the target commit SHA.
    if ! ref_commit="$(git rev-parse --verify "${resolve_ref}^{commit}" 2>/dev/null)"; then
-      die "could not resolve ref '${ref}' to a commit"
+      die 1 "could not resolve ref '${ref}' to a commit"
    fi
 
    ## Authenticate the target commit via sq-git log. When
@@ -486,7 +480,7 @@ mode_submodules() {
    ## 'git submodule foreach --recursive'.
    ## Uses $MYDIR (not git rev-parse --show-toplevel) to find this script.
    ## foreach runs under /bin/sh, so we re-invoke via bash.
-   [ -r "${MYDIR}/git_sanity_test" ] || die "helper script not found or not readable: '${MYDIR}/git_sanity_test'"
+   [ -r "${MYDIR}/git_sanity_test" ] || die 1 "helper script not found or not readable: '${MYDIR}/git_sanity_test'"
 
    export MYDIR
    ## TODO: why did we hardcode the following variable here? sq_git_trust_root=HEAD
@@ -495,7 +489,7 @@ mode_submodules() {
 }
 
 mode_all() {
-   [ -n "${context:-}" ] || die "--context is required for --mode all"
+   [ -n "${context:-}" ] || die 1 "--context is required for --mode all"
    mode_working_tree
    mode_submodules
 }
@@ -505,5 +499,5 @@ case "$mode" in
    ref)          mode_ref ;;
    submodules)   mode_submodules ;;
    all)          mode_all ;;
-   *) die "unknown mode '$mode' (expected one of working-tree, ref, submodules, all)" ;;
+   *) die 1 "unknown mode '$mode' (expected one of working-tree, ref, submodules, all)" ;;
 esac
