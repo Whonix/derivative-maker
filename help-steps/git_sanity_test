@@ -18,6 +18,7 @@ MYDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 export HELPER_SCRIPTS_PATH="${MYDIR}/../packages/kicksecure/helper-scripts"
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/get_colors.sh"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/log_run_die.sh"
 
 ## This function is defined up here to avoid redundancy between comments and
 ## documentation.
