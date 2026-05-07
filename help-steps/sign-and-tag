@@ -5,33 +5,11 @@
 
 ## AI-Assisted
 
-## Driver for the "sign every HEAD in the tree against an ephemeral
-## maintainer policy" operation. Linear, no internal dispatch:
-##   1. Mint an ephemeral OpenPGP key.
-##   2. Build a policy file seeded from openpgp-policy.toml,
-##      authorizing the ephemeral cert as project-maintainer on
-##      top of the upstream maintainer keys.
-##   3. Call help-steps/sign-head for the parent repo's HEAD.
-##   4. Tag the parent's (now-amended) HEAD if no signed tag
-##      already points there.
-##   5. 'git submodule foreach --recursive' into help-steps/sign-
-##      head so each submodule's HEAD ends up signed too.
-##
-## help-steps/sign-head is the leaf operation: amend HEAD if it
-## does not already verify against the policy. Both the parent
-## and each submodule use the same leaf - no special-casing.
-##
-## Side effects:
-##   - Mints a new OpenPGP cert in the caller's sq keystore.
-##   - Rewrites HEAD via 'git commit --amend -S' on the parent
-##     and on each submodule whose HEAD does not already verify.
-##   - Adds a signed annotated tag on the parent's HEAD.
-##   - Does NOT write to global git config; signing settings are
-##     applied per-call via git_signing_command_wrapper from
-##     help-steps/variables.
-##
-## Caller is responsible for guarding against running this on a
-## developer machine if those side effects aren't wanted.
+## Mint an ephemeral OpenPGP cert, build a policy that authorizes
+## it on top of the upstream maintainer keys, sign the parent's
+## HEAD via help-steps/sign-head, tag the result, then foreach into
+## sign-head for every submodule. The caller is responsible for
+## guarding against running this on a developer machine.
 
 set -o errexit
 set -o nounset
@@ -40,12 +18,9 @@ set -o errtrace
 
 repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 
-## Source variables.bsh for git_signing_command_wrapper +
-## DEBEMAIL/DEBFULLNAME + binary_build_folder_dist. The save/restore
-## of CWD is symmetry with sign-head (variables.bsh:153 cds away);
-## here it does not strictly matter because the next step cds to
-## repo_root explicitly, but keeping the pattern consistent reduces
-## per-script reasoning.
+## variables.bsh's source has a 'cd "$source_code_folder_dist"'
+## side effect; restore CWD afterward so behaviour is symmetric
+## with sign-head, where preserving CWD is required.
 saved_cwd="$PWD"
 export dist_build_source_run=true
 export dist_build_one_parsed=true
@@ -60,13 +35,8 @@ source "${repo_root}/help-steps/verify-ref"
 
 cd -- "${repo_root}"
 
-## (1) Mint the ephemeral key (idempotent on DEBEMAIL).
-## signing-key-create rejects root invocations.
 ./help-steps/signing-key-create
 
-## (2) Export the cert. On a fresh container the keystore has
-## exactly one cert; '--all' picks it without us needing to know
-## the email/fingerprint.
 ephemeral_cert_pem="$(mktemp)"
 sq cert export --all > "${ephemeral_cert_pem}"
 
@@ -83,19 +53,16 @@ sq-git policy authorize \
    "${DEBFULLNAME}" \
    "${ephemeral_cert_pem}"
 rm -f -- "${ephemeral_cert_pem}"
-printf '%s\n' "${BASH_SOURCE[0]}: wrote policy to ${ephemeral_policy}"
+printf '%s: wrote policy to %s\n' "${BASH_SOURCE[0]}" "${ephemeral_policy}"
 
-## verify_ref + sign-head consume sq_git_policy_file from env.
 export sq_git_policy_file="${ephemeral_policy}"
 
-## (3) Sign parent's HEAD if not already signed.
 ./help-steps/sign-head
 
-## (4) Tag parent's HEAD if no signed tag already points there.
-## Tag name is "<nearest-git-tag>_<commit-full-sha>": composes the
-## project's existing tag namespace ('git tag -l' shows the new
-## tag grouped near the release it came from) with the post-amend
-## full HEAD SHA so the suffix is globally unique per run.
+## Tag if no signed tag already points at HEAD. Tag name composes
+## the project's existing namespace ('git describe --abbrev=0' = the
+## release a developer reading 'git tag -l' would expect this near)
+## with the post-amend full SHA for global uniqueness.
 existing_signed_tag=
 for existing_tag in $(git tag --points-at HEAD); do
    if verify_ref "${existing_tag}" tag "main repo tag"; then
@@ -108,13 +75,11 @@ if [ -z "${existing_signed_tag:-}" ]; then
    commit_full_sha="$(git rev-parse HEAD)"
    signed_tag="${nearest_git_tag}_${commit_full_sha}"
    "${git_signing_command_wrapper[@]}" tag -a -s -m 'Signed by sign-and-tag' "${signed_tag}"
-   printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${signed_tag}"
+   printf '%s: tagged HEAD as %s\n' "${BASH_SOURCE[0]}" "${signed_tag}"
 else
-   printf '%s\n' "${BASH_SOURCE[0]}: HEAD already has signed tag: ${existing_signed_tag}"
+   printf '%s: HEAD already has signed tag: %s\n' "${BASH_SOURCE[0]}" "${existing_signed_tag}"
 fi
 
-## (5) Sign each submodule's HEAD if not already signed.
-## Single quotes intentional; '$toplevel' is expanded by foreach's
-## child shell, not this one.
+## '$toplevel' is foreach's env, expanded by its child shell.
 # shellcheck disable=SC2016
 git submodule foreach --recursive '"$toplevel/help-steps/sign-head"'

@@ -5,20 +5,10 @@
 
 ## AI-Assisted
 
-## Re-sign HEAD of the current git repo with the signing config
-## from help-steps/variables, but only when HEAD does not already
-## verify against sq_git_policy_file.
-##
-## Called from two places by help-steps/sign-and-tag:
-##   1. Top-level for the parent repo's HEAD.
-##   2. Per submodule via 'git submodule foreach --recursive'.
-##
-## Both paths share the same code; no internal dispatch. The caller
-## is expected to have run sign-and-tag's setup phase first (mint
-## ephemeral key, build policy, sq-git policy authorize the cert)
-## - this script does NOT do any of that. The 'sq_git_policy_file'
-## env var must point at the policy that authorizes the signing
-## cert.
+## Sign HEAD of the current repo unless it already verifies against
+## sq_git_policy_file. Called both for the parent repo and per
+## submodule via 'git submodule foreach'. Caller (sign-and-tag) is
+## expected to have set up the policy and exported sq_git_policy_file.
 
 set -o errexit
 set -o nounset
@@ -27,12 +17,10 @@ set -o errtrace
 
 repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 
-## Source variables.bsh for git_signing_command_wrapper +
-## DEBEMAIL/DEBFULLNAME. Save+restore CWD because variables.bsh:153
-## does 'cd -- "$source_code_folder_dist"' as a side effect, which
-## would break the foreach-recursed submodule context (CWD has to
-## stay at the submodule's working tree so 'git rev-parse HEAD'
-## and 'git commit --amend' operate on the submodule's git db).
+## variables.bsh's source cds away as a side effect. CWD must stay
+## at the caller's working tree (= the submodule when foreach lands
+## us there) so 'git rev-parse HEAD' / 'git commit --amend' operate
+## on the right git db.
 saved_cwd="$PWD"
 export dist_build_source_run=true
 export dist_build_one_parsed=true

@@ -5,17 +5,12 @@
 
 ## AI-Assisted
 
-## Per-submodule action invoked via 'git submodule foreach
-## --recursive' from ci/checkout-fork-submodule-branches.
-##
-## Reads $FORK_BRANCH (set by the caller) and $displaypath /
-## $sm_path / $toplevel (exported by foreach). Tries to fetch
-## the named branch from origin. If the fetch succeeds, switches
-## the submodule's HEAD to it. If the branch doesn't exist on
-## the remote, exits 0 silently so the SHA pin stays.
-##
-## Per-submodule decisions (skipped/no-ref/switched) are printed
-## so a failed lookup is visible in the workflow log.
+## Per-submodule action invoked from ci/checkout-fork-submodule-
+## branches via 'git submodule foreach'. Reads $FORK_BRANCH (set
+## by the caller) and $displaypath (set by foreach). Tries to fetch
+## the named branch; on success switches HEAD to it. On absence
+## exits 0 silently so the SHA pin stays. Diagnostic line emitted
+## per outcome.
 
 set -o errexit
 set -o nounset
@@ -23,17 +18,14 @@ set -o pipefail
 set -o errtrace
 
 if [ -z "${FORK_BRANCH:-}" ]; then
-   ## $FORK_BRANCH in the message is the env-var name being
-   ## reported, not a value to interpolate.
+   ## $FORK_BRANCH in the message is the env-var name, not a value.
    # shellcheck disable=SC2016
    printf '%s: $FORK_BRANCH not set; call from ci/checkout-fork-submodule-branches\n' "${BASH_SOURCE[0]}" >&2
    exit 64
 fi
 
-submodule_url=
 submodule_url="$(git remote get-url origin 2>/dev/null || printf '<no-origin>')"
 
-fetch_log=
 if ! fetch_log="$(git fetch origin "${FORK_BRANCH}" 2>&1)"; then
    printf 'no-ref %s (origin: %s): %s\n' "${displaypath:-${PWD}}" "${submodule_url}" "${fetch_log}"
    exit 0

@@ -5,26 +5,20 @@
 
 ## AI-Assisted
 
-## Sourced library. Defines verify_ref(): thin wrapper around
-## help-steps/git_sanity_test --mode ref. Returns 0 if the ref
-## passes policy verification, non-zero otherwise.
-##
-## Caller must have sq_git_policy_file, sq_git_trust_root, and
-## the dist_build_ignore_* booleans set in env (git_sanity_test's
-## env-var preconditions). Sourcing help-steps/variables sets all
-## of those defaults.
-##
-## Inside the function, BASH_SOURCE[0] is the path of THIS file
-## (verify-ref), not the caller's script - so the path to
-## git_sanity_test resolves correctly regardless of where
-## verify_ref is invoked from (parent repo, foreach-recursed
-## submodule, etc.).
+## Sourced library. Defines verify_ref(): exits 0 if a ref passes
+## help-steps/git_sanity_test --mode ref against sq_git_policy_file,
+## non-zero otherwise. Caller must have sq_git_policy_file,
+## sq_git_trust_root, and the dist_build_ignore_* booleans set in
+## env (sourcing help-steps/variables provides defaults).
 
 verify_ref() {
    local ref="$1"
    local ref_type="$2"
    local context="$3"
    local self_dir
+   ## BASH_SOURCE[0] inside a function is the path of THIS file,
+   ## not the caller's, so the lookup works regardless of where
+   ## verify_ref was called from.
    self_dir="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
    "${self_dir}/git_sanity_test" \
       --mode ref --ref "${ref}" --ref-type "${ref_type}" --context "${context}" \

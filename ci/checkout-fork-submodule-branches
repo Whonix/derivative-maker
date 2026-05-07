@@ -5,23 +5,11 @@
 
 ## AI-Assisted
 
-## After parent-side submodule init, walk every submodule via
-## 'git submodule foreach' and switch to the same-named branch
-## on its origin remote when one exists. Submodules without a
-## matching branch keep the SHA pin from the parent's index.
-##
-## Same pattern as help-steps/git_sanity_test's mode_submodules:
-## 'foreach --recursive' delegates the per-submodule action to
+## After 'git submodule update --init', walk every submodule and
+## switch to the same-named branch on its origin remote when one
+## exists; submodules without a matching branch keep the SHA pin
+## from the parent's index. Per-submodule action lives in
 ## ci/checkout-fork-branch.
-##
-## Caller contract:
-##   - Pass the branch name as the only argument.
-##   - Run after 'git submodule update --init --recursive' so each
-##     submodule's .git/config exists.
-##
-## Reusable from a developer machine:
-##   git submodule update --init --recursive
-##   ./ci/checkout-fork-submodule-branches my-feature-branch
 
 set -o errexit
 set -o nounset
@@ -33,7 +21,6 @@ if [ "$#" -ne 1 ]; then
    exit 64
 fi
 
-branch=
 branch="$1"
 
 case "${branch}" in
@@ -45,9 +32,7 @@ esac
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
-## $toplevel is exported by 'git submodule foreach' for its child
-## shell to expand per-submodule. Single quotes intentional;
-## expanding now would substitute this shell's (empty) value.
+## '$toplevel' is foreach's env, expanded by its child shell.
 # shellcheck disable=SC2016
 FORK_BRANCH="${branch}" \
    git submodule foreach --recursive '"$toplevel/ci/checkout-fork-branch"'

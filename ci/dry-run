@@ -5,8 +5,8 @@
 
 ## AI-Assisted
 
-## Walks ci/dry-run.d/* via run-parts. Mirrors derivative-maker's
-## own build-steps.d/ dispatcher.
+## Walks ci/dry-run.d/* via run-parts. Same dispatcher pattern as
+## derivative-maker's build-steps.d/.
 
 set -o errexit
 set -o nounset

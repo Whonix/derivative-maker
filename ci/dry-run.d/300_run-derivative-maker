@@ -5,21 +5,11 @@
 
 ## AI-Assisted
 
-## Phase 300: run derivative-maker --dry-run as the unprivileged
-## target user.
-##
-## Compute the path to the policy file from the target user's home
-## dir via getent (matches binary_build_folder_dist's default in
-## help-steps/variables when run as that user). Avoids a literal
-## '/home/<user>/' string. Single ': '-delimited field extraction
-## is standard Unix, not awk.
-##
-## --policy-file is consumed by parse-cmd, which exports
-## sq_git_policy_file for git_sanity_test - cleaner than passing
-## across the run-as-user sudo via 'env VAR=val'.
-##
-## sq_git_trust_root is NOT set: help-steps/variables defaults it
-## to "HEAD" for non-redistributable builds.
+## Drop privileges and run derivative-maker --dry-run. The
+## --policy-file value is computed from the target user's home
+## (via getent so there's no '/home/<user>/' literal); --policy-file
+## is consumed by parse-cmd which exports sq_git_policy_file for
+## git_sanity_test.
 
 set -o errexit
 set -o nounset
