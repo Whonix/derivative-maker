@@ -24,7 +24,7 @@ fi
 
 submodule_url="$(git remote get-url origin 2>/dev/null || printf '<no-origin>')"
 
-if ! fetch_log="$(git fetch origin "${FORK_BRANCH}" 2>&1)"; then
+if ! fetch_log="$(git fetch origin -- "${FORK_BRANCH}" 2>&1)"; then
    printf 'no-ref %s (origin: %s): %s\n' "${displaypath:-${PWD}}" "${submodule_url}" "${fetch_log}"
    exit 0
 fi

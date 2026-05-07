@@ -23,7 +23,7 @@ fi
 branch="$1"
 
 case "${branch}" in
-   *[!a-zA-Z0-9._/-]*|"")
+   -*|*[!a-zA-Z0-9._/-]*|"")
       printf '%s\n' "${BASH_SOURCE[0]}: refusing suspicious branch name: '${branch}'" >&2
       exit 64
       ;;

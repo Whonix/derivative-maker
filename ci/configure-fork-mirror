@@ -34,13 +34,13 @@ kicksecure_mirror="$1"
 whonix_mirror="$2"
 
 case "${kicksecure_mirror}" in
-   *[!a-zA-Z0-9_.-]*|"")
+   -*|*[!a-zA-Z0-9_.-]*|"")
       printf '%s\n' "${BASH_SOURCE[0]}: refusing suspicious kicksecure-mirror org: '${kicksecure_mirror}'" >&2
       exit 64
       ;;
 esac
 case "${whonix_mirror}" in
-   *[!a-zA-Z0-9_.-]*|"")
+   -*|*[!a-zA-Z0-9_.-]*|"")
       printf '%s\n' "${BASH_SOURCE[0]}: refusing suspicious whonix-mirror org: '${whonix_mirror}'" >&2
       exit 64
       ;;
