@@ -6,10 +6,10 @@
 ## AI-Assisted
 
 ## Mint an ephemeral OpenPGP cert, build a policy that authorizes
-## it on top of the upstream maintainer keys, sign the parent's
-## HEAD via help-steps/sign-head, tag the result, then foreach into
-## sign-head for every submodule. The caller is responsible for
-## guarding against running this on a developer machine.
+## it on top of the upstream maintainer keys, then sign+tag HEAD
+## for the parent repo and every submodule via the sign-head /
+## tag-head leaves. The caller is responsible for guarding against
+## running this on a developer machine.
 
 set -o errexit
 set -o nounset
@@ -18,20 +18,12 @@ set -o errtrace
 
 repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 
-## variables.bsh's source has a 'cd "$source_code_folder_dist"'
-## side effect; restore CWD afterward so behaviour is symmetric
-## with sign-head, where preserving CWD is required.
-saved_cwd="$PWD"
 export dist_build_source_run=true
 export dist_build_one_parsed=true
 # shellcheck source=help-steps/pre
 source "${repo_root}/help-steps/pre"
 # shellcheck source=help-steps/variables
 source "${repo_root}/help-steps/variables"
-cd -- "${saved_cwd}"
-
-# shellcheck source=help-steps/verify-ref
-source "${repo_root}/help-steps/verify-ref"
 
 cd -- "${repo_root}"
 
@@ -57,28 +49,8 @@ printf '%s: wrote policy to %s\n' "${BASH_SOURCE[0]}" "${ephemeral_policy}"
 export sq_git_policy_file="${ephemeral_policy}"
 
 ./help-steps/sign-head
-
-## Tag if no signed tag already points at HEAD. Tag name composes
-## the project's existing namespace ('git describe --abbrev=0' = the
-## release a developer reading 'git tag -l' would expect this near)
-## with the post-amend full SHA for global uniqueness.
-existing_signed_tag=
-for existing_tag in $(git tag --points-at HEAD); do
-   if verify_ref "${existing_tag}" tag "main repo tag"; then
-      existing_signed_tag="${existing_tag}"
-      break
-   fi
-done
-if [ -z "${existing_signed_tag:-}" ]; then
-   nearest_git_tag="$(git describe --abbrev=0)"
-   commit_full_sha="$(git rev-parse HEAD)"
-   signed_tag="${nearest_git_tag}_${commit_full_sha}"
-   "${git_signing_command_wrapper[@]}" tag -a -s -m 'Signed by sign-and-tag' "${signed_tag}"
-   printf '%s: tagged HEAD as %s\n' "${BASH_SOURCE[0]}" "${signed_tag}"
-else
-   printf '%s: HEAD already has signed tag: %s\n' "${BASH_SOURCE[0]}" "${existing_signed_tag}"
-fi
+./help-steps/tag-head
 
 ## '$toplevel' is foreach's env, expanded by its child shell.
 # shellcheck disable=SC2016
-git submodule foreach --recursive '"$toplevel/help-steps/sign-head"'
+git submodule foreach --recursive '"$toplevel/help-steps/sign-head" && "$toplevel/help-steps/tag-head"'
