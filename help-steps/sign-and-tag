@@ -74,8 +74,18 @@ verify_ref() {
 ## $toplevel is exported by 'git submodule foreach' (absolute path
 ## of the superproject's working tree) - presence is the cleanest
 ## signal that we are a per-submodule invocation.
+##
+## Submodule-mode skip uses the $sha1-vs-HEAD heuristic, NOT
+## verify_ref, because in a fresh-cloned submodule context sq-git
+## with --trust-root HEAD treats target=trust-root as trivially
+## verifiable - the verify_ref call returns success even for an
+## unsigned overlaid fork branch tip, and the amend is incorrectly
+## skipped. The deterministic SHA compare gets the intended
+## semantic: "if HEAD diverges from the parent's index pin, it
+## was overlaid by checkout-fork-submodule-branches and needs
+## resigning".
 if [ -n "${toplevel:-}" ]; then
-   if verify_ref HEAD commit "submodule HEAD"; then
+   if [ "$(git rev-parse HEAD)" = "${sha1:-}" ]; then
       exit 0
    fi
    git "${git_options[@]}" commit --amend --no-edit -S
