@@ -93,8 +93,16 @@ jobs:
         ## Submodules without a matching fork branch keep their pin.
         ## github.head_ref is set on pull_request triggers (the PR's
         ## source branch); github.ref_name is the branch on push.
+        ## github.head_ref / github.ref_name are passed through an env
+        ## var rather than inlined into the run: script, per actionlint
+        ## guidance: head_ref is attacker-controlled (any forked PR
+        ## can name its branch arbitrarily) and inlining it would be
+        ## a shell-injection sink. The script's own arg validator
+        ## (case statement, alnum + '._/-' only) is the second layer.
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
-        run: bash ci/checkout-fork-submodule-branches.sh "${{ github.head_ref || github.ref_name }}"
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: bash ci/checkout-fork-submodule-branches.sh "${FORK_BRANCH}"
 
       - name: Start systemd-enabled Debian container
         run: bash ci/dry-run-start-container.sh dryrun "${DEBIAN_IMAGE}"
