@@ -1,3 +1,2015 @@
+commit 32ebbfe24a42d2fd036b465610a2aec02f30ba48
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 15:24:59 2026 -0400
+
+    .
+
+commit f99c8a28831769d2dea816fdfbce8a4547cb1e5a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 15:23:21 2026 -0400
+
+    agents
+
+commit 64aa9beaf9c2ec44c127992aadf0099f386c4e0d
+Merge: 19273feab d74e7280c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 15:20:37 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/help-steps-and-ci-fixes'
+
+commit 19273feabf2433c950404e37c9c50b147f8b8544
+Merge: 6faecb245 4046be6ff
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 15:18:46 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/help-steps-and-ci-fixes'
+
+commit d74e7280c4c1d7564d40266db68ff72e701f2929
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 19:17:35 2026 +0000
+
+    agents/git_sanity_test_security.md: add 'Ref-resolution hygiene' section
+
+    The doc previously called out the abstract collision concern in the
+    'Tag verification flow' section (using full refnames %(refname) when
+    enumerating tags via for-each-ref). It did NOT enumerate:
+
+    * The concrete tag-shadowing-remote-tracking attack pattern
+      (adversary creates a tag literally named 'origin/master', so
+      'git switch --detach origin/master' resolves to the TAG with only
+      a warning instead of refs/remotes/origin/master).
+    * The 'git switch --detach' over 'git checkout' preference for new
+      code: switch lets us use '--' as end-of-options, checkout treats
+      it as a pathspec separator.
+    * The recommendation to use fully qualified refspecs (refs/tags/X,
+      refs/heads/X, refs/remotes/origin/X, <expr>^{commit}) when the
+      caller statically knows the type.
+
+    New section enumerates each, plus a 'Already-applied mitigations'
+    list that references the three sites this PR's earlier commits
+    hardened (sign-tag-head, derivative-update, checkout-fork-branch)
+    so a future reader can find the implementation pattern fast.
+
+commit 6faecb245da1a631ccbc53f16bd30ed7c692d85e
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 15:14:35 2026 -0400
+
+    .
+
+commit 4046be6ff73db0849ced9000d994a47cc850e474
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 19:12:31 2026 +0000
+
+    derivative-update: git switch --detach instead of git checkout (2 sites)
+
+    Two sites in derivative-update where the target is unambiguously a
+    specific commit object: the abort_update() rollback (recover_commit
+    is already peeled to '${X}^{commit}') and the tag-mode path
+    (refs/tags/${target_tag}). Both want detached HEAD.
+
+    Replacing 'git checkout' with 'git switch --recurse-submodules
+    --detach -- ...':
+    * '--' end-of-options now usable. With checkout '--' switches to
+      pathspec interpretation; with switch it's plain end-of-options.
+      Defense in depth against future callers passing a recover_commit
+      / target_tag starting with '-'.
+    * --detach makes the detached-HEAD intent explicit (switch refuses
+      non-local-branch refs without -c or --detach).
+
+    Comments updated to drop the now-stale 'Cannot use --' notes.
+
+    The third 'git checkout --recurse-submodules "${target_ref}"' site
+    in update_repo() (the --ref code path) is left untouched: it
+    deliberately uses checkout's branch-or-commit dual-mode behavior
+    (branch name -> set up tracking; commit hash -> detach), which
+    git switch does not replicate cleanly. Restructuring it to use
+    the existing show-ref check would be a larger refactor and is
+    out of scope here.
+
+commit 2ab1d0ab18ba1f3bfd9394cf2a8654d9148ea4be
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 19:05:32 2026 +0000
+
+    checkout-fork-branch: git switch --detach instead of git checkout
+
+    Replace 'git checkout origin/${FORK_BRANCH}' with
+    'git switch --quiet --detach -- refs/remotes/origin/${FORK_BRANCH}':
+
+    * git switch is the modern command for HEAD-changing operations.
+    * --detach makes the detached-HEAD intent explicit (switch otherwise
+      refuses non-local-branch refs without -c or --detach).
+    * '--' end-of-options separator: defense in depth against a future
+      caller passing FORK_BRANCH starting with '-' (the validator in
+      ci/checkout-fork-submodule-branches already rejects this, but '--'
+      is cheap belt + suspenders).
+    * Fully qualified 'refs/remotes/origin/<branch>' instead of
+      'origin/<branch>': closes a tag-vs-remote-tracking ambiguity.
+      Reproduced locally - if an adversary creates a tag literally
+      named 'origin/master' in the submodule, 'git switch --detach
+      origin/master' resolves to the TAG (with only a warning), not
+      the remote-tracking branch. The fully qualified form bypasses
+      standard ref lookup and goes straight to the remote-tracking
+      namespace, eliminating the collision.
+
+commit 94c52237d9d56ec3c4a5c9a1c350f8331ea8a1c1
+Merge: 950b059a3 68711c5ff
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 15:05:24 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/help-steps-and-ci-fixes'
+
+commit 68711c5ff595869bcda7ccc73a8cb18883bde807
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 18:49:49 2026 +0000
+
+    git_sanity_test: restore sq_git_trust_root=HEAD for submodule foreach
+
+    Commit 3fe6f5a removed:
+
+      sq_git_trust_root=HEAD \
+         git submodule foreach --recursive \
+            'bash "$MYDIR/git_sanity_test" ...'
+
+    and left a TODO asking why the variable was hardcoded. Restoring
+    with the rationale inline: the parent's sq_git_trust_root is a SHA
+    in the parent's git db that does not exist in any submodule, so
+    'sq-git log --trust-root <parent-SHA>' inside the submodule fails
+    to resolve the trust root. Forcing trust_root=HEAD per-command
+    collapses verification to single-commit verify (the same trivial-
+    chain case mode_ref documents at line 469-470): the policy file's
+    trusted signing keys must validate the submodule's HEAD commit
+    signature directly. The chain-walk security property is delegated
+    to the parent - the parent commit (chain-verified) records the
+    submodule's pinned SHA, so a well-signed submodule HEAD plus
+    a well-signed parent pin is the trust closure.
+
+    Without this, mode_submodules is broken for any non-trivial
+    parent trust_root: 'sq-git log' aborts as soon as it tries to
+    walk back from submodule HEAD to a SHA that is not in the
+    submodule's history.
+
+commit 215feb123a4fa50e195b9fa8e147843db97dc3fc
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 18:49:49 2026 +0000
+
+    sign-tag-head: enforce working-tree tag policy; drop word-split
+
+    git_sanity_test --mode working-tree allows exactly one of:
+      A) zero tags at HEAD (only with --allow-untagged)
+      B) exactly one annotated SIGNED tag at HEAD
+    Anything else is a hard error. The previous loop in sign-tag-head
+    could leave HEAD in a multi-tag state that the next sanity check
+    would reject:
+
+      state at HEAD       | old behaviour
+      --------------------+------------------------------------------
+      0 tags              | create signed tag (correct)
+      1 unsigned tag      | falls through, creates 2nd tag (multi-tag)
+      1 signed tag        | exit 0 (correct)
+      >=2 tags, any signed| exit 0 silently (multi-tag persists)
+      >=2 tags, none      | falls through, adds yet another (worse)
+
+    Replace the loop with the same case-on-count idiom git_sanity_test
+    itself uses (mode_working_tree:352): for-each-ref + readarray, then
+    explicit handling of 0/1/N. Bail loudly on the 1-unsigned and
+    multi-tag cases so the operator sees the policy violation instead
+    of silently advancing into a state the next gate rejects.
+
+    Drops the unquoted '$(git tag --points-at HEAD)' word-split (safe
+    in practice because git rejects whitespace in ref names, but
+    shellcheck SC2046 caught it as a smell).
+
+commit 890e73617a7429ff175cc3d6300581ca11caff98
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 18:40:25 2026 +0000
+
+    ci, help-steps: printf style guide compliance (R-030/R-031/R-032)
+
+    R-030 says: 'Always printf %s\\n "...". Format string is fixed; all
+    data goes in the data string. No %d, no extra \\n in the format.'
+    12 calls in scripts touched by the recent dry-run / sign-tag-head
+    work used 'printf' with the data interpolated as %s placeholders
+    into a literal-text format string (e.g. 'no-ref %s (origin: %s):
+    %s\\n'). Rewrites concatenate the data into the data string so the
+    format reduces to '%s\\n' (or '%s' for the one non-newline case in
+    ci/checkout-fork-branch's <no-origin> fallback).
+
+    Mechanical change, no behaviour difference. shellcheck -x clean
+    on all touched files. The SC2016 disable in ci/checkout-fork-branch
+    is no longer needed: $FORK_BRANCH is now explicitly escaped inside
+    a double-quoted string.
+
+commit 950b059a38990d3ff3b4a4f03aee309a63718c9f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:47:06 2026 -0400
+
+    .
+
+commit 4db836871d2e7bc1dca95dd5be7e61d3fc07e34f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:43:13 2026 -0400
+
+    .
+
+commit 514f84a6ce7d98e51229091dac5ef85b00d413fe
+Merge: a5cbd6d3a d9171c807
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:35:50 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/fix-workflow-syntax-j1LlD'
+
+commit d9171c80781502487c4de64b91e523bd501ee23e
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 18:24:32 2026 +0000
+
+    Fix submodule pin to match master (sha-prefix collision)
+
+    5e164ac wrote 780cc07da7e9efeebc1d56e62d52b3df37e5c7c8 into the
+    parent index, but master's actual pin is 780cc073434f9fa7daf98...
+    - two different commits sharing the '780cc07' 7-char prefix.
+    This corrects the pin to the master SHA so the PR no longer
+    modifies packages/kicksecure/helper-scripts vs master.
+
+commit a5cbd6d3a5db5e132153ce1002a14f2aa8246542
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:22:14 2026 -0400
+
+    .
+
+commit 3d00ae124636a74047a831c68a31d1eb78b92bd6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:19:45 2026 -0400
+
+    output
+
+commit 6dd4bb95c97b799ca54cdb3de1b7060c825768bf
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:12:16 2026 -0400
+
+    code simplification
+
+commit bb0444be79aaecf731dd1586d4ddb5e7790d8a57
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:08:32 2026 -0400
+
+    port to long_run_die
+
+commit 244875349d1cfd36b4462727870a88171bc1173d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:04:38 2026 -0400
+
+    fix
+
+commit 3fe6f5a4f80b6bc5166388027ebef05cc56e49f4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:04:19 2026 -0400
+
+    fix
+
+commit 629f27cef2dd011abf6e428f08f9118a4ec0290b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:02:41 2026 -0400
+
+    output
+
+commit 0d106ea386b6243857f6c3fb490e4ff321ce5226
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:01:16 2026 -0400
+
+    output
+
+commit feacd528a079eff4a3ea0504262389a896783f81
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 14:01:02 2026 -0400
+
+    .
+
+commit d72f07a7c77a5ceaa91ffe7af55406c939856500
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 13:54:23 2026 -0400
+
+    .
+
+commit 5e164acec1f947f02b02dd514dbf6c417045cb54
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 17:52:14 2026 +0000
+
+    Revert helper-scripts submodule pointer bump
+
+    Drop the submodule pointer change from 3f33ae0; keep only the
+    parent-repo workflow comment trim. Per request: derivative-maker
+    merges should not carry .gitmodules / submodule pointer changes
+    that originate from this branch's helper-scripts edits.
+
+commit 2bd19268bb0f49b4b704f1995296a732e42ec798
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 13:49:13 2026 -0400
+
+    .
+
+commit 363cad2a6c3484f83af2036a7cc98de123da28f7
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 17:21:38 2026 +0000
+
+    ci: harden git ref/arg handling against flag-injection
+
+    * ci/checkout-fork-branch: add '--' before "${FORK_BRANCH}" in
+      'git fetch'. Without it, FORK_BRANCH=--foo is parsed by git as an
+      unknown option ('error: unknown option `foo''). Confirmed by
+      reproducing the parse error locally.
+    * ci/checkout-fork-submodule-branches: tighten the validator to
+      reject leading '-' (defense in depth - the inner script's '--'
+      separator already neutralizes the flag-injection path, but we
+      also bail before invoking foreach with a bogus branch).
+    * ci/configure-fork-mirror: same leading-'-' rejection on org
+      args. GitHub usernames/orgs cannot start with '-' per GitHub's
+      own rules, so this is a no-cost tightening.
+
+    Other vectors audited and confirmed safe:
+    * 'git checkout origin/${FORK_BRANCH}' - 'origin/' prefix
+      neutralizes any leading '-'.
+    * verify_ref always passes explicit --ref-type tag|commit, so
+      ambiguous tag/branch resolution is moot.
+    * 'git tag --points-at HEAD' iteration is safe under word-split:
+      git rejects whitespace in ref names.
+    * Pre-existing same-name tag would cause 'git tag -a -s' to fail
+      loudly via errexit; constructed name '<nearest>_<full-sha>'
+      makes accidental collision essentially impossible.
+
+commit 11f91391848160ec37fc7ee4fbce88444eab170f
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 17:07:10 2026 +0000
+
+    ci, docker, help-steps: bash style guide compliance pass
+
+    R-010: add 'shopt -s inherit_errexit' and 'shopt -s shift_verbose'
+           to all 11 strict-mode-quintet scripts. verify-ref is sourced
+           (caller sets options) so left untouched.
+    R-021: verify-ref: locals declared at top of function, blank line,
+           then assignments.
+    R-020: $PWD -> ${PWD} in sign-tag-head and 300_run-derivative-maker.
+    R-030/R-031: dry-run-start-container diagnostics block: drop \n
+           from printf format strings, use 'printf %s\\n "" "..."' for
+           blank-line-then-content.
+    R-120: sign-and-tag: rm -f -> safe-rm --force.
+
+    Pre-push checklist: bash -n, shellcheck -x, ASCII grep all pass.
+    R-040/R-110 (use log/die instead of bare printf >&2; exit) skipped
+    for ci/* and docker/* by R-093 spirit - those scripts run before
+    helper-scripts is on disk.
+
+commit 3f33ae0c03e4d8c90bb6864df065b25c0af3a160
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 17:02:52 2026 +0000
+
+    workflows: trim verbose upstream-only-gate comments
+
+    Same trim in run_automated_builder.yml and (via submodule bump)
+    helper-scripts/coverity.yml. Drops the multi-paragraph rationale
+    to a 4-line comment that names the gate and the GHA env-context
+    constraint.
+
+commit a716ec7ea9308a423ba0226c8584ff8d3e6622eb
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 16:59:06 2026 +0000
+
+    help-steps: combine sign-head + tag-head into sign-tag-head leaf
+
+    The two leaves were always called together (driver invokes both for
+    the parent repo, foreach chained them per submodule with &&) and
+    shared ~24 lines of preamble (errexit/nounset, repo_root, the
+    variables.bsh saved-cwd dance, sourcing pre + variables + verify-ref).
+
+    Combining into one help-steps/sign-tag-head leaf with two clearly-
+    labeled phases (sign-if-unsigned, tag-if-untagged) drops the
+    duplication and simplifies the driver and foreach lines to a single
+    script invocation. Tag fallback when no nearest tag exists is
+    'tag_<sha>' (mainly for submodules).
+
+commit 9b0286dc3db6ed45b0e662e7422ccd049c5301a1
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 16:55:22 2026 +0000
+
+    dry-run-start-container: log 'systemctl --failed' on degraded boot
+
+    Containerized systemd routinely degrades on default units that don't
+    apply in a minimal container (resolved, networkd-wait-online, getty,
+    ...), so 'degraded' must stay non-fatal. Previously the gate accepted
+    degraded silently, hiding which units failed. Now log the failed-unit
+    list to stderr while still exiting 0 - if a unit dry-run actually
+    needs (approx) is in that list, the next step's failure has the
+    context already in the build log.
+
+commit 31318bab7e27acfb084c74794e488d10339b92d1
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 16:52:58 2026 +0000
+
+    ci, docker, help-steps: drop comments that just restate code flow
+
+    Trim comment blocks that paraphrase what the next code line / call
+    does (e.g. 'docker-execs into ./ci/dry-run which run-parts walks
+    ci/dry-run.d/'). Keep only non-obvious WHYs (timing constraints,
+    flag rationale, security notes, preconditions).
+
+commit a498da97a26b16ec5097d43262288ea244a23eb3
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 16:45:34 2026 +0000
+
+    sign-and-tag: tag submodule HEADs too via new tag-head leaf
+
+    git_sanity_test --mode submodules requires a signed annotated tag at
+    each submodule's HEAD by default. Previously the foreach only invoked
+    sign-head (commit signing) so submodules failed the tag-policy check
+    unless run with --allow-untagged.
+
+    Splits the tag logic out of sign-and-tag into a sibling leaf
+    help-steps/tag-head, called for the parent repo and chained after
+    sign-head in 'git submodule foreach --recursive'. Submodule tag name
+    falls back to tag_<sha> when the submodule has no nearest tag for
+    'git describe --abbrev=0'.
+
+commit f5f8b6de4a37c16afdcaf3b413d85ed2b6d0d151
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 16:32:35 2026 +0000
+
+    sign-and-tag: simple test -r assert for project_policy precondition
+
+commit 818febff21aeea2b5417bf366856ea33d7bca73a
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 16:28:26 2026 +0000
+
+    verify-ref: simple assert at source time
+
+commit dd65ed0fb6c11c481437cd4df4e6be62df97f8ae
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 16:27:06 2026 +0000
+
+    verify-ref: test -x git_sanity_test before invoking
+
+commit 53d29e008483697f6bbf8975347b425e54219637
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 16:14:10 2026 +0000
+
+    move CI's container bootstrap into docker/
+
+    Per discussion: docker/ is the canonical home for "how this build
+    gets a containerized runtime"; ci/ should hold workflow-side
+    orchestration (fork-mirror, fork-branch overlay, phase scripts)
+    but not container-bootstrap plumbing.
+
+    Moves:
+      ci/dry-run-start-container -> docker/dry-run-start-container
+           host-side helper that 'docker run's the systemd container.
+      ci/dry-run-container-init  -> docker/dry-run-entrypoint
+           container PID 1 (apt-get install systemd-sysv; exec /sbin/init).
+
+    This realises option (c) from the upstreaming discussion: two
+    in-container entrypoints living side-by-side in docker/:
+      docker/entrypoint.sh      - interactive (TTY-required, service-
+                                  routed via docker-entrypoint.service).
+                                  Today's behaviour, untouched. Used by
+                                  dev 'docker run derivative-maker <cmd>'.
+      docker/dry-run-entrypoint - detached. Used by CI which then drives
+                                  the build via 'docker exec'.
+
+    ci/dry-run.d/ phase scripts and ci/dry-run dispatcher stay in ci/ -
+    they're CI-orchestration concerns, not container-layer concerns.
+
+    Updates:
+      .github/workflows/dry-run.yml  - call ./docker/dry-run-start-container
+      docker/dry-run-start-container - bind-mount path -> /work/docker/
+                                        dry-run-entrypoint
+
+    Deferred (per same discussion):
+      - Bake sign-and-tag deps into docker/Dockerfile.
+      - arm64 / multi-arch.
+      - Remove apple/.
+
+commit 3123164f4747f1f56dc53681dab2c55c91525175
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 15:56:47 2026 +0000
+
+    audit pass: trim verbose comments across the new ci/ + help-steps scripts
+
+    The growth of these scripts during back-and-forth review left the
+    comment headers many paragraphs long, with restate-the-code
+    content, line-number cross-refs that will rot, and historical
+    "was X, now Y" rationale.
+
+    Per CLAUDE.md / agents/bash-style-guide: default to no comments;
+    only add WHY comments where the WHY is non-obvious, and don't
+    explain WHAT well-named identifiers already convey.
+
+    Pruned across:
+      help-steps/sign-and-tag
+      help-steps/sign-head
+      help-steps/verify-ref
+      ci/dry-run
+      ci/dry-run.d/{100_install,200_sign-and-tag,300_run-derivative-maker}
+      ci/dry-run-container-init
+      ci/dry-run-start-container
+      ci/configure-fork-mirror
+      ci/checkout-fork-submodule-branches
+      ci/checkout-fork-branch
+      .github/workflows/dry-run.yml
+
+    Net: -239 lines, mostly comment text. Workflow YAML had stale
+    references to old phase numbers (300_resign-submodules,
+    400_run-derivative-maker) - removed; the current dry-run.d/ set
+    is 100_install / 200_sign-and-tag / 300_run-derivative-maker.
+
+    Empty 'var=' inits before single 'var="$(cmd)"' assignments
+    dropped where they served no purpose (the assignment is
+    unconditional under errexit + inherit_errexit).
+
+commit 42c97d61c0393726a137eb6e6c2a95a5f8071a73
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 15:50:51 2026 +0000
+
+    ci/dry-run-start-container: hoist /work mapping into named variables
+
+    The /work bind-mount + entrypoint path were two literals tied
+    together by an implicit convention. Surface the relationship:
+
+      host_repo=${PWD}
+      container_repo=/work
+      container_entrypoint=${container_repo}/ci/dry-run-container-init
+
+      --volume ${host_repo}:${container_repo}
+      --workdir ${container_repo}
+      ...
+      ${container_entrypoint}
+
+    A reader now sees the host->container path mapping at a glance
+    without having to recall that /work is the bind-mount target
+    chosen by this script.
+
+commit 2371c1aa97be7b01de24c209811867e22da5fcb0
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 15:45:10 2026 +0000
+
+    sign-and-tag: split into driver + sign-head leaf, no internal dispatch
+
+    Implements the option-A refinement discussed earlier.
+
+    help-steps/sign-and-tag: now the linear driver. No more
+    'is $toplevel set?' dispatch. Body is:
+       1. Mint ephemeral key (signing-key-create).
+       2. Build policy file + sq-git policy authorize.
+       3. ./help-steps/sign-head           (parent's HEAD).
+       4. Tag parent if no signed tag already there.
+       5. git submodule foreach --recursive ./help-steps/sign-head.
+
+    Setup (key + policy + authorize) runs once in the driver, never
+    inside the foreach iteration.
+
+    help-steps/sign-head (new): leaf operation. Sources variables.bsh
+    (for git_signing_command_wrapper + DEBEMAIL/DEBFULLNAME + the
+    sq_git_* env), saves+restores CWD around the source (variables.bsh
+    cds to /work as a side effect), sources verify-ref, then:
+       if HEAD verifies against policy: exit 0
+       else: git -c user.signingkey=... commit --amend -S
+    Same script handles both the parent invocation and each foreach-
+    recursed submodule - no internal dispatch.
+
+    help-steps/verify-ref (new): sourced library defining verify_ref()
+    - thin wrapper around git_sanity_test --mode ref. Used by both
+    sign-and-tag (for the "tag already exists?" check) and sign-head
+    (for the "HEAD already verifies?" check).
+
+    help-steps/variables: add 'git_signing_command_wrapper' array
+    near the existing 'git_verify_command_wrapper' definition. Both
+    sign-and-tag and sign-head consume it via the variables.bsh
+    source.
+
+    Net layout:
+      help-steps/variables                 # adds git_signing_command_wrapper
+      help-steps/verify-ref (new)          # sourced library: verify_ref()
+      help-steps/sign-and-tag              # driver (linear, no dispatch)
+      help-steps/sign-head (new)           # leaf (verify-or-amend)
+
+    Removed: the internal $toplevel-vs-$sha1 dispatch in the old
+    sign-and-tag, the embedded foreach-mode branch's ad-hoc heuristic.
+
+commit 086c4a43bd23a43875fd0945933126f613d370e5
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 15:33:36 2026 +0000
+
+    ci/dry-run-container-init: shorten the exec /sbin/init comment
+
+commit 31b7004456f598bbbb1b1a68175dc6d64e9a5124
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 15:32:09 2026 +0000
+
+    fix(sign-and-tag): save+restore CWD around variables.bsh source
+
+    variables.bsh:153 does 'cd -- "$source_code_folder_dist"' as a
+    side effect of sourcing. In submodule-mode dispatch (where
+    'git submodule foreach' lands us in the submodule's working
+    tree), the cd yanks us back to /work, and the subsequent
+    'git commit --amend -S' amends the PARENT's HEAD instead of
+    the submodule's.
+
+    Visible in CI log:
+       Entering 'packages/kicksecure/developer-meta-files'
+       [detached HEAD fee06f9b1] Merge aadeb9e... into 0156893...
+
+    The 'Merge aadeb9e... into 0156893...' message is the parent
+    PR-merge commit being amended again - not the submodule.
+    Submodule's HEAD stays at the original 8d8ae2f and the build's
+    later sq-git verification rejects it.
+
+    Save $PWD before sourcing, restore after. Root mode then does its
+    own 'cd -- "${repo_root}"' explicitly; submodule mode stays at
+    the submodule's foreach-set CWD.
+
+commit aadeb9e7758a5d9f3742d054d7622637f0525cb7
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 15:26:44 2026 +0000
+
+    sign-and-tag: revert submodule-mode verify_ref to $sha1 heuristic
+
+    The verify_ref call in the submodule branch returned success
+    incorrectly for the developer-meta-files overlay (HEAD=8d8ae2f7,
+    SSH-signed, not in policy). Likely cause: in a fresh-cloned
+    submodule context, sq-git with --trust-root HEAD treats
+    target=trust-root as trivially verifiable even with --policy-file
+    (opposite of the comment in git_sanity_test:191 - probably an
+    sq-git behavior change). The amend was then skipped and the
+    build's later git_sanity_test --mode all rejected the unsigned
+    submodule HEAD.
+
+    Restore the deterministic SHA compare ('HEAD vs $sha1 = parent's
+    index pin') in the submodule branch. Same heuristic that was
+    green in commit ae01956. Parent (root mode) keeps verify_ref
+    since git_sanity_test --mode ref --ref HEAD --ref-type commit
+    correctly fails for the merge commit there.
+
+commit 7a24d89c903afa6a5c30e79785b11445c6fdc29b
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 15:17:33 2026 +0000
+
+    fix(dry-run-container-init): restore exec /sbin/init (PID 1)
+
+    Previous commit dropped 'exec' as part of a cleanup. This is one
+    of the rare cases where exec is crucial: the script IS the
+    container's PID 1 (set as the 'docker run' command). Without
+    exec, bash forks /sbin/init as a child (PID > 1) and systemd's
+    boot-check times out:
+       "ERROR: systemd did not become ready within 90s"
+    With exec, bash is replaced in place and /sbin/init takes over
+    PID 1.
+
+    sign-and-tag: drop the now-superfluous 'existing_signed_tag='
+    empty init by using ${existing_signed_tag:-} on the test that
+    uses the variable.
+
+commit afe9ca3c0e5ad5efd0412053197a4245cd429e60
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 15:13:23 2026 +0000
+
+    sign-and-tag: review feedback pass
+
+    help-steps/sign-and-tag:
+    - Drop the 'if [ -z DEBEMAIL ]' guard around the source - always
+      source pre + variables (one-time setup is cheap; foreach
+      recursion has the work to do anyway).
+    - Drop the empty 'repo_root=' init line - redundant for top-level
+      (non-local) assignments under errexit.
+    - Hoist git_sanity_test path to a variable + 'test -x' check
+      before any verify_ref call.
+    - Switch foreach-mode dispatch from $sha1 to $toplevel: cleaner
+      semantic signal (presence of a parent superproject path) than
+      $sha1 (which is just a value that happens to be set).
+    - Drop the explanatory comment block above git_options.
+
+    ci/dry-run-container-init:
+    - Drop 'exec' before /sbin/init (script's last statement; the
+      bare invocation is equivalent and cleaner in process listings).
+
+    ci/dry-run.d/200_sign-and-tag, 300_run-derivative-maker:
+    - Hoist 'builder' to a 'target_user=builder' variable near the
+      top of each phase. One spot per file to change if the user name
+      ever needs to.
+
+    help-steps/parse-cmd:
+    - Drop the multi-line --policy-file comment.
+
+commit ae01956f11c492b615c8a40835e769344cee8a2f
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 14:43:09 2026 +0000
+
+    sign-and-tag: source variables.bsh for identity defaults; idempotent
+
+    help-steps/variables: harden five unprotected derefs (lines 537,
+    540, 542, 543, 545, 546, 602, 630, 682) so the file can be sourced
+    under nounset from a non-build context. Pure mechanical ':-}
+    additions and one bash-lowercase intermediate (',,' refuses an
+    unset var even with the immediate ':-}'). No behavior change for
+    the existing build path; every dereference still gets the same
+    effective value when set.
+
+    help-steps/sign-and-tag:
+    - Drop the duplicated ': "${DEBFULLNAME:=...}"' / ':
+      "${DEBEMAIL:=...}"' fallbacks. Source help-steps/pre +
+      help-steps/variables once at the top with two sentinel exports:
+        dist_build_source_run=true   (variables.bsh ~522 fills VMNAME,
+                                      dist_build_type_*, etc. from
+                                      --flavor source defaults)
+        dist_build_one_parsed=true   (skip parse-cmd auto-source -
+                                      no positional args here)
+      Single source of truth for DEBEMAIL/DEBFULLNAME (variables.bsh).
+    - Source guarded by 'if [ -z "${DEBEMAIL:-}" ]' so the foreach-
+      recursed submodule invocation skips re-sourcing - inherits
+      DEBEMAIL/DEBFULLNAME from the parent's exported env, keeps
+      per-submodule overhead low and avoids re-running variables.bsh's
+      mkdir / etc. side effects per submodule.
+
+    - Add 'verify_ref' helper that wraps help-steps/git_sanity_test
+      --mode ref. Both branches now check whether the target ref
+      already verifies against the policy before amending or tagging:
+        * Submodule branch: skip amend if HEAD verifies (drops the
+          $sha1-vs-HEAD heuristic in favor of the actual signature
+          check). Catches the edge case where an overlay commit
+          happens to be signed by a maintainer key in the seed
+          policy - no unnecessary amend.
+        * Root branch: skip amend if HEAD already verifies; skip
+          tag creation if any signed tag already points at HEAD.
+      Result: re-running sign-and-tag on an already-signed tree is
+      a no-op, no SHA churn.
+
+    - Rename 'ephemeral_tag' -> 'signed_tag'. The variable name was
+      misleading: 'git tag' writes a persistent ref; calling it
+      'ephemeral' was wrong outside the throw-away CI runner.
+
+commit 33cbef85f6d70f6249312584f0e25945e2a27f44
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 13:29:26 2026 +0000
+
+    sign-and-tag: tag name = "<nearest-tag>_<full-sha>"
+
+    Was: 'commit_${full-sha}'. Now: '${nearest_git_tag}_${full-sha}',
+    composed via 'git describe --abbrev=0' (nearest reachable tag,
+    plain name) + 'git rev-parse HEAD' (post-amend full sha).
+
+    Result groups under the project's existing tag namespace -
+    'git tag -l' shows the ephemeral tag right next to the release
+    it was forked from - while still being globally unique per run
+    via the full-sha suffix.
+
+commit 18c136c2c32e445bd618c5da86c8e68311f6a8a9
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 13:24:09 2026 +0000
+
+    sign-and-tag: per-call git -c options + commit_<sha> tag name
+
+    Drop 'git config --global ...' setup. Build the seven signing
+    settings as a 'git_options=(-c key=value ...)' array and pass
+    them inline to each git invocation that needs them
+    ('git "${git_options[@]}" commit --amend -S', '...tag -a -s'.
+    The submodule-mode branch reads the same array). The caller's
+    persistent ~/.gitconfig is no longer touched.
+
+    Tag name: 'commit_${full-sha}' instead of bare '${full-sha}'.
+    The 'commit_' prefix avoids any chance of collision with a
+    branch, ref, or other tag that happens to have the same shape
+    as a SHA. Still globally unique and deterministic from HEAD.
+
+commit 2b53ee4e29cf4a3c2cc31c97cacea9e00efb9c83
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 13:17:10 2026 +0000
+
+    ci: combine sign-and-tag + sign-submodule-head into one help-step
+
+    Auto-dispatch via $sha1 (exported by 'git submodule foreach',
+    unset everywhere else). At the top of help-steps/sign-and-tag,
+    if $sha1 is set we're in the submodule-mode branch (compare
+    HEAD to the pin, amend on divergence, exit). Otherwise run the
+    full bootstrap: mint key, build policy, --global git config,
+    amend + tag the parent, then 'git submodule foreach --recursive'
+    back into the same script - which lands every submodule in the
+    submodule-mode branch.
+
+    One file, one help-step, one workflow phase. Caller does
+    './help-steps/sign-and-tag' and the entire tree ends up signed
+    against the same policy.
+
+    Removed:
+      - help-steps/sign-submodule-head (folded into sign-and-tag)
+      - ci/dry-run.d/300_resign-submodules (foreach now happens
+        inside sign-and-tag, no separate phase needed)
+      R ci/dry-run.d/400_run-derivative-maker -> 300_run-derivative-maker
+        (compact the gap)
+
+    Pattern matches help-steps/git_sanity_test, which similarly
+    self-recurses via foreach with an in-band mode signal. The
+    git_sanity_test mode is set by an explicit '--mode submodules'
+    flag; we use the foreach-set $sha1 env var instead - one fewer
+    arg to plumb, but functionally equivalent.
+
+commit 0f2d5360c5c0e5e75c1e6c73743043ba5f2d3149
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 13:03:42 2026 +0000
+
+    ci: foreach + array config + --policy-file CLI option + drop exec
+
+    help-steps/parse-cmd:
+    - Add --policy-file <path> option. Sets sq_git_policy_file via
+      parse-cmd's normal export path; help-steps/variables's default-
+      only assignment leaves it alone when set. Lets callers point at
+      a custom policy via the CLI rather than env-var plumbing across
+      docker exec / sudo --preserve-env boundaries.
+
+    help-steps/sign-and-tag:
+    - Drop every "CI", "ci", "dry-run" mention. The script is a
+      generic project primitive; the CI guard lives in the caller.
+    - Restore DEBFULLNAME (mirrored from help-steps/variables defaults
+      same way DEBEMAIL is); use it for git user.name AND for the
+      'sq-git policy authorize NAME' label so the policy entry's
+      authorization key matches the cert userid.
+    - Build the seven 'git config --global ...' calls as a flat (key,
+      value) array applied in one loop. Adding/removing settings is
+      now a one-line edit.
+    - Drop the GITHUB_RUN_ID-derived 'ci-dry-run-...' tag-name
+      computation. Use the post-amend full HEAD SHA as the tag name
+      directly: globally unique, deterministic, no environment
+      plumbing. Tag message is now plain "Signed by sign-and-tag".
+
+    ci/dry-run:
+    - Add --verbose to run-parts so each phase script's name shows up
+      in the consolidated step log (matches the visibility derivative-
+      maker's main script gives for build-steps.d).
+    - Drop the explanatory comment block; the body is one line.
+    - Drop 'exec' (run-parts is the last command; the bare invocation
+      is equivalent and shows up cleaner in process listings).
+
+    ci/dry-run.d/200_sign-and-tag, 300_resign-submodules:
+    - Drop 'exec'. Same reasoning.
+
+    ci/dry-run.d/400_run-derivative-maker:
+    - Drop 'exec'.
+    - Use --policy-file via parse-cmd instead of inlining
+      'env sq_git_policy_file=...' as a wrapper. Cleaner CLI.
+
+    ci/checkout-fork-submodule-branches:
+    - Replace the .gitmodules-parser while-loop with the same
+      'git submodule foreach --recursive' pattern help-steps/git_sanity_test
+      uses. Per-submodule action moves to ci/checkout-fork-branch
+      (mirrors the help-steps/sign-submodule-head split).
+
+    ci/checkout-fork-branch (new):
+    - Per-submodule fetch+checkout. Reads $FORK_BRANCH from caller and
+      $displaypath / $sm_path / $toplevel from foreach. Prints
+      skipped/no-ref/switch decisions so foreach output stays
+      diagnosable.
+
+commit 1c78d6735328768ff2725b5e26b6ab19e0e8688a
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 12:38:45 2026 +0000
+
+    ci: restructure dry-run as run-parts dispatcher; drop .sh extensions
+
+    The in-container portion of the dry-run flow used to be four
+    separate workflow YAML steps each shelling out to its own
+    ci/dry-run-*-step.sh wrapper. Replace that with the same dispatcher
+    pattern derivative-maker itself uses for build-steps.d/:
+
+      ci/dry-run                              # entry, runs run-parts
+      ci/dry-run.d/100_install                # apt-get build prereqs
+      ci/dry-run.d/200_sign-and-tag           # call help-steps/sign-and-tag as builder
+      ci/dry-run.d/300_resign-submodules      # foreach -> help-steps/sign-submodule-head
+      ci/dry-run.d/400_run-derivative-maker   # ./derivative-maker --dry-run as builder
+
+    The workflow collapses to a single 'docker exec dryrun ./ci/dry-run'
+    step. Per-phase visibility moves from the Actions UI tabs into the
+    consolidated step's log; per-phase failure still surfaces because
+    run-parts --exit-on-error stops at the first non-zero exit.
+
+    Sign-and-tag and the per-submodule re-sign action move into
+    help-steps/ where they belong as project primitives:
+
+      help-steps/sign-and-tag         (was ci/dry-run-sign-and-tag.sh)
+      help-steps/sign-submodule-head  (was ci/dry-run-resign-submodules.sh's per-iteration body)
+
+    The CI guard moves out of help-steps/sign-and-tag - the help-step is
+    a generic primitive callable from anywhere; the driver in
+    ci/dry-run.d/200_sign-and-tag is what enforces CI=true.
+
+    The submodule resign loop now uses 'git submodule foreach
+    --recursive' the same way help-steps/git_sanity_test does, calling
+    help-steps/sign-submodule-head once per submodule. The helper reads
+    $sha1 (foreach exports the parent's index pin), compares to the
+    working-tree HEAD, and only amends on divergence. Replaces the
+    'while read | parse-status-prefix' loop and the per-iteration
+    cd-subshell with a single foreach invocation.
+
+    Drop .sh extensions across ci/. Matches derivative-maker's own
+    build-steps.d / help-steps convention (no extensions; shebang
+    identifies the script). Also a hard prerequisite for run-parts on
+    Debian, which by default rejects file names containing dots.
+
+    Folded into 100_install: the previous 'Install git inside container'
+    step (just 'apt-get install git ca-certificates'). The build prereqs
+    list already includes git, so the separate up-front install is dead
+    work.
+
+    Files affected:
+      + ci/dry-run
+      + ci/dry-run.d/{100_install,200_sign-and-tag,300_resign-submodules,400_run-derivative-maker}
+      + help-steps/sign-and-tag
+      + help-steps/sign-submodule-head
+      R ci/configure-fork-mirror.sh -> ci/configure-fork-mirror
+      R ci/checkout-fork-submodule-branches.sh -> ci/checkout-fork-submodule-branches
+      R ci/dry-run-start-container.sh -> ci/dry-run-start-container
+      R ci/dry-run-container-init.sh -> ci/dry-run-container-init
+      R ci/lint-{install,diagnostics,shellcheck,yaml}.sh -> drop .sh
+      R ci/local-checks.sh -> ci/local-checks
+      - ci/dry-run-{sign-and-tag,sign-step,build-step,derivative-maker,resign-submodules,install,install-container-git}.sh
+      M .github/workflows/dry-run.yml (collapse 4 in-container steps to 1)
+      M .github/workflows/lint.yml (drop bash-prefix and .sh)
+      M ci/pre-commit-hook (cross-ref updates)
+
+commit 56cf7edfde9e35d261fcaf9bed74187fded7a101
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 11:57:46 2026 +0000
+
+    fix(sign-and-tag): restore git user.name (any non-empty literal)
+
+    Previous commit dropped DEBFULLNAME including the
+    'git config user.name' line. git's amend now aborts:
+
+      fatal: empty ident name (for <derivative-distribution@local-signing.key>) not allowed
+
+    git wants both user.email AND user.name; falling back to the
+    system default doesn't fire when user.email is set explicitly.
+    Set user.name to the same fixed 'ci-ephemeral-key' label we use
+    for sq-git policy authorize - any non-empty literal would do, but
+    matching the policy entry keeps the author identity consistent
+    with what's authorized.
+
+commit 984d75190b60d3aec43329fb16e1aa6411cd36ec
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 11:55:45 2026 +0000
+
+    ci: split sign flow into focused scripts, $HOME-derived paths, drop DEBFULLNAME
+
+    ci/dry-run-resign-submodules.sh (new):
+    - Walks 'git submodule status --recursive', amends + signs every
+      '+'-prefixed (off-pin) submodule HEAD with the parent's signing
+      key. Extracted out of dry-run-sign-and-tag.sh so the loop is
+      self-contained: avoids the inline 'while read' over process
+      substitution and the per-iteration cd-subshell. Uses
+      pushd/popd >/dev/null for cwd scoping.
+
+    ci/dry-run-sign-and-tag.sh:
+    - Drop DEBFULLNAME setup. sq-git policy authorize takes any string
+      for NAME (label only, doesn't have to match cert userid), so use
+      a fixed 'ci-ephemeral-key' label. git config user.name was the
+      only other DEBFULLNAME consumer; let git fall back to the system
+      default for tag/commit author identity.
+    - Drop the 'sq cert export --cert-email' filter; use --all instead.
+      On a fresh CI keystore there's only the one ephemeral cert, so
+      exporting all of them gets exactly the right thing without us
+      having to know its email/userid/fingerprint.
+    - Replace the inline submodule resign loop with a call to
+      ci/dry-run-resign-submodules.sh.
+    - Improve the DEBEMAIL comment to answer 'why needed?' concretely
+      (sq-git-wrapper rejects empty user.signingkey; we have to know
+      the email signing-key-create's subshell minted the cert under).
+
+    ci/dry-run-derivative-maker.sh:
+    - Compute the CI policy path from 'getent passwd builder | cut -d:
+      -f6' instead of the hardcoded '/home/builder/' literal. Same
+      result on the standard CI runner; survives a future user-add
+      that picks a non-/home prefix.
+
+    ci/dry-run-build-step.sh:
+    - Drop the '--env sq_git_policy_file=...' forwarding. The inner
+      dry-run-derivative-maker.sh computes the path itself, so the
+      host->container env-flag pass is no longer needed.
+
+    ci/dry-run-sign-step.sh:
+    - Comment now explains why this step runs in the container rather
+      than directly on the host runner (sequoia-git is Debian-only;
+      we'd otherwise have to add a Debian apt source on Ubuntu).
+
+    help-steps/variables:
+    - Drop the wordy comment above the 'dist_build_target_arch' default
+      about the parse-cmd dead writes that were removed earlier. The
+      remaining one-liner is self-explanatory; the historical context
+      is in git log of that change.
+
+commit fd68ca31373ff6bc378cd6f66453559e061c370b
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 11:37:18 2026 +0000
+
+    ci: clean up sign + build flow per review
+
+    ci/dry-run-sign-and-tag.sh:
+    - Drop the '.ci' suffix from the policy filename. End goal is to
+      upstream this script (likely as help-steps/ci-sign-and-tag);
+      the predictable plain 'openpgp-policy.toml' filename matches
+      the project's convention.
+    - Replace the per-submodule 'sq-git policy goodlist' loop with
+      per-submodule 'git commit --amend -S'. The CI key is already
+      authorized in the policy, so amending each fork-overlaid HEAD
+      with that key produces a genuinely-signed commit instead of a
+      goodlist policy hack.
+    - Switch git config writes to --global so the signing settings
+      (signingkey/openpgp.program/etc) propagate to submodule git
+      contexts, letting the per-submodule amend in the loop above
+      inherit them with no per-submodule git config dance.
+    - Drop the 'sq_git_policy_file=...' / 'sq_git_trust_root=HEAD'
+      printf tail. The path is now fully predictable; downstream
+      consumers compose it from the same convention. trust_root
+      defaults to HEAD in variables.bsh for non-redistributable
+      builds, so it doesn't need passing at all.
+    - Fix the comment: previous text said "fork branch tip is signed
+      by an unrelated developer key" - actually those tips are
+      SSH-signed by the contributor's session key, but sq-git only
+      validates OpenPGP, so the tips look unsigned to it. Comment
+      now reflects that.
+
+    ci/dry-run-sign-step.sh:
+    - Drop the tee-to-RUNNER_TEMP / grep / tee-to-GITHUB_ENV machinery.
+      The policy path is fixed; nothing to discover.
+
+    ci/dry-run-build-step.sh:
+    - Drop the '${sq_git_policy_file}' env-flag composition that
+      threaded the path through GITHUB_ENV. Hardcode
+      /home/builder/derivative-binary/openpgp-policy.toml directly
+      in the --env flag. The path matches binary_build_folder_dist's
+      default for the 'builder' user.
+
+    ci/dry-run-derivative-maker.sh:
+    - Drop the 'env "sq_git_policy_file=${sq_git_policy_file:-}"'
+      passthrough; replace with the same hardcoded path inlined
+      after run-as-user. No outer env-var dependency.
+
+commit 5989175ed4f864260a425d09e6f994f00a3f36b0
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 10:28:57 2026 +0000
+
+    fix(configure-fork-mirror): use --add so single-org case keeps both rewrites
+
+    Symptom: in the single-org fork case (kicksecure-mirror ==
+    whonix-mirror == org-ai-assisted), 'Whonix/* -> org-ai-assisted/*'
+    worked but 'Kicksecure/* -> org-ai-assisted/*' did not. Every
+    Kicksecure submodule fetched from the canonical host and 404'd
+    on the fork-only branch.
+
+    Cause: both 'git config --global' calls wrote to the same key
+    ('url.https://github.com/<fork>/.insteadOf') when both args were
+    the same. git config without --add overwrites; the second call
+    (Whonix) clobbered the first (Kicksecure). Only Whonix-rooted
+    URLs got rewritten.
+
+    Fix: --add on the second so both values are stored under the same
+    key. insteadOf accepts multiple values per key (any URL matching
+    any value gets rewritten), so the result is "rewrite either
+    upstream to the same fork org" - exactly the single-org intent.
+    For the two-org case (distinct mirrors), the keys differ anyway,
+    so --add is harmless.
+
+commit 916a37ce774f97b53d03b9241798461456f07e6a
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 10:24:17 2026 +0000
+
+    ci: switch fork-mirror to --global insteadOf (drop per-submodule loop)
+
+    ci/configure-fork-mirror.sh: replace the 80-line per-submodule
+    loop ('git remote set-url origin' on each cross-org submodule)
+    with two 'git config --global url.<fork>.insteadOf <upstream>'
+    lines. --global is loaded by every git process - parent and
+    submodule alike - so the rewrite applies uniformly to the parent's
+    'git submodule update --init' clones AND to subsequent
+    'git -C <submodule> fetch' calls. This is the simple form the
+    original --local attempt aimed at; --local failed because the
+    parent's local config is invisible to in-submodule git contexts.
+    --global side-steps that.
+
+    dry-run.yml: move the fork-mirror step ABOVE 'Initialize
+    submodules' so the rewrite is in place before any submodule
+    clone happens.
+
+    Trade-off: --global writes to ~/.gitconfig. On the ephemeral CI
+    runner this is harmless. On a developer machine the rewrite
+    persists across all repos until manually undone with
+       git config --global --unset-all url.https://github.com/<fork>/.insteadOf
+    (documented in the script's header).
+
+    ci/dry-run-sign-and-tag.sh: drop the 'bash' prefix from the
+    help-steps/signing-key-create invocation. The script has a real
+    shebang and +x bit; './help-steps/signing-key-create' is enough.
+    Same change applied to every other ci/*.sh invocation in this
+    batch.
+
+commit d6f1e3820c37cd332ffcb47306094ef2ef65f958
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 10:17:09 2026 +0000
+
+    fix(dry-run-derivative-maker): drop sq_git_trust_root from env prefix too
+
+    Symmetric to the workflow YAML drop in commit a6abfa8 - this
+    script's run-as-user invocation also still inlined
+    'sq_git_trust_root=${sq_git_trust_root:-}' as an env arg. The
+    parent shell no longer has the var (workflow stopped forwarding
+    it), so the inline expanded to 'sq_git_trust_root=' (empty).
+    'env VAR=' SETS the var to the empty string. variables.bsh's
+    default-only assignment
+
+      [[ -v sq_git_trust_root ]] || sq_git_trust_root="HEAD"
+
+    honours the empty-but-set value and skips the default, leaving
+    git_sanity_test to abort on:
+
+      git_sanity_test: ERROR: env var sq_git_trust_root must be set
+
+    variables.bsh's default for non-redistributable builds is "HEAD"
+    anyway, so dropping the inline lets the default flow through.
+
+commit 9191f3fdc75bd8b154480f0575f5c0bc0c12035a
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 10:12:31 2026 +0000
+
+    ci: revert sign-and-tag to hardcoded DEBEMAIL fallbacks (variables.bsh too noisy)
+
+    Sourcing help-steps/variables in sign-and-tag fails under nounset:
+
+      ./help-steps/variables: line 537: dist_build_type_long: unbound variable
+
+    variables.bsh has many unprotected '${var}' derefs of vars normally
+    set by parse-cmd. Pre-setting every required var to make 'source
+    ./help-steps/variables' clean from a non-build context would be
+    more brittle than mirroring two defaults. Once variables.bsh is
+    fully ':-}-protected (a separate audit, same shape as the
+    dm-prepare-release pass that just landed), the source can replace
+    this block.
+
+    For now: keep the ':=' defaults with a comment that names the
+    canonical lines in variables.bsh, so the duplication is auditable.
+
+commit a6abfa86d3fe1defe7c3e3fd113d1fa9f71119dd
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 10:09:29 2026 +0000
+
+    ci: cleanup pass per review feedback
+
+    Workflow:
+    - Move inline shell out of dry-run.yml's run: blocks into wrapper
+      scripts (per agents/bash-style-guide.md - multi-line shell
+      belongs in shellcheck'd files):
+      - ci/dry-run-sign-step.sh wraps the docker exec + tee + grep
+        around dry-run-sign-and-tag.sh. Forwards the policy-file path
+        to $GITHUB_ENV via 'tee --append', not '>>', so the assignment
+        shows up in xtrace.
+      - ci/dry-run-build-step.sh wraps the docker exec for
+        dry-run-derivative-maker.sh.
+    - Drop the 'bash' prefix on script invocations: every ci/*.sh has
+      a real shebang and +x bit, so './ci/foo.sh' is enough.
+    - Drop forwarding of sq_git_trust_root: help-steps/variables
+      already defaults it to "HEAD" for non-redistributable builds
+      (which the dry-run is), so passing it across docker exec was
+      redundant.
+
+    ci/configure-fork-mirror.sh:
+    - Two-arg API: <kicksecure-mirror-org> <whonix-mirror-org>.
+      derivative-maker's submodules straddle two upstream orgs, so a
+      forker who keeps Kicksecure-mirror and Whonix-mirror as separate
+      GitHub orgs can pass them distinctly. The single-org case
+      (org-ai-assisted/* mirroring both upstreams) passes the same
+      arg twice. Workflow side passes
+      '${{ github.repository_owner }}' twice.
+
+    ci/dry-run-sign-and-tag.sh:
+    - Drop the hardcoded ': "${DEBFULLNAME:=...}"' / ':
+      "${DEBEMAIL:=...}"' defaults. Source help-steps/pre +
+      help-steps/variables so DEBFULLNAME/DEBEMAIL come from
+      variables.bsh's own fallbacks (single source of truth).
+      dist_build_one_parsed=true short-circuits variables.bsh's
+      auto-source of parse-cmd, which would otherwise call
+      dist_build_one_parse_cmd "$@" with no args and abort.
+
+    ci/dry-run-derivative-maker.sh:
+    - Drop the chmod +x workaround for
+      packages/.../helper-scripts/usr/libexec/helper-scripts/extract-
+      openpgp-policy-trusted-certs. The fork-mirror flow now pulls
+      helper-scripts from org-ai-assisted/helper-scripts where commit
+      c50a0a2 set the file's mode to 100755 in git, so the bit comes
+      through correctly.
+
+commit a9bac6cacab883e0728e5089afaea295aaf4bb06
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 10:06:05 2026 +0000
+
+    fix(sign-and-tag): run sq-git policy goodlist inside each submodule
+
+    The previous run failed at:
+      Error: Looking up "e300a634159b4df4c181b2620d70725a4e7898ef"
+      revspec ... not found; class=Reference (4); code=NotFound (-3)
+
+    sq-git policy goodlist resolves the SHA against the CWD's git
+    repository. The submodule HEAD only exists in the submodule's
+    git db, not the parent's, so the call has to run with the
+    submodule as CWD - otherwise the lookup aborts.
+
+    Subshell + cd scopes the cwd change to the single sq-git call.
+
+commit 3b12bd813418c114b81efd9c977ebccdb8c0b7ed
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 10:00:20 2026 +0000
+
+    ci: goodlist switched-submodule HEADs in CI policy
+
+    The fork-branch-checkout step in dry-run.yml leaves switched
+    submodules at unsigned commits (the fork branch tips, signed by
+    no cert in the CI policy). The previous run reached:
+
+      ERROR: sq-git verification failed: packages/kicksecure/developer-meta-files (commit e300a634...)
+      fatal: run_command returned non-zero status for packages/kicksecure/developer-meta-files
+
+    Two ways to fix: re-sign each switched submodule's HEAD with the
+    ephemeral CI key (heavyweight - per-submodule git config + amend),
+    or add the SHA to the policy goodlist (commits in commit_goodlist
+    are trusted regardless of signature). The goodlist path is
+    strictly lighter and doesn't rewrite submodule history.
+
+    After the parent's amend+sign, walk 'git submodule status
+    --recursive' for lines prefixed '+' (HEAD diverged from index pin
+    - exactly the ones the workflow's fork-mirror step switched).
+    For each, call 'sq-git policy goodlist --policy-file <ci-policy>
+    <sha>'. Submodules still at their canonical pin are left alone:
+    their HEAD is signed by an upstream maintainer cert that's
+    already authorized in the seeded policy.
+
+    The goodlist additions are scoped to the CI policy file only;
+    the project's openpgp-policy.toml is untouched.
+
+commit 50befa5e7e1a278968976de90352cce256ba44c9
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 09:56:01 2026 +0000
+
+    ci: rewrite submodule origin URLs directly (was: insteadOf at parent)
+
+    Diagnostic from the previous CI run:
+      no-ref packages/kicksecure/developer-meta-files
+      (origin: https://github.com/Kicksecure/developer-meta-files.git):
+      fatal: couldn't find remote ref claude/fix-workflow-syntax-j1LlD
+
+    Why: 'git config --local url.<fork>.insteadOf' in the parent's
+    .git/config rewrites the network endpoint only when the *parent's*
+    git context issues a command. 'git submodule update' clones via
+    the rewrite (data comes from fork), but each submodule's own
+    .git/config records the canonical URL. A subsequent
+    'git -C <submodule> fetch origin <branch>' executes in the
+    submodule's git context, where the parent's local rewrite is
+    invisible - so the fetch hits the canonical host and 404s on any
+    fork-only branch.
+
+    Fix: rewrite each submodule's origin URL directly with
+    'git remote set-url'. Each submodule's own .git/config now
+    explicitly points at the fork; in-submodule fetches reach the
+    right host with no insteadOf magic.
+
+    Workflow order: 'submodules: false' checkout -> 'git submodule
+    update --init' -> rewrite origins -> fetch fork branches. Same
+    two-script split (configure-fork-mirror.sh + checkout-fork-
+    submodule-branches.sh) so a developer can run either independently
+    on a local clone.
+
+commit 634f09e9231497d743227801ced146c6dccbb76e
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 09:48:50 2026 +0000
+
+    ci: print per-submodule diagnostics in checkout-fork-submodule-branches
+
+    The previous CI run finished the script in 28s but printed no
+    'switched to origin/' lines - every fetch failed silently behind
+    2>/dev/null. Cannot tell whether the URL rewrite missed, the
+    remote returned 404, or the branch genuinely does not exist on
+    the fork without the failure message.
+
+    Print the submodule's origin URL and the fetch-error body on
+    each non-success path. Four states surface:
+      skip   <path>                 - submodule not initialized
+      no-ref <path>: <fetch err>    - branch not on the fork's remote
+      switch <path> -> origin/<br>  - successfully repointed
+      fail   <path>: ...            - fetch ok but checkout failed
+
+commit 02911faaaab5ce4d1029901820f32639ae540fd5
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 09:43:21 2026 +0000
+
+    ci: pass FORK_BRANCH via env, not inlined (actionlint hardening)
+
+    actionlint flagged the previous change:
+      "github.head_ref" is potentially untrusted. avoid using it
+      directly in inline scripts. instead, pass it through an
+      environment variable.
+
+    head_ref is the source branch of a PR, which on a fork PR is
+    attacker-named. Inlining it into the run: script's command line
+    would be a shell-injection sink. Hoist the value into FORK_BRANCH
+    in the step's env: block so it reaches the script as a real
+    shell variable (already quoted at the call site). The script's
+    own arg validator (alnum + '._/-' only) is the second layer.
+
+commit 1c98cfb08285d372c2031b4abec6e7b787992287
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 09:42:56 2026 +0000
+
+    ci: switch submodules to matching fork branch when present
+
+    The dist_build_utm: unbound variable failure in CI was the upstream
+    SHA pin, not a missing fix. The submodule pin in derivative-maker
+    points at the upstream Kicksecure/developer-meta-files master tip
+    (or whatever was last bumped); my dm-prepare-release fix lives at
+    org-ai-assisted/developer-meta-files claude/fix-workflow-syntax-j1LlD,
+    a branch tip not in the pinned history line. The insteadOf rewrite
+    only changes the fetch URL; it does not change which SHA is checked
+    out.
+
+    Add ci/checkout-fork-submodule-branches.sh: after submodule init,
+    walks every submodule listed in .gitmodules, fetches the named
+    branch (the PR's source branch, github.head_ref || github.ref_name),
+    and switches the submodule to it when found. Submodules without a
+    matching branch keep their canonical SHA. Lets a coordinated
+    multi-repo PR on the same branch name flow fork-side fixes into
+    CI before they land upstream and the pin gets bumped.
+
+    Wired into dry-run.yml as a step after 'Initialize submodules',
+    gated on the same fork-mirror condition. Bumping a submodule's
+    SHA pin in this PR was rejected because the fork-side commit is
+    not in the upstream history line - the pin would 404 against the
+    upstream remote on Whonix/derivative-maker.
+
+commit fed8c954fde536799ef0b9e787c1d6c82702a0ed
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 09:37:05 2026 +0000
+
+    fix(parse-cmd): protect dist_build_target_arch deref + drop dead write
+
+    Caller path: signing-key-create sources help-steps/variables, which
+    sources parse-cmd if dist_build_one_parsed is unset. parse-cmd's
+    diagnostic line 850 dereferenced \$dist_build_target_arch without
+    ':-'. Under nounset (default), this aborts when --arch is not on
+    the command line - which is the case for every internal helper
+    (signing-key-create, signing-key-test, etc.) that goes through
+    variables.bsh's auto-source of parse-cmd:
+
+      /work/help-steps/parse-cmd: line 850: dist_build_target_arch: unbound variable
+
+    The variables.bsh default ('dpkg --print-architecture') runs AFTER
+    parse-cmd returns, too late for parse-cmd's own diagnostic. Use
+    ':-}' on the diagnostic line so it prints empty for the no-arch
+    case (matches the surrounding lines for BUILD_KERNEL_PKGS /
+    BUILD_HEADER_PKGS which already use ':-}').
+
+    Also drop the dead 'dist_build_target_arch=""' at line 297 in the
+    --flavor source branch. Same shape as the three already-removed
+    XXX-flagged dead writes in --target source / source_run paths:
+    '-n ""' is false so variables.bsh's default fills it back. The
+    explicit empty assignment achieved nothing.
+
+commit bf10d6ef9c1b8241a3153a8f4022668aaee5d63a
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 09:33:45 2026 +0000
+
+    fix: clean up dist_build_target_arch init and drop CI-side workaround
+
+    help-steps/parse-cmd: the three 'dist_build_target_arch=""'
+    assignments at the source / source-run paths were dead writes -
+    '-n ""' is false, so the variables.bsh default ('dpkg --print-
+    architecture') ran anyway and the explicit empty-string never
+    took effect. Drop them and the three 'XXX: Belonging here?'
+    markers that flagged the duplication.
+
+    help-steps/parse-cmd: also export 'dist_build_source_archive=true'
+    in the --target source branch so it's visible to child build steps
+    (matches the sibling --target virtualbox/qcow2/raw/iso/utm/
+    windows_installer branches, which all use 'export'). Was
+    previously a plain assignment - latent breakage for anything that
+    fork-execs from parse-cmd.
+
+    help-steps/variables: keep the 'dist_build_target_arch=...' default
+    in place; with parse-cmd no longer competing, variables.bsh is now
+    the unambiguous owner. Replaced the XXX with a comment explaining
+    why this is the right home.
+
+    ci/dry-run-derivative-maker.sh: drop the 10-line 'env "dist_build_X="'
+    prefix block. The unprotected dereferences in
+    packages/.../dm-prepare-release have been fixed at the consumer
+    side ('${var}' -> '${var:-}', a separate commit on
+    org-ai-assisted/developer-meta-files claude/fix-workflow-syntax-j1LlD)
+    which CI now picks up via the insteadOf submodule rewrite. No more
+    CI-only nounset workarounds.
+
+commit 6a995a3b7d3a9c2140127ac658609092ed93d2bf
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 08:52:32 2026 +0000
+
+    ci: replace per-submodule URL override with insteadOf rewrite
+
+    derivative-maker's submodules straddle two upstream orgs
+    (Kicksecure/* and Whonix/*). Relative URLs in .gitmodules cannot
+    satisfy both at once, and the previous workflow's per-submodule
+    HELPER_SCRIPTS_URL override only handled one repo and would have
+    to be repeated per cross-org submodule.
+
+    Switch to the standard git.insteadOf rewrite. .gitmodules stays
+    canonical (correct for upstream). On any fork the workflow runs
+    ci/configure-fork-mirror.sh \${github.repository_owner}, which
+    installs two --local rewrites:
+       url.https://github.com/<fork>/.insteadOf https://github.com/Kicksecure/
+       url.https://github.com/<fork>/.insteadOf https://github.com/Whonix/
+    so submodule init pulls from <fork>/<repo> regardless of which
+    upstream org the .gitmodules entry names. Two config lines now
+    cover every cross-org submodule the build reaches; adding a new
+    submodule from either upstream needs no further workflow change.
+
+    The fork-mirror step is gated on
+       github.repository_owner != 'Whonix' && != 'Kicksecure'
+    so upstream runs see canonical URLs unmodified.
+
+    Checkout is split: 'submodules: false' first, run the rewrite
+    script, then 'git submodule update --init --recursive'. This way
+    the rewrites are in place before any submodule fetch happens.
+
+    ci/configure-fork-mirror.sh is reusable from a developer machine
+    ('bash ci/configure-fork-mirror.sh org-ai-assisted && git
+    submodule sync --recursive && git submodule update --init
+    --recursive') so the fork-setup convention is identical between
+    CI and local clones, no inline workflow YAML magic to replicate.
+
+commit 64e750186d2d05008bfa8646a6ca4f2c81d543ae
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:37:14 2026 +0000
+
+    ci: extend dist_build_* defaults (windows_installer, installer_dist, source_*)
+
+    The previous run got past dist_build_utm but tripped on
+    dist_build_installer_dist:
+
+      /work/.../dm-prepare-release: line 44: dist_build_installer_dist: unbound variable
+
+    Each unprotected consumer dereferences a different name from the
+    target-vars group. Cover the whole group rather than chase one var
+    per CI round: install_to_root, virtualbox, qcow2, raw, utm, iso,
+    windows_installer, installer_dist, source_archive, source_run.
+
+    dist_build_source_archive in particular is set by parse-cmd as a
+    local (not exported) when --target source is passed, so sub-shells
+    do not inherit it - explicitly defaulting it here too.
+
+commit b60fc0a137e3d0c5a490ced73d62dd9642732ff9
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:32:35 2026 +0000
+
+    ci: pre-set dist_build_* group to empty in dry-run-derivative-maker
+
+    Under '--target source' help-steps/parse-cmd does not export any of
+    dist_build_{install_to_root,virtualbox,qcow2,raw,utm,iso}. Several
+    downstream consumers (build-steps.d/2800_create-lb-iso,
+    packages/kicksecure/developer-meta-files/usr/bin/dm-prepare-release,
+    others) dereference them without the ':-' form, so under
+    set -o nounset they abort:
+
+      /work/packages/kicksecure/developer-meta-files/usr/bin/dm-prepare-release: line 733: dist_build_utm: unbound variable
+
+    The structurally correct fix is to ':-'-protect each consumer
+    upstream, but several of those consumers live in submodules whose
+    SHA pins lag fork branches. Pre-set the whole group to empty
+    strings here so a missing flag falls into the existing "skip this
+    target" branch (the comparison against "true" fails) without
+    touching every submodule. Once the consumers are fixed in their
+    respective upstreams, this defaulting can be removed.
+
+commit 9071a4c5e7d2fa4a0b5da992607a6b043e0dceb4
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:27:05 2026 +0000
+
+    ci: add HELPER_SCRIPTS_URL env + protect dist_build_install_to_root
+
+    dry-run.yml: hoist the helper-scripts submodule remote URL to a
+    HELPER_SCRIPTS_URL env var at the top of the workflow. Resolves to
+    \${github.repository_owner}/helper-scripts so a workflow run on
+    org-ai-assisted/derivative-maker pulls from
+    org-ai-assisted/helper-scripts (where fork branches live) and a
+    run on Kicksecure/derivative-maker pulls from
+    Kicksecure/helper-scripts (production).
+
+    Adds a 'Repoint helper-scripts submodule' step that runs after
+    actions/checkout's submodule init and re-targets the local
+    submodule clone's origin remote to HELPER_SCRIPTS_URL. The step
+    allow-lists both Kicksecure and org-ai-assisted explicitly; any
+    other owner falls through to the .gitmodules default. The
+    submodule SHA pin continues to govern which commit is checked
+    out (both repos share the same history, so the pin resolves
+    in either).
+
+    build-steps.d/2800_create-lb-iso: protect the
+    dist_build_install_to_root and dist_build_iso checks with the
+    ':-' default-value form. The variables are only exported when
+    the matching CLI flags are passed; under set -o nounset (default),
+    the unprotected dereference aborts:
+
+      ./build-steps.d/2800_create-lb-iso: line 607: dist_build_install_to_root: unbound variable
+
+    The next-line dist_build_iso check had the same shape; aligned
+    both with the pattern already used in similar callsites elsewhere.
+
+commit e211446206b8154371a31569a39074dbc412a43c
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:22:26 2026 +0000
+
+    fix(1200_prepare-build-machine): protect GPG_AGENT_INFO under nounset
+
+    The diagnostic line dereferenced \$GPG_AGENT_INFO unprotected. With
+    'set -o nounset' (the script's default) and a CI environment that
+    has no gpg-agent running, the access aborts the build:
+
+      ./build-steps.d/1200_prepare-build-machine: line 407: GPG_AGENT_INFO: unbound variable
+
+    The '-:' default-value form is already used on the very next line
+    for the actual decision branch; align the diagnostic with it so a
+    missing gpg-agent reports cleanly instead of crashing.
+
+commit 6ac7b88e6caaac6c662779c4dc659125af195716
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:19:06 2026 +0000
+
+    ci: seed CI policy from project openpgp-policy.toml, add CI key on top
+
+    git_sanity_test --mode all also walks submodules. A CI policy built
+    from scratch (only the ephemeral CI key authorized) makes sq-git
+    reject every submodule HEAD signed by a real upstream maintainer:
+
+      ERROR: sq-git verification failed: grml-debootstrap (commit ...)
+      Caused by: Key 6E979B28A6F37C43BE30AFA1CB8D50BB77BB3C48 missing
+
+    Copy the project's existing openpgp-policy.toml as the seed instead.
+    The upstream authorizations carry over; 'sq-git policy authorize'
+    below stacks our ephemeral CI key on top so the amended HEAD also
+    verifies. Result: HEAD signed by the CI key + submodule HEADs signed
+    by upstream maintainers all pass against the same combined policy.
+
+commit 02d8fa2b44046f983e39166e4d7e44c80df978d5
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:16:48 2026 +0000
+
+    ci: chmod +x extract-openpgp-policy-trusted-certs at dry-run time
+
+    The script is committed in upstream helper-scripts at mode 100644,
+    so a fresh submodule checkout (no .deb / no debhelper to repair the
+    bit) cannot exec it directly:
+
+      git_sanity_test: line 303: .../extract-openpgp-policy-trusted-
+        certs: Permission denied
+
+    The proper fix is on org-ai-assisted/helper-scripts branch
+    claude/fix-workflow-syntax-j1LlD (commit c50a0a2 sets mode 100755).
+    Until that lands upstream and the submodule pin here is bumped,
+    repair the bit at runtime so CI is not blocked.
+
+commit 58b8aa9f0e3bd3c0c748a57f582937e93833a5cb
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:12:56 2026 +0000
+
+    ci: forward sq_git_policy_file/trust_root through run-as-user
+
+    The previous run got past sign-and-tag but the inner derivative-maker
+    fell back to /work/openpgp-policy.toml (the project's main policy)
+    and rejected the CI commit:
+
+      Error: Could not verify trust root 84b9a83d... using the specified policy
+      Caused by:
+        Key ED6AD86B... missing
+      Hint: sq-git policy authorize --policy-file /work/openpgp-policy.toml ...
+
+    Root cause: help-steps/run-as-user invokes 'sudo --preserve-env=PATH'
+    when dropping to 'builder'. PATH plus the inline user_name= are the
+    only vars that survive; the sq_git_* env this script's caller set
+    via docker exec --env get stripped before derivative-maker runs.
+
+    Forward the two values as inline 'env sq_git_policy_file=... sq_git_
+    trust_root=...' arguments after 'builder', so they land in the
+    builder shell's environment and help-steps/variables honors them
+    (it only sets the default when sq_git_policy_file is unset).
+
+commit 50c4ce2a0506d81aa36fc5f4066477ec07d64277
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:09:55 2026 +0000
+
+    ci: drop fingerprint extraction in sign-and-tag (avoid sq --format)
+
+    The trixie sq does not accept '--format json'; the previous run
+    failed at:
+       error: unexpected argument '--format' found
+
+    Avoid parsing 'sq cert list' altogether: pass the cert FILE to
+    'sq-git policy authorize' (which accepts FILE | FINGERPRINT | KEYID
+    positionally), and set 'git config user.signingkey "${DEBEMAIL}"'
+    so help-steps/sq-git-wrapper resolves the signer via its '@' branch
+    ('sq sign --signer-email'). No fingerprint, no jq, no awk.
+
+    ci/dry-run-install.sh: drop the now-unused 'jq' from the apt list.
+
+commit 847f508cfffea355c6bf305040e00b8eff565bd9
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:06:46 2026 +0000
+
+    ci: add signify-openbsd to dry-run apt deps
+
+    help-steps/signing-key-create's sanity_tests gate asserts:
+       command -v sq >/dev/null
+       command -v sqop >/dev/null
+       command -v signify-openbsd >/dev/null
+
+    Even though sign-and-tag only exercises the OpenPGP path, the gate
+    is unconditional, so the apt install must satisfy all three.
+
+commit 19d848ec7e1c045d3e90bb3b867b218a4ca98307
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:04:56 2026 +0000
+
+    ci: run sign-and-tag as builder via run-as-user, not as root
+
+    help-steps/variables refuses to import when run as root with no
+    SUDO_USER and no controlling tty (which is exactly the docker exec
+    PID 1 situation in CI):
+
+      ERROR: Variable user_name is empty.
+
+    The previous escape hatch (dist_build_allow_root=true) only got past
+    the first guard; the second guard in variables tripped right after.
+    The right fix is to run sign-and-tag as the unprivileged 'builder'
+    user instead - the same user dry-run-derivative-maker.sh already
+    drops to via help-steps/run-as-user. The keystore lands under
+    /home/builder/.local/share/sequoia and is shared between this step
+    and the dry-run step.
+
+    dry-run.yml: wrap the docker exec in 'help-steps/run-as-user --chown
+    /work -- builder env CI=true bash ci/dry-run-sign-and-tag.sh'. The
+    inner 'env CI=true' is needed because sudo strips env when
+    run-as-user drops privileges; sign-and-tag's CI guard refuses to run
+    without it.
+
+    dry-run-sign-and-tag.sh: drop the dist_build_allow_root=true export
+    (no longer needed) and the chmod a+rX/a+r on the policy file (also
+    no longer needed - both this step and the next run as builder, so
+    filesystem permissions match by default).
+
+commit a8e38e6b5c5d8cbd47461c3f6c8743a37340670e
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 23:01:07 2026 +0000
+
+    ci: dry-run-sign-and-tag.sh: export dist_build_allow_root=true
+
+    help-steps/pre's pre-flight rejects root invocations to protect a
+    developer's real signing keys. In the dry-run container we run as
+    root and the key is ephemeral, so the documented escape hatch
+    ('CI / container use only') is the correct override here.
+
+    Without this the previous run failed with:
+      ERROR: This must NOT be run as root (sudo)!
+             Export 'dist_build_allow_root=true' to override
+             (CI / container use only).
+
+commit 16185a6b5e482d6b6ea0618dcb91238c64be07f7
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 22:58:06 2026 +0000
+
+    ci: wire dry-run-sign-and-tag.sh into dry-run.yml so PR builds pass
+
+    git_sanity_test runs sq-git verification of HEAD as an unconditional
+    gate even under --dry-run. On a PR build the gate sees GitHub's
+    auto-merge commit (signed by GitHub Actions, not by an authorized
+    maintainer key) and fails with 'Bad signature: Malformed MPI'.
+
+    Add a 'Sign HEAD with ephemeral CI key' step before the existing
+    'Drop privileges' step. It runs ci/dry-run-sign-and-tag.sh in the
+    container with binary_build_folder_dist=/tmp/dryrun-ci (world-
+    traversable so the unprivileged 'builder' user can read the policy
+    file later), then captures the script's 'sq_git_policy_file=...' /
+    'sq_git_trust_root=HEAD' stdout lines into $GITHUB_ENV. The next
+    step forwards them via 'docker exec --env' so derivative-maker's
+    git_sanity_test invocation finds the CI-only policy.
+
+    ci/dry-run-install.sh: add jq (sign-and-tag uses it to parse 'sq
+    cert list --format json' output for the fingerprint).
+
+    ci/dry-run-sign-and-tag.sh: chmod a+rX on binary_build_folder_dist
+    and a+r on the policy file so the 'builder' user the dry-run drops
+    to can open the policy file root just wrote. Without this the
+    verification fails with 'permission denied' before sq-git is even
+    reached.
+
+commit b69a4f0eece7c4a5460604b84d009ba1403a4d0a
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 22:49:48 2026 +0000
+
+    ci: clean up dry-run scripts and reduce dependabot PR limit
+
+    dry-run-sign-and-tag.sh:
+    - Drop the CI-specific DEBEMAIL/DEBFULLNAME export. The defaults
+      baked into help-steps/variables ('derivative-distribution@local-
+      signing.key' / 'derivative distribution auto generated local APT
+      signing key') are descriptive enough that a leaked copy is
+      obvious; replicate them via the standard ': "${VAR:=...}"'
+      fallback so this script does not need to source the heavy
+      variables.bsh.
+    - Replace the awk-line-grep fingerprint extraction with
+      'sq cert list --format json | jq -r .[0].fingerprint'. Robust
+      against future changes in sq's text layout.
+    - Replace the hand-rolled '[authorization."..."]' TOML block with
+      'sq-git policy authorize --project-maintainer'. Capability flag
+      names, user-id escaping, and any future schema bump are now
+      sq-git's responsibility, not this script's.
+    - Hoist the embedded 'git rev-parse --short HEAD' subshell out of
+      the ci_tag_name '${VAR:-$(cmd)}' parameter expansion into its
+      own assignment (R-022 / bash-style-guide).
+
+    dry-run-start-container.sh:
+    - Move the multi-line 'bash -c' entrypoint heredoc into a separate
+      ci/dry-run-container-init.sh script with a real shebang. Lets
+      shellcheck see it and lets a developer reproduce it locally;
+      per agents/bash-style-guide.md, multi-line bash logic does not
+      belong inside a 'docker run ... bash -c "..."' arg.
+
+    dependabot.yml (derivative-maker, helper-scripts, kloak):
+    - Reduce open-pull-requests-limit to 1 to avoid PR spam. Was 5
+      on derivative-maker github-actions, 3 on derivative-maker docker,
+      5 on helper-scripts; kloak inherited the default of 5 (now
+      explicit at 1).
+
+commit 181373e7712b5e28e7da566fb0576009b01758be
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 6 21:05:42 2026 +0000
+
+    ci: inline canonical repo literal in job-level if (env context unavailable)
+
+    GitHub Actions does not expose the env context in job-level if
+    expressions (only github, inputs, needs, vars are available there);
+    referencing env.CANONICAL_REPO produced "Unrecognized named-value:
+    'env'" and prevented the workflow from loading. Inline the literal
+    'Whonix/derivative-maker' in the if and drop the now-unused
+    workflow-level env block. Caught by actionlint.
+
+commit 0156893d4293e61cc53ecfddf5b50c45e1c689cd
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 6 15:54:00 2026 -0400
+
+    .
+
+commit 926a24408af88491c6877001e2280aa41dfc273e
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 6 15:53:55 2026 -0400
+
+    .
+
+commit f349d58a6654f9f45e2be9637c59a5b6fa254592
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 6 15:44:36 2026 -0400
+
+    .
+
+commit 074bc0e770823ed4656dc2c0d4551d96b6aed379
+Merge: 80d9b4552 c790cbf48
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 6 13:03:10 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/read-agents-meta-file-uKeT9'
+
+commit c790cbf48e7f9b2e322f9f612862cded5e360147
+Author: claude-code <claude-code@assisted-by-ai>
+Date:   Wed May 6 13:30:40 2026 +0000
+
+    feat(ci): add dry-run-sign-and-tag.sh for sq-git verify gate
+
+    Generate an ephemeral CI OpenPGP signing key, build a CI-only
+    openpgp-policy.toml.ci that trust-roots only that key, re-sign HEAD
+    with it, and tag HEAD with a signed annotated tag. The dry-run.yml
+    workflow exports sq_git_policy_file=<path> and sq_git_trust_root=HEAD
+    so the unconditional sq_git_verify gate in git_sanity_test passes
+    without needing a real maintainer's signed commits in CI.
+
+    Why this is necessary: derivative-maker --dry-run calls
+    git_sanity_test which calls sq_git_verify, an unconditional
+    cryptographic trust gate. AI-pushed commits with commit.gpgsign=false
+    would otherwise fail this gate. The flag-controlled bypasses
+    (--allow-untagged, --allow-uncommitted) only cover the LATER
+    tag/dirty checks, not the upstream-of-them sq-git verify.
+
+    Hard CI-only guard: refuses to run outside CI without ALLOW_LOCAL=true,
+    because the script generates a key under DEBEMAIL=ci@dryrun.local and
+    re-signs HEAD --amend - both surprising on a developer host.
+
+    Standalone-runnable: from a checked-out source tree on a CI host
+    with sq, sqop, signify-openbsd, and sq-git installed (see
+    help-steps/signing-key-create's sanity_tests),
+    'CI=true bash ci/dry-run-sign-and-tag.sh' reproduces what CI does.
+
+    Note: this is iteration 1. The exact 'sq cert list' / 'sq-git
+    rebase' / git config commands may need adjustment based on actual
+    sq / sq-git behaviour in CI; treat the script as a working draft.
+
+commit 755113e7e1601946c992430352add58cba978c92
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Wed May 6 09:13:22 2026 -0400
+
+    ci(run_automated_builder): hoist canonical-repo gate to env.CANONICAL_REPO
+
+    Replace the inline `if: github.repository == 'Whonix/derivative-maker'`
+    with `if: github.repository == env.CANONICAL_REPO`, where
+    CANONICAL_REPO is set near the top of the file. Documents the
+    upstream-only-gate purpose (vault decrypt secret only on canonical
+    repo) and avoids drift if the same value is referenced in multiple
+    `if:` expressions in the future.
+
+commit 3bb1b259c8150c43c2fed745f831d88add3c2c30
+Author: claude-code <claude-code@assisted-by-ai>
+Date:   Wed May 6 12:25:20 2026 +0000
+
+    ci: restore executable bit on shebanged scripts (lost via MCP push)
+
+    The GitHub MCP push_files / create_or_update_file API resets every
+    tree entry to mode 100644, even when the prior entry was 100755.
+    This commit re-flips the bit via 'git update-index --chmod=+x' on
+    the affected files (no content change). Resolves Codex P1 reviews
+    about EACCES at exec time + the rc=126 'Permission denied' failures
+    in CI.
+
+commit f94a71e5a4bdfea251a2b782b04c6dc88b65079c
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Wed May 6 07:15:56 2026 -0400
+
+    fix(git_sanity_test): invoke extract-openpgp-policy-trusted-certs by absolute path
+
+    Codex P1 on derivative-maker#1: after the openpgp-policy-trusted-certs
+    migration to helper-scripts, line 303 invoked the script via $PATH
+    without any install check or dependency, so environments that ran
+    git_sanity_test before helper-scripts was installed (derivative-update
+    tag verification, fresh checkouts) hit command-not-found and aborted.
+
+    git_sanity_test already exports HELPER_SCRIPTS_PATH=$MYDIR/../packages/
+    kicksecure/helper-scripts and sources from there for get_colors.sh.
+    Use the same prefix for extract-openpgp-policy-trusted-certs so the
+    script is reachable from the submodule layout regardless of whether
+    helper-scripts is installed system-wide. No new dependency on $PATH;
+    no behavioural change in the build-context where helper-scripts IS
+    installed (the absolute path resolves identically).
+
+commit e5296ad27ae142708a4341f18521c5b6db8c6d04
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Wed May 6 07:15:19 2026 -0400
+
+    fix(dry-run-start-container): cgroupns=host so systemd boots under cgroups v2
+
+    Iteration 3. Diagnostics from iteration 2 (commit c91dea7) confirmed:
+
+      Exited (255) About a minute ago
+
+    with apt-get install completing all 6 packages cleanly (libsystemd-shared,
+    libapparmor1, systemd, systemd-sysv, openssl, ca-certificates) and then
+    ZERO output between `exec /sbin/init` and container exit - systemd
+    didn't even print its banner before bailing.
+
+    That's the canonical symptom of systemd refusing to boot under cgroups
+    v2 with a private cgroup namespace. GitHub-hosted runners (ubuntu-latest)
+    default to cgroupns=private; systemd >= 247 needs to share the host's
+    cgroup namespace to set up its own slice/scope hierarchy correctly.
+    Adding --cgroupns=host (which is the documented systemd-in-docker
+    incantation on cgroups-v2 hosts) should fix the silent exit.
+
+    If it doesn't, the diagnostics from iteration 2 will surface whatever
+    boot message systemd does emit this time.
+
+commit c91dea7312973b4c1f4f111793ab75dee1643d97
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Wed May 6 07:10:27 2026 -0400
+
+    fix(dry-run-start-container): drop --rm + add diagnostics on systemd-not-ready
+
+    Iteration 2: previous attempt got past the /sbin/init exec error
+    (systemd-sysv installs cleanly), but `is-system-running` never
+    reaches running/degraded within 90s and the container exits.
+    With --rm set, the container disappeared the moment the entrypoint
+    died, so `docker logs` returned 'No such container: dryrun' and
+    we had zero signal as to what failed inside.
+
+    - Drop --rm. The workflow's `if: always()` Tear-down step does the
+      rm explicitly, so leaving --rm off has no leak risk; it just keeps
+      the dead container available long enough for diagnostics.
+    - On the systemd-not-ready failure path, dump `docker ps -a`
+      (container exit status / OOM kill / etc.), `docker logs <name>`
+      (entrypoint stdout/stderr - apt output, init boot messages),
+      and a best-effort `systemctl --failed`.
+
+    Once the next CI run lands with this in place we'll see WHY init
+    exits or hangs and can apply a targeted fix.
+
+commit 8b8c16bc8202bb74bcf08b03cbb064373e91256d
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Wed May 6 07:04:46 2026 -0400
+
+    fix(dry-run-start-container): install systemd-sysv inside container before init
+
+    The minimal debian:trixie image does not ship systemd-sysv, so the
+    previous `docker run ... /sbin/init` failed at runc create with:
+
+      exec: "/sbin/init": stat /sbin/init: no such file or directory
+
+    Wrap the entrypoint in a bash -c that does
+    `apt-get install -y systemd-sysv ca-certificates` first, then
+    `exec /sbin/init` so systemd takes over PID 1 normally.
+
+    Bump is-system-running poll timeout from 60s to 90s to give the
+    extra apt round-trip headroom; ca-certificates is added so any
+    TLS-bearing post-init unit (approx fetch from deb.kicksecure.com)
+    has a trust store to use.
+
+    The Debian Project does not publish an official systemd-enabled
+    debian:trixie image, so installing inside the minimal base image
+    is the path that keeps trust footprint at "Debian Project official
+    base image" without importing a community-maintained derivative.
+
+commit 688a63a292a89d3c8911b397fa9822ea543ec8d3
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Tue May 5 19:08:31 2026 -0400
+
+    refactor: drop codeql.yml (no Python files remain)
+
+    derivative-maker is bash-only after the
+    extract-openpgp-policy-trusted-certs move; CodeQL has no bash
+    extractor (shellcheck in lint.yml covers bash).
+
+commit 51f9186f85d2ee9b6c75b686840a9a748ed8ffca
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Tue May 5 19:08:29 2026 -0400
+
+    refactor: drop extract-openpgp-policy-trusted-certs (moved to helper-scripts)
+
+    Now lives at helper-scripts'
+    usr/libexec/helper-scripts/extract-openpgp-policy-trusted-certs and is
+    invoked PATH-resolved by callers.
+
+commit a0417258476c434cb1d173dc56f3fcb1c5d25181
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Tue May 5 19:08:21 2026 -0400
+
+    refactor: move extract-openpgp-policy-trusted-certs to helper-scripts
+
+    The Python helper now lives at helper-scripts'
+    usr/libexec/helper-scripts/extract-openpgp-policy-trusted-certs;
+    call sites updated to invoke it bare-name (PATH-resolved).
+
+    Drop .github/workflows/codeql.yml: derivative-maker is bash-only
+    after this move, and CodeQL has no bash extractor.
+
+commit 06feaab0f5c34bef347a5a3bb8a5703af6b81be7
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Tue May 5 19:03:34 2026 -0400
+
+    ci: cancel-in-progress on workflow re-run
+
+    Add (or enable) concurrency: cancel-in-progress: true on workflow yml
+    files that lacked it. Re-pushed runs of the same workflow on the same
+    ref (re-tagged release, force-push, etc.) now cancel the in-flight
+    run instead of stacking.
+
+commit 85283788689d10ac9e04d36010b6b35aac885456
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Tue May 5 18:59:47 2026 -0400
+
+    ci(derivative-maker): gate run_automated_builder on dry-run via workflow_call
+
+    Refactor dry-run.yml into a reusable workflow (on: workflow_call) and
+    have run_automated_builder.yml call it as the first job, with the build
+    job needs: dry-run. This collapses two previously-parallel workflow
+    runs (dry-run.yml + run_automated_builder.yml, both fired by the same
+    tag push) into ONE Actions UI record where the build is gated on the
+    dry-run smoke passing.
+
+    dry-run.yml:
+    - Replace 'on: push: tags: [\"*\"]' with 'on: workflow_call' +
+      'workflow_dispatch'. Tag-driven invocation now happens via the
+      parent workflow.
+
+    run_automated_builder.yml:
+    - Add a 'dry-run' job that calls .github/workflows/dry-run.yml.
+    - 'build' job now has 'needs: dry-run', so it only kicks off after
+      the dry-run smoke is green.
+    - Sidebar UI ordering: rename 'name: Run automated builder' to
+      'name: 00 Run automated builder'. GitHub sorts the Actions tab
+      alphabetically by 'name:'; the '00 ' prefix puts the canonical
+      release pipeline at the top of the sidebar.
+
+commit 80d9b45520c3921373e245b80aad6be1c084b0a7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 4 20:19:08 2026 +0000
+
+    bumped changelog version
+
 commit eb770a9166b4d9f3f875973ca0efdfdcb571250f
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Mon May 4 16:19:01 2026 -0400

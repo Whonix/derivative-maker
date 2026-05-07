@@ -1,3 +1,9 @@
+derivative-maker (3:18.1.9.0-1) unstable; urgency=medium
+
+  * New upstream version (local package).
+
+ -- Patrick Schleizer <adrelanos@whonix.org>  Thu, 07 May 2026 19:32:27 +0000
+
 derivative-maker (3:18.1.8.9-1) unstable; urgency=medium
 
   * New upstream version (local package).
