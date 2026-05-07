@@ -27,6 +27,6 @@ if ! fetch_log="$(git fetch origin -- "${FORK_BRANCH}" 2>&1)"; then
    exit 0
 fi
 
-if git checkout --quiet "origin/${FORK_BRANCH}"; then
+if git switch --quiet --detach -- "refs/remotes/origin/${FORK_BRANCH}"; then
    printf '%s\n' "switch ${displaypath:-${PWD}} (origin: ${submodule_url}) -> origin/${FORK_BRANCH}"
 fi
