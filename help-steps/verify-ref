@@ -20,7 +20,10 @@ verify_ref() {
    ## not the caller's, so the lookup works regardless of where
    ## verify_ref was called from.
    self_dir="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
-   "${self_dir}/git_sanity_test" \
+   local git_sanity_test="${self_dir}/git_sanity_test"
+   [ -x "${git_sanity_test}" ] \
+      || { printf '%s: missing or not executable: %s\n' "${BASH_SOURCE[0]}" "${git_sanity_test}" >&2; return 1; }
+   "${git_sanity_test}" \
       --mode ref --ref "${ref}" --ref-type "${ref_type}" --context "${context}" \
       >/dev/null 2>&1
 }
