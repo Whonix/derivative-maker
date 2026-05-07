@@ -150,6 +150,68 @@ errors** regardless of `--allow-untagged`:
 the caller explicitly named a ref and declared its type, so the
 declaration is enforced strictly.
 
+## Ref-resolution hygiene
+
+A separate class of attack from tag content forgery: **ref name
+collisions**. Git resolves an unqualified `<name>` against multiple
+namespaces (`refs/heads/`, `refs/tags/`, `refs/remotes/<remote>/`,
+...) and may resolve ambiguously to an attacker-pushable namespace.
+
+### Tag shadowing a remote-tracking branch
+
+Reproduced on Debian trixie git 2.47:
+
+```
+$ git tag 'origin/master' HEAD          # adversary creates this
+$ git switch --detach origin/master
+warning: refname 'origin/master' is ambiguous.
+HEAD is now at <TAG-COMMIT>             # tag wins, NOT origin/master
+```
+
+Same attack pattern applies to `git checkout`, `git reset`, and any
+ref-consuming command. Mitigation: pass the fully qualified refname
+when the type is statically known.
+
+| Caller knows | Use |
+|---|---|
+| It is a tag | `refs/tags/<name>` |
+| It is a local branch | `refs/heads/<name>` |
+| It is a remote-tracking branch | `refs/remotes/<remote>/<name>` |
+| It is a commit object | peel: `<expr>^{commit}` |
+
+### Prefer `git switch --detach` over `git checkout`
+
+For HEAD-changing operations on a ref:
+
+- `git switch --detach -- <ref>` accepts `--` as end-of-options;
+  combined with a fully qualified refname, both flag injection and
+  namespace collision are closed.
+- `git checkout -- <ref>` treats `--` as a **pathspec separator**;
+  end-of-options is therefore not available, leaving leading-`-`
+  arg injection unmitigated unless the caller validates first.
+
+`git switch` without `--detach` only accepts a local branch name
+and refuses commits, tags, and remote-tracking refs. That stricter
+default is itself a useful guard for branch-only call sites.
+
+### File-restore (path checkout) is unrelated
+
+`git checkout -- <pathspec>` (and the modern `git restore --
+<pathspec>`) is restore-from-index for files, not ref resolution.
+No collision risk applies; out of scope for this section.
+
+### Already-applied mitigations in this codebase
+
+- `git for-each-ref --points-at=HEAD --format='%(refname)' refs/tags`
+  in `mode_working_tree` enumerates fully qualified tag names so
+  values fed back into git are unambiguous (see Tag verification
+  flow, step 1).
+- `derivative-update`'s tag and rollback paths use
+  `git switch --recurse-submodules --detach -- "refs/tags/${tag}"`
+  / `... -- "${recover_commit}"` (commit-ish peeled).
+- `ci/checkout-fork-branch` uses
+  `git switch --quiet --detach -- "refs/remotes/origin/${branch}"`.
+
 ## Future directions
 
 - If sequoia-git adds `sq-git verify-tag` using the policy file,
