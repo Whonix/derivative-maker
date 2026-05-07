@@ -48,14 +48,21 @@ docker run \
    "${image}" \
    "${container_entrypoint}"
 
-## 'degraded' counts: a non-essential unit failure is fine, we just
-## need basic targets up so 'systemctl start approx' works. 90s
-## covers ~10s apt install + boot.
+## 'degraded' counts: container default units (resolved, networkd-
+## wait-online, getty, ...) routinely fail in a minimal container and
+## that's fine. If a unit dry-run actually needs (approx) failed,
+## the dry-run step will fail on its own. 90s covers ~10s apt
+## install + boot.
 for attempt in $(seq 1 90); do
    state="$(docker exec "${container_name}" systemctl is-system-running 2>/dev/null || true)"
    case "${state}" in
-      running|degraded)
-         printf '%s\n' "systemd state: ${state} (after ${attempt}s)"
+      running)
+         printf '%s\n' "systemd state: running (after ${attempt}s)"
+         exit 0
+         ;;
+      degraded)
+         printf '%s\n' "systemd state: degraded (after ${attempt}s); failed units:" >&2
+         docker exec "${container_name}" systemctl --failed --no-legend --no-pager >&2 || true
          exit 0
          ;;
    esac
