@@ -194,24 +194,6 @@ For HEAD-changing operations on a ref:
 and refuses commits, tags, and remote-tracking refs. That stricter
 default is itself a useful guard for branch-only call sites.
 
-### File-restore (path checkout) is unrelated
-
-`git checkout -- <pathspec>` (and the modern `git restore --
-<pathspec>`) is restore-from-index for files, not ref resolution.
-No collision risk applies; out of scope for this section.
-
-### Already-applied mitigations in this codebase
-
-- `git for-each-ref --points-at=HEAD --format='%(refname)' refs/tags`
-  in `mode_working_tree` enumerates fully qualified tag names so
-  values fed back into git are unambiguous (see Tag verification
-  flow, step 1).
-- `derivative-update`'s tag and rollback paths use
-  `git switch --recurse-submodules --detach -- "refs/tags/${tag}"`
-  / `... -- "${recover_commit}"` (commit-ish peeled).
-- `ci/checkout-fork-branch` uses
-  `git switch --quiet --detach -- "refs/remotes/origin/${branch}"`.
-
 ## Future directions
 
 - If sequoia-git adds `sq-git verify-tag` using the policy file,
