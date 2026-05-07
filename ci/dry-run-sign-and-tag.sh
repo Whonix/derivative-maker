@@ -151,7 +151,55 @@ ci_tag_name="ci-dry-run-${GITHUB_RUN_ID:-${git_short_sha}}"
 git tag -a -s -m 'CI dry-run ephemeral signed tag' "${ci_tag_name}"
 printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${ci_tag_name}"
 
-## (7) Print env exports for the workflow step to capture into
+## (7) Goodlist any submodule HEAD that has been switched off its
+## SHA pin (i.e. that the workflow's checkout-fork-submodule-
+## branches.sh step repointed at a fork branch). The fork branch
+## tip is signed by an unrelated developer key, not by any cert in
+## our policy, so sq-git --mode submodules would otherwise reject
+## it. 'sq-git policy goodlist' adds the SHA to the policy's
+## commit_goodlist - those commits are then trusted regardless of
+## signature, scoped to this CI policy file only. Submodules still
+## at their canonical pin are left alone (their HEAD is signed by
+## an upstream maintainer, already authorized in the seeded
+## policy).
+##
+## 'git submodule status' prefixes:
+##   ' ' (space) - HEAD matches the index pin
+##   '+'         - HEAD differs from the index pin
+##   '-'         - submodule not initialized (we filter those out
+##                 - the fork-mirror init step has already run)
+##   'U'         - merge conflict
+## The case-glob below matches the '+' lines.
+submodule_status_line=
+submodule_sha=
+submodule_path_field=
+while read -r submodule_status_line; do
+   case "${submodule_status_line}" in
+      +*) ;;
+      *) continue ;;
+   esac
+
+   ## Strip leading '+', then split off SHA (first whitespace-delimited
+   ## field). 'git submodule status --recursive' format:
+   ##   '+<sha> <path> (<describe>)'
+   submodule_sha="${submodule_status_line#+}"
+   submodule_path_field="${submodule_sha#* }"
+   submodule_sha="${submodule_sha%% *}"
+
+   case "${submodule_sha}" in
+      [0-9a-f]*)
+         sq-git policy goodlist \
+            --policy-file "${ci_policy}" \
+            -- "${submodule_sha}"
+         printf '%s: goodlisted %s (%s)\n' "${BASH_SOURCE[0]}" "${submodule_sha}" "${submodule_path_field%% *}"
+         ;;
+      *)
+         printf '%s: skipping non-SHA status line: %s\n' "${BASH_SOURCE[0]}" "${submodule_status_line}" >&2
+         ;;
+   esac
+done < <(git submodule status --recursive)
+
+## (8) Print env exports for the workflow step to capture into
 ## subsequent docker exec calls. The workflow's next step does
 ## `docker exec --env sq_git_policy_file=... --env sq_git_trust_root=HEAD ...`
 ## using these values.
