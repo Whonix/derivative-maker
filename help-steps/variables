@@ -534,16 +534,16 @@ export VMNAME VMRAM VRAM
 
 ## Used by: developer-meta-files /usr/bin/dm-prepare-release
 vm_multiple=false
-if [ "${dist_build_type_long}" = "workstation" ]; then
+if [ "${dist_build_type_long:-}" = "workstation" ]; then
    vm_multiple=true
    ## dist_build_desktop could be KDE, CLI, Xfce, LXQt, RPi or CUSTOM
-   [ -n "${vm_names_to_be_exported:-}" ] || vm_names_to_be_exported="Whonix-Gateway-${dist_build_desktop} Whonix-Workstation-${dist_build_desktop}"
+   [ -n "${vm_names_to_be_exported:-}" ] || vm_names_to_be_exported="Whonix-Gateway-${dist_build_desktop:-} Whonix-Workstation-${dist_build_desktop:-}"
 fi
-if [ "${dist_build_type_long}" = "custom-workstation" ]; then
-   [ -n "${vm_names_to_be_exported:-}" ] || vm_names_to_be_exported="${VMNAME}"
+if [ "${dist_build_type_long:-}" = "custom-workstation" ]; then
+   [ -n "${vm_names_to_be_exported:-}" ] || vm_names_to_be_exported="${VMNAME:-}"
 fi
-if [ "${dist_build_type_short}" = "kicksecure" ]; then
-   [ -n "${vm_names_to_be_exported:-}" ] || vm_names_to_be_exported="${VMNAME}"
+if [ "${dist_build_type_short:-}" = "kicksecure" ]; then
+   [ -n "${vm_names_to_be_exported:-}" ] || vm_names_to_be_exported="${VMNAME:-}"
 fi
 ## --flavor source fallback
 [ -n "${vm_names_to_be_exported:-}" ] || vm_names_to_be_exported="none"
@@ -599,7 +599,11 @@ fi
 
 ## example dist_build_desktop_lowercase:
 ## lxqt
-[ -n "${dist_build_desktop_lowercase:-}" ] || dist_build_desktop_lowercase="${dist_build_desktop,,}"
+## Bash's lowercase expansion ',,' refuses an unset var under
+## nounset. Take the value through a defaulted intermediate.
+dist_build_desktop_safe="${dist_build_desktop:-}"
+[ -n "${dist_build_desktop_lowercase:-}" ] || dist_build_desktop_lowercase="${dist_build_desktop_safe,,}"
+unset dist_build_desktop_safe
 
 if [ ! "${dist_build_desktop_lowercase:-}" = "lxqt" ] ; then
    true "${BASH_SOURCE[0]} INFO: dist_build_desktop_lowercase is '$dist_build_desktop_lowercase'. Not 'lxqt'. Build Whonix Windows Installer only for Whonix LXQt for VirtualBox. Therefore: maybe_disable_dist_build_windows_installer"
@@ -623,7 +627,7 @@ export DISK_IDENTIFIER
 if [ "${dist_build_install_to_root:-}" = "true" ]; then
    [ -n "${CHROOT_FOLDER:-}" ] || CHROOT_FOLDER=""
 else
-   [ -n "${CHROOT_FOLDER:-}" ] || CHROOT_FOLDER="$binary_build_folder_dist/${VMNAME}_image"
+   [ -n "${CHROOT_FOLDER:-}" ] || CHROOT_FOLDER="${binary_build_folder_dist:-}/${VMNAME:-}_image"
 fi
 export CHROOT_FOLDER
 
@@ -675,7 +679,7 @@ fi
 if [ "${dist_build_source_run:-}" = "true" ]; then
    true "${BASH_SOURCE[0]} INFO: Internal run."
 else
-   true "${BASH_SOURCE[0]} INFO: VMNAME is $VMNAME"
+   true "${BASH_SOURCE[0]} INFO: VMNAME is ${VMNAME:-}"
 fi
 
 if [ "${VMNAME:-}" = "" ]; then

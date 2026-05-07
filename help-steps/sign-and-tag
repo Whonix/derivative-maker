@@ -13,46 +13,26 @@
 ##
 ## Auto-dispatch:
 ##   When invoked top-level, runs the bootstrap (mint key, build
-##   policy, amend HEAD, tag, foreach).
+##   policy, amend HEAD if not already verifiable, tag, foreach).
 ##   When invoked from 'git submodule foreach', recognizes the
 ##   foreach-set $sha1 env var (= the parent's recorded sha for
-##   the current submodule), checks whether the working-tree HEAD
-##   diverges from that pin, and only amends on divergence.
-##   Submodules still at their canonical pin are left alone -
-##   their HEAD is signed by an upstream maintainer cert that the
-##   bootstrap kept authorized in the seeded policy.
+##   the current submodule), checks via help-steps/git_sanity_test
+##   whether HEAD already verifies against the policy, and only
+##   amends when verification fails.
 ##
-## Why this exists:
-##   git_sanity_test runs sq-git verification of HEAD as an
-##   unconditional cryptographic gate. Three classes of commits
-##   fail at it:
-##     * Auto-generated PR merge commits at HEAD - no OpenPGP
-##       signature at all.
-##     * Fork-side branch tips overlaid into submodules - SSH-
-##       signed by the contributor's session key, but sq-git only
-##       validates OpenPGP, so they look unsigned to it.
-##     * Tags created during the build - need a signature from a
-##       cert authorized for sign_tag in the policy.
-##   Mint an ephemeral OpenPGP key, authorize it as
-##   --project-maintainer in a policy file (seeded from the
-##   project's openpgp-policy.toml so upstream maintainer keys
-##   carry over for unmodified submodules), re-sign HEAD + the
-##   new tag + each overlaid submodule HEAD with that key, and
-##   point sq_git_policy_file at the policy. Every gate verifies
-##   against one consistent policy.
+## Idempotent: re-running on an already-signed tree is a no-op.
+## Both root and submodule branches gate the amend/tag operations
+## on a help-steps/git_sanity_test --mode ref check, so the script
+## never duplicates a signature that already passes the policy.
 ##
-## Side effects this script HAS:
+## Side effects this script HAS when work is needed:
 ##   - Mints a new OpenPGP cert in the caller's sq keystore.
 ##   - Rewrites HEAD via 'git commit --amend -S' (changes the
 ##     commit's SHA) - on the parent and on each fork-overlaid
 ##     submodule.
 ##   - Adds a signed annotated tag on the parent.
 ##   - Does NOT write to global git config; signing settings are
-##     applied per-invocation via 'git -c key=value' so the
-##     caller's persistent ~/.gitconfig is untouched.
-##
-## The caller is responsible for guarding against running this on
-## a developer machine if those side effects aren't wanted.
+##     applied per-invocation via 'git -c key=value'.
 
 set -o errexit
 set -o nounset
@@ -62,26 +42,42 @@ set -o errtrace
 repo_root=
 repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 
-## DEBFULLNAME / DEBEMAIL: needed by git_options below in BOTH the
-## root-mode and submodule-mode branches. signing-key-create runs
-## as a separate bash process that sources variables in its own
-## subshell, so the defaults it picks for the ephemeral cert never
-## reach our shell. Mirror the defaults from help-steps/variables
-## (lines ~1168-1172) here; a 'source ./help-steps/variables'
-## would be cleaner but trips variables.bsh's own R-010 violations
-## under nounset (unprotected ${dist_build_type_long} at line 537,
-## etc.). Exported so the foreach recursion below sees them in
-## the submodule-mode invocation.
-: "${DEBFULLNAME:=derivative distribution auto generated local APT signing key}"
-: "${DEBEMAIL:=derivative-distribution@local-signing.key}"
-export DEBFULLNAME DEBEMAIL
+## ----------------------------------------------------------------------------
+## Identity setup
+## ----------------------------------------------------------------------------
 
-## git invocation prefix: per-call '-c key=value' pairs that
-## configure sq-git-wrapper signing without touching the caller's
-## persistent git config. user.signingkey is set to the email;
-## sq-git-wrapper detects the '@' and dispatches to 'sq sign
-## --signer-email'. Built once and applied to every git command
-## that needs to commit / tag.
+## DEBFULLNAME / DEBEMAIL come from help-steps/variables (lines
+## ~1168-1172) - source it once here so this script doesn't
+## duplicate the literals. dist_build_source_run=true selects
+## the --flavor source path inside variables.bsh (line ~522 fills
+## VMNAME, dist_build_type_*, etc. with sentinels), and
+## dist_build_one_parsed=true short-circuits the auto-source of
+## parse-cmd that would otherwise fire with no positional args.
+##
+## Do this BEFORE the submodule-mode dispatch so DEBEMAIL is
+## available in both branches; root's foreach below relies on the
+## same exports flowing into the recursed invocations.
+##
+## Sourced only when DEBEMAIL is unset, so a foreach-recursed
+## invocation (which already has DEBEMAIL exported by the parent
+## invocation) skips the sourcing - keeps per-submodule overhead
+## low and avoids re-running variables.bsh's mkdir / etc.
+## side effects per submodule.
+if [ -z "${DEBEMAIL:-}" ]; then
+   export dist_build_source_run=true
+   export dist_build_one_parsed=true
+   # shellcheck source=help-steps/pre
+   source "${repo_root}/help-steps/pre"
+   # shellcheck source=help-steps/variables
+   source "${repo_root}/help-steps/variables"
+fi
+
+## ----------------------------------------------------------------------------
+## Per-call git config: -c key=value pairs that configure sq-git-
+## wrapper signing without touching the caller's persistent git
+## config. user.signingkey is set to the email; sq-git-wrapper
+## detects the '@' and dispatches to 'sq sign --signer-email'.
+## ----------------------------------------------------------------------------
 git_options=(
    -c user.signingkey="${DEBEMAIL}"
    -c gpg.format=openpgp
@@ -92,12 +88,31 @@ git_options=(
    -c user.name="${DEBFULLNAME}"
 )
 
+## verify_ref: thin wrapper around help-steps/git_sanity_test
+## --mode ref. Returns 0 if the ref passes policy verification,
+## non-zero otherwise. Used by both branches below to gate the
+## amend/tag operations - signs only when needed, no signature
+## duplication on re-run.
+##
+## --mode ref needs sq_git_policy_file, sq_git_trust_root, and
+## the dist_build_ignore_* booleans set (env-var checks at
+## git_sanity_test:167-174). variables.bsh defaults them when
+## sourced; the foreach recursion below inherits them via env.
+verify_ref() {
+   local ref="$1"
+   local ref_type="$2"
+   local context="$3"
+   "${repo_root}/help-steps/git_sanity_test" \
+      --mode ref --ref "${ref}" --ref-type "${ref_type}" --context "${context}" \
+      >/dev/null 2>&1
+}
+
 ## ----- submodule-mode dispatch -------------------------------------
 ## $sha1 is exported by 'git submodule foreach'; treat its presence
 ## as the signal that we are a per-submodule invocation. The
 ## recursion at the end of root mode lands here.
 if [ -n "${sha1:-}" ]; then
-   if [ "$(git rev-parse HEAD)" = "${sha1}" ]; then
+   if verify_ref HEAD commit "submodule HEAD"; then
       exit 0
    fi
    git "${git_options[@]}" commit --amend --no-edit -S
@@ -118,36 +133,30 @@ cd -- "${repo_root}"
 ## (2) Export every cert in the keystore. On a fresh container the
 ## keystore has exactly one cert (the ephemeral one signing-key-
 ## create just minted), so '--all' picks it without us having to
-## know the cert's email or fingerprint. Avoids the 'sq cert list
-## --format json | jq' parse the trixie sq does not support and
-## the awk grep the bash style guide rejects.
+## know the cert's email or fingerprint.
 ephemeral_cert_pem=
 ephemeral_cert_pem="$(mktemp)"
 sq cert export --all > "${ephemeral_cert_pem}"
 
-if [ -z "${binary_build_folder_dist:-}" ]; then
-   binary_build_folder_dist="${HOME}/derivative-binary"
-fi
+## (3) Build the policy file at a predictable path. Seed from the
+## project's existing openpgp-policy.toml so the upstream maintainer
+## keys remain authorized for any submodule HEAD still at its
+## canonical SHA pin. 'sq-git policy authorize' below adds our
+## ephemeral key on top, without removing them.
 mkdir --parents -- "${binary_build_folder_dist}"
-
-## (3) Build the policy file at a predictable path so callers can
-## compute the location without grepping this script's stdout.
-##
-## Seed from the project's existing openpgp-policy.toml so the
-## upstream maintainer keys remain authorized for any submodule
-## HEAD still at its canonical SHA pin. 'sq-git policy authorize'
-## below adds our ephemeral key on top, without removing them.
 ephemeral_policy="${binary_build_folder_dist}/openpgp-policy.toml"
-project_policy="${PWD}/openpgp-policy.toml"
+project_policy="${repo_root}/openpgp-policy.toml"
 [ -r "${project_policy}" ] \
    || { printf '%s\n' "${BASH_SOURCE[0]}: missing project policy: ${project_policy}" >&2; exit 1; }
 cp -- "${project_policy}" "${ephemeral_policy}"
 
+## Export so verify_ref's git_sanity_test invocations below see it.
+export sq_git_policy_file="${ephemeral_policy}"
+
 ## (4) Authorize the cert. NAME is the policy-file label; use
 ## DEBFULLNAME so it matches what the cert userid will resolve to.
 ## --project-maintainer grants the full set (sign_commit, sign_tag,
-## sign_archive, add_user, retire_user, audit) - the build needs
-## sign_commit and sign_tag at minimum.
+## sign_archive, add_user, retire_user, audit).
 sq-git policy authorize \
    --policy-file "${ephemeral_policy}" \
    --project-maintainer \
@@ -156,30 +165,39 @@ sq-git policy authorize \
 rm -f -- "${ephemeral_cert_pem}"
 printf '%s\n' "${BASH_SOURCE[0]}: wrote policy to ${ephemeral_policy}"
 
-## (5) Re-sign HEAD. --amend --no-edit rewrites the tip without
-## changing its content; -S forces a signature pass under the
-## inline gpg config from git_options.
-git "${git_options[@]}" commit --amend --no-edit -S
+## (5) Re-sign HEAD if it doesn't already verify under the new
+## policy. Idempotent: re-running on an already-signed tree skips
+## the amend (no SHA churn).
+if ! verify_ref HEAD commit "main repo HEAD"; then
+   git "${git_options[@]}" commit --amend --no-edit -S
+fi
 
-## (6) Tag HEAD. Some build steps inspect the latest tag; having
-## one present (and signed) is more realistic than --allow-untagged.
+## (6) Tag HEAD if no signed tag already points there. Some build
+## steps inspect the latest tag; having one present (and signed)
+## is more realistic than --allow-untagged.
 ##
-## Tag name is "<nearest-tag>_<full-sha>": composes the project's
-## existing tag namespace (so a developer reading 'git tag -l' sees
-## the new tag grouped near the release it came from) with the
-## post-amend full HEAD SHA (so the suffix is globally unique per
-## run, no environment-variable plumbing needed).
-##
-## 'git describe --abbrev=0' returns the nearest reachable tag as
-## a plain name (no -<n>-g<sha> suffix). After the amend in (5),
-## HEAD's sha is post-amend.
-nearest_git_tag=
-nearest_git_tag="$(git describe --abbrev=0)"
-commit_full_sha=
-commit_full_sha="$(git rev-parse HEAD)"
-ephemeral_tag="${nearest_git_tag}_${commit_full_sha}"
-git "${git_options[@]}" tag -a -s -m 'Signed by sign-and-tag' "${ephemeral_tag}"
-printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${ephemeral_tag}"
+## Tag name is "<nearest-git-tag>_<commit-full-sha>": composes the
+## project's existing tag namespace ('git tag -l' shows the new
+## tag grouped near the release it came from) with the post-amend
+## full HEAD SHA so the suffix is globally unique per run.
+existing_signed_tag=
+for existing_tag in $(git tag --points-at HEAD); do
+   if verify_ref "${existing_tag}" tag "main repo tag"; then
+      existing_signed_tag="${existing_tag}"
+      break
+   fi
+done
+if [ -z "${existing_signed_tag}" ]; then
+   nearest_git_tag=
+   nearest_git_tag="$(git describe --abbrev=0)"
+   commit_full_sha=
+   commit_full_sha="$(git rev-parse HEAD)"
+   signed_tag="${nearest_git_tag}_${commit_full_sha}"
+   git "${git_options[@]}" tag -a -s -m 'Signed by sign-and-tag' "${signed_tag}"
+   printf '%s\n' "${BASH_SOURCE[0]}: tagged HEAD as ${signed_tag}"
+else
+   printf '%s\n' "${BASH_SOURCE[0]}: HEAD already has signed tag: ${existing_signed_tag}"
+fi
 
 ## (7) Recurse into submodules. Each foreach call exports $sha1,
 ## landing the called script in the submodule-mode branch at the
