@@ -47,22 +47,24 @@ fi
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
-## Source help-steps/variables to inherit DEBFULLNAME / DEBEMAIL
-## (the defaults that 'signing-key-create' will use to mint the
-## ephemeral cert). Single source of truth: variables.bsh's
-## fallbacks at lines ~1168-1172. Hardcoding the literals here
-## would duplicate those defaults and rot if upstream ever
-## changed them.
+## Mirror help-steps/variables's DEBFULLNAME / DEBEMAIL fallbacks
+## (lines ~1168-1172). The signing-key-create call below sources
+## variables.bsh in its own subshell to mint the ephemeral cert
+## with these values; we set them in our parent shell so the
+## subsequent 'sq cert export --cert-email "${DEBEMAIL}"' knows
+## what email to query.
 ##
-## dist_build_one_parsed=true short-circuits variables.bsh's
-## auto-source of help-steps/parse-cmd, which would otherwise call
-## dist_build_one_parse_cmd "$@" (no args from this caller) and
-## error out on the missing --target / --flavor.
-export dist_build_one_parsed=true
-# shellcheck source=help-steps/pre
-source ./help-steps/pre
-# shellcheck source=help-steps/variables
-source ./help-steps/variables
+## Why duplicate the literals instead of 'source ./help-steps/variables'
+## here: variables.bsh has unprotected '${var}' derefs of vars
+## normally set by parse-cmd (e.g. dist_build_type_long at line 537,
+## R-010 violations from before nounset-hardening) that abort under
+## set -o nounset when sourced from a non-build context. Pre-setting
+## every required var would be more brittle than mirroring two
+## defaults; once variables.bsh is fully ':-}-protected, this block
+## can be replaced with the source.
+: "${DEBFULLNAME:=derivative distribution auto generated local APT signing key}"
+: "${DEBEMAIL:=derivative-distribution@local-signing.key}"
+export DEBFULLNAME DEBEMAIL
 
 ## (1) Generate the ephemeral OpenPGP key. signing-key-create is
 ## idempotent on DEBEMAIL: re-runs are no-ops if a cert with that
