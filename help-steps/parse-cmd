@@ -294,7 +294,6 @@ dist_build_one_parse_cmd() {
                   dist_build_image_upload_supported="true"
                elif [ "${dist_build_flavor:-}" = "source" ]; then
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
-                  dist_build_target_arch=""
                   export dist_build_source_run="true"
                else
                   parse_cmd_flavor_error
@@ -847,7 +846,7 @@ ${reset}"
    ## Using export, so it can be read by chroot-post.d scripts.
    export dist_build_target_arch
 
-   true "${cyan}INFO: dist_build_target_arch    (--arch): $dist_build_target_arch${reset}"
+   true "${cyan}INFO: dist_build_target_arch    (--arch): ${dist_build_target_arch:-}${reset}"
    true "${cyan}INFO: BUILD_KERNEL_PKGS       (--kernel): ${BUILD_KERNEL_PKGS:-}${reset}"
    true "${cyan}INFO: BUILD_HEADER_PKGS      (--headers): ${BUILD_HEADER_PKGS:-}${reset}"
 
