@@ -68,11 +68,21 @@ case "${whonix_mirror}" in
       ;;
 esac
 
+## When kicksecure_mirror == whonix_mirror (the single-org case),
+## both rewrites land under the same git config key
+## ('url.https://github.com/<fork>/.insteadOf'). git config without
+## --add overwrites the existing value, so the second 'git config'
+## would clobber the first - only the Whonix->fork rewrite would
+## survive and Kicksecure/* clones would still go to canonical
+## hosts. --add appends a second value under the same key, and
+## insteadOf accepts multiple values per key (any URL matching any
+## of them gets rewritten). For the two-org case (different
+## mirrors), the keys differ, so --add is harmless.
 git config --global \
    "url.https://github.com/${kicksecure_mirror}/.insteadOf" \
    "https://github.com/Kicksecure/"
 
-git config --global \
+git config --global --add \
    "url.https://github.com/${whonix_mirror}/.insteadOf" \
    "https://github.com/Whonix/"
 
