@@ -43,13 +43,40 @@ else
    printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} HEAD re-signed"
 fi
 
-## Phase 2: tag HEAD if no signed tag points at it.
-for existing_tag in $(git tag --points-at HEAD); do
-   if verify_ref "${existing_tag}" tag "${context_label} tag"; then
-      printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} already has signed tag: ${existing_tag}"
-      exit 0
-   fi
-done
+## Phase 2: tag HEAD according to the working-tree policy in
+## help-steps/git_sanity_test (see mode_working_tree): valid states
+## are exactly zero or exactly one signed annotated tag at HEAD;
+## any other state is a hard error there. We mirror that classification
+## so we don't drop the repo into a multi-tag state which the next
+## sanity check would reject.
+##
+## Use the same idiom git_sanity_test uses (for-each-ref + readarray
+## with %(refname)) rather than '$(git tag ...)' word-splitting.
+git_tags_at_head_cmd=( git for-each-ref --points-at=HEAD --format='%(refname)' refs/tags )
+git_tags_at_head_output="$( "${git_tags_at_head_cmd[@]}" )"
+if [ -n "${git_tags_at_head_output:-}" ]; then
+   readarray -t tags_at_head <<< "${git_tags_at_head_output}"
+else
+   tags_at_head=()
+fi
+
+case "${#tags_at_head[@]}" in
+   0)
+      ## Fall through to create a signed tag.
+      ;;
+   1)
+      if verify_ref "${tags_at_head[0]}" tag "${context_label} tag"; then
+         printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} already has signed tag: ${tags_at_head[0]}"
+         exit 0
+      fi
+      printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} has unsigned tag '${tags_at_head[0]}' at HEAD; remove it ('git tag -d ...') before re-running" >&2
+      exit 1
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} has multiple tags at HEAD: ${tags_at_head[*]}; remove extras ('git tag -d ...') before re-running" >&2
+      exit 1
+      ;;
+esac
 
 commit_full_sha="$(git rev-parse HEAD)"
 if nearest_git_tag="$(git describe --abbrev=0 2>/dev/null)"; then
