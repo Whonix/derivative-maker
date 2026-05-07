@@ -16,19 +16,17 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 
 if [ -z "${FORK_BRANCH:-}" ]; then
-   ## $FORK_BRANCH in the message is the env-var name, not a value.
-   # shellcheck disable=SC2016
-   printf '%s: $FORK_BRANCH not set; call from ci/checkout-fork-submodule-branches\n' "${BASH_SOURCE[0]}" >&2
+   printf '%s\n' "${BASH_SOURCE[0]}: \$FORK_BRANCH not set; call from ci/checkout-fork-submodule-branches" >&2
    exit 64
 fi
 
-submodule_url="$(git remote get-url origin 2>/dev/null || printf '<no-origin>')"
+submodule_url="$(git remote get-url origin 2>/dev/null || printf '%s' '<no-origin>')"
 
 if ! fetch_log="$(git fetch origin -- "${FORK_BRANCH}" 2>&1)"; then
-   printf 'no-ref %s (origin: %s): %s\n' "${displaypath:-${PWD}}" "${submodule_url}" "${fetch_log}"
+   printf '%s\n' "no-ref ${displaypath:-${PWD}} (origin: ${submodule_url}): ${fetch_log}"
    exit 0
 fi
 
 if git checkout --quiet "origin/${FORK_BRANCH}"; then
-   printf 'switch %s (origin: %s) -> origin/%s\n' "${displaypath:-${PWD}}" "${submodule_url}" "${FORK_BRANCH}"
+   printf '%s\n' "switch ${displaypath:-${PWD}} (origin: ${submodule_url}) -> origin/${FORK_BRANCH}"
 fi

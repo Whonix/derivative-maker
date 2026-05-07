@@ -479,9 +479,22 @@ mode_submodules() {
    [ -r "${MYDIR}/git_sanity_test" ] || die 1 "helper script not found or not readable: '${MYDIR}/git_sanity_test'"
 
    export MYDIR
-   ## TODO: why did we hardcode the following variable here? sq_git_trust_root=HEAD
-   git submodule foreach --recursive \
-      'bash "$MYDIR/git_sanity_test" --mode working-tree --context "$displaypath"'
+   ## sq_git_trust_root=HEAD per-command:
+   ## the parent's sq_git_trust_root value is a SHA from the parent's
+   ## git db that does not exist in any submodule, so 'sq-git log
+   ## --trust-root <parent-SHA>' inside a submodule fails to resolve
+   ## the trust root. Forcing trust_root=HEAD inside the submodule
+   ## context collapses sq-git verification to single-commit verify
+   ## (see sq_git_verify and the 'trivial chain' note in mode_ref):
+   ## the policy file's signing keys must validate the submodule's
+   ## HEAD commit signature directly. The chain-walk security
+   ## property is delegated to the parent - the parent commit
+   ## (already chain-verified) records the submodule's pinned SHA.
+   ## $MYDIR / $displaypath expanded by foreach's child shell.
+   # shellcheck disable=SC2016
+   sq_git_trust_root=HEAD \
+      git submodule foreach --recursive \
+         'bash "$MYDIR/git_sanity_test" --mode working-tree --context "$displaypath"'
 }
 
 mode_all() {
