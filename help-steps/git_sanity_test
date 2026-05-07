@@ -185,7 +185,7 @@ sq_git_verify() {
    ## same, it will assume the target ref is authenticated even if it is
    ## unsigned. However, when a policy file is explicitly passed, sq-git will
    ## verify the trust root's commit and exit non-zero if validation fails.
-   if sq-git log --policy-file "${sq_git_policy_file}" --trust-root "${sq_git_trust_root}" -- "${target_ref}"; then
+   if log_run notice sq-git log --policy-file "${sq_git_policy_file}" --trust-root "${sq_git_trust_root}" -- "${target_ref}"; then
       true "INFO: sq-git verification ok: ${label}"
       return 0
    fi
@@ -333,7 +333,7 @@ mode_working_tree() {
    head="$(git rev-parse HEAD)" || die 1 "Failed to get HEAD for: ${context}"
 
    ## Commit authentication via sq-git log.
-   sq_git_verify "${head}^{commit}" "${context} (commit ${head})" || exit 1
+   log_run notice sq_git_verify "${head}^{commit}" "${context} (commit ${head})" || exit 1
 
    ## Tag policy check.
    ##
