@@ -15,22 +15,12 @@ on:
     tags:
       - '*'
 
-## Upstream-only gate. The literal "Whonix/derivative-maker" in the
-## job-level `if:` on the `build:` job below prevents forks (and the
-## org-ai-assisted mirror) from running this workflow's upstream-only
-## paths - the upstream-only secret(s) referenced below (vault
-## password / Coverity token / GHORG_AUDIT_TOKEN) are only set on the
-## canonical repo. A fork would either see those secrets as empty and
-## fail mid-flight, or - worse - run the heavy ops with its own
-## arbitrary-named secret.
+## Upstream-only gate: build:if uses a literal repo string (not env)
+## because GitHub Actions does not expose env in job-level if:.
+## Required secrets (vault password, etc.) only exist on the canonical
+## repo, so forks must skip the heavy paths.
 ##
-## The canonical owner/repo is inlined in the `if:` rather than
-## hoisted to a workflow-level `env:` constant because GitHub Actions
-## does not expose the `env` context in job-level `if:` expressions
-## (only `github`, `inputs`, `needs`, and `vars` are available there).
-
-## See agents/github-actions-security.md for the standard
-## permissions / persist-credentials / fork-PR / SHA-pin patterns.
+## See agents/github-actions-security.md.
 permissions:
   contents: read
 
@@ -58,9 +48,6 @@ jobs:
 
   build:
     needs: dry-run
-    ## Upstream-only: the Ansible vault used by the build is only a
-    ## repo secret on the canonical upstream. Skip on every other
-    ## repo so forks don't fail at vault decrypt.
     if: github.repository == 'Whonix/derivative-maker'
     runs-on: ubuntu-latest
     env:
