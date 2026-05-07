@@ -5,8 +5,9 @@
 
 ## AI-Assisted
 
-## Caller (sign-and-tag) must have exported sq_git_policy_file and
-## already run sign-head, so HEAD is the post-amend signed commit.
+## Caller (sign-and-tag) must have exported sq_git_policy_file.
+## Two phases: sign HEAD if unsigned (rewrites the commit via amend),
+## then tag HEAD if no signed tag points at it.
 
 set -o errexit
 set -o nounset
@@ -32,6 +33,15 @@ source "${repo_root}/help-steps/verify-ref"
 
 context_label="${displaypath:-main repo}"
 
+## Phase 1: sign HEAD if unsigned.
+if verify_ref HEAD commit "${context_label} HEAD"; then
+   printf '%s: %s HEAD already signed\n' "${BASH_SOURCE[0]}" "${context_label}"
+else
+   "${git_signing_command_wrapper[@]}" commit --amend --no-edit -S
+   printf '%s: %s HEAD re-signed\n' "${BASH_SOURCE[0]}" "${context_label}"
+fi
+
+## Phase 2: tag HEAD if no signed tag points at it.
 for existing_tag in $(git tag --points-at HEAD); do
    if verify_ref "${existing_tag}" tag "${context_label} tag"; then
       printf '%s: %s already has signed tag: %s\n' "${BASH_SOURCE[0]}" "${context_label}" "${existing_tag}"
@@ -45,5 +55,5 @@ if nearest_git_tag="$(git describe --abbrev=0 2>/dev/null)"; then
 else
    signed_tag="tag_${commit_full_sha}"
 fi
-"${git_signing_command_wrapper[@]}" tag -a -s -m 'Signed by tag-head' "${signed_tag}"
+"${git_signing_command_wrapper[@]}" tag -a -s -m 'Signed by sign-tag-head' "${signed_tag}"
 printf '%s: tagged %s as %s\n' "${BASH_SOURCE[0]}" "${context_label}" "${signed_tag}"

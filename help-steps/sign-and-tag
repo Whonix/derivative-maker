@@ -7,9 +7,9 @@
 
 ## Mint an ephemeral OpenPGP cert, build a policy that authorizes
 ## it on top of the upstream maintainer keys, then sign+tag HEAD
-## for the parent repo and every submodule via the sign-head /
-## tag-head leaves. The caller is responsible for guarding against
-## running this on a developer machine.
+## for the parent repo and every submodule via the sign-tag-head
+## leaf. The caller is responsible for guarding against running
+## this on a developer machine.
 
 set -o errexit
 set -o nounset
@@ -48,9 +48,8 @@ printf '%s: wrote policy to %s\n' "${BASH_SOURCE[0]}" "${ephemeral_policy}"
 
 export sq_git_policy_file="${ephemeral_policy}"
 
-./help-steps/sign-head
-./help-steps/tag-head
+./help-steps/sign-tag-head
 
 ## '$toplevel' is foreach's env, expanded by its child shell.
 # shellcheck disable=SC2016
-git submodule foreach --recursive '"$toplevel/help-steps/sign-head" && "$toplevel/help-steps/tag-head"'
+git submodule foreach --recursive '"$toplevel/help-steps/sign-tag-head"'

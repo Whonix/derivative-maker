@@ -1180,11 +1180,9 @@ export DEBEMAIL
 [ -n "${git_verify_command_wrapper:-}" ] || git_verify_command_wrapper=( git -c "gpg.openpgp.program=$sq_git_wrapper" )
 
 ## Per-call 'git -c key=value' options that configure sq-git-wrapper
-## signing without writing to ~/.gitconfig. Used by help-steps/sign-
-## and-tag (parent setup + tag) and help-steps/sign-head (per-ref
-## amend). user.signingkey is set to DEBEMAIL; sq-git-wrapper's
-## case statement detects '@' and dispatches to 'sq sign --signer-
-## email'. Defined here so both consumers share one source of truth.
+## signing without writing to ~/.gitconfig. user.signingkey is set
+## to DEBEMAIL; sq-git-wrapper's case statement detects '@' and
+## dispatches to 'sq sign --signer-email'.
 git_signing_command_wrapper=(
    git
    -c "user.signingkey=${DEBEMAIL}"
