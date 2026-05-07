@@ -62,38 +62,11 @@ chmod +x -- packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/extrac
 ## (which honors a pre-set sq_git_policy_file) and by
 ## help-steps/git_sanity_test (which dies if sq_git_policy_file is
 ## empty).
-## help-steps/parse-cmd only exports the matching dist_build_*
-## target var for the --target flag passed: '--target virtualbox'
-## sets dist_build_virtualbox="true", '--target source' sets
-## dist_build_source_archive="true" (locally, not exported), and
-## leaves the other target booleans unset entirely. Several
-## downstream consumers in the build steps and submodules (e.g.
-## dm-prepare-release, 2800_create-lb-iso) dereference these without
-## the ':-' default-value form, so under set -o nounset (default)
-## those references abort:
-##   /work/.../dm-prepare-release: line 44: dist_build_installer_dist: unbound variable
-##   /work/.../dm-prepare-release: line 733: dist_build_utm: unbound variable
-##   build-steps.d/2800_create-lb-iso: line 607: dist_build_install_to_root: unbound variable
-## Pre-set the entire 'target' group to empty strings here so the
-## unprotected derefs see "" (which compares unequal to "true" -
-## the existing "skip-this-target" branch is taken). The
-## structurally correct fix is to ':-'-protect each consumer
-## upstream; this CI-side defaulting is the minimal unblocker.
 timeout 1200 \
   ./help-steps/run-as-user --chown "$PWD" -- \
     builder \
     env "sq_git_policy_file=${sq_git_policy_file:-}" \
         "sq_git_trust_root=${sq_git_trust_root:-}" \
-        "dist_build_install_to_root=" \
-        "dist_build_virtualbox=" \
-        "dist_build_qcow2=" \
-        "dist_build_raw=" \
-        "dist_build_utm=" \
-        "dist_build_iso=" \
-        "dist_build_windows_installer=" \
-        "dist_build_installer_dist=" \
-        "dist_build_source_archive=" \
-        "dist_build_source_run=" \
     ./derivative-maker \
       --dry-run true \
       --unsupported-os true \

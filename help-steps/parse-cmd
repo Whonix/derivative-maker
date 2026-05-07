@@ -350,10 +350,8 @@ dist_build_one_parse_cmd() {
                   implicit_dist_type_vm "--target ${2:-}"
                elif [ "${2:-}" = "source" ]; then
                   build_target_counter="$(( $build_target_counter + 1 ))"
-                  dist_build_source_archive="true"
+                  export dist_build_source_archive="true"
                   dist_build_image_upload_supported="true"
-                  ## XXX: Belonging here?
-                  dist_build_target_arch=""
                else
                   parse_cmd_target_error
                fi
@@ -785,12 +783,8 @@ dist_build_one_parse_cmd() {
    if [ "${dist_build_target_arch:-}" = "" ]; then
       if [ "${dist_build_source_archive:-}" = "true" ]; then
          architecture_valid=true
-         ## XXX: Belonging here?
-         dist_build_target_arch=""
       elif [ "${dist_build_source_run:-}" = "true" ]; then
          architecture_valid=true
-         ## XXX: Belonging here?
-         dist_build_target_arch=""
       else
          error "\
 ${red}${bold}Missing '--arch' option!
