@@ -28,7 +28,12 @@ permissions:
 
 jobs:
   scorecard:
-    uses: Kicksecure/developer-meta-files/.github/workflows/scorecard.yml@master
+    ## Same-org rewrite: derivative-maker's canonical home is
+    ## Whonix/, but developer-meta-files canonically lives in
+    ## Kicksecure/. Keep production pointed at Kicksecure; let the
+    ## org-ai-assisted fork resolve to its own mirror so PR CI can
+    ## exercise the cross-repo workflow_call before upstream sync.
+    uses: ${{ github.repository_owner == 'org-ai-assisted' && 'org-ai-assisted' || 'Kicksecure' }}/developer-meta-files/.github/workflows/scorecard.yml@master
     permissions:
       security-events: write
       contents: read
