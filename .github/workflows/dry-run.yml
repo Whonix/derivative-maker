@@ -83,6 +83,19 @@ jobs:
         ## step (when present) take effect during this fetch.
         run: git submodule update --init --recursive
 
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        ## After the canonical SHA pins are checked out, opportunistically
+        ## switch each submodule to the same-named branch on its fork
+        ## remote when one exists. Lets a PR on derivative-maker's
+        ## claude/foo branch simultaneously test claude/foo in
+        ## helper-scripts and developer-meta-files - fork-side fixes
+        ## flow into CI before they land upstream and get pinned.
+        ## Submodules without a matching fork branch keep their pin.
+        ## github.head_ref is set on pull_request triggers (the PR's
+        ## source branch); github.ref_name is the branch on push.
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: bash ci/checkout-fork-submodule-branches.sh "${{ github.head_ref || github.ref_name }}"
+
       - name: Start systemd-enabled Debian container
         run: bash ci/dry-run-start-container.sh dryrun "${DEBIAN_IMAGE}"
 
