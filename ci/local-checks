@@ -7,12 +7,12 @@
 ## CI lint workflow runs as separate steps. Use this for one-shot
 ## local pre-commit-style coverage.
 ##
-##   bash ci/local-checks.sh    # run all
+##   ./ci/local-checks    # run all
 ##
 ## CI invokes the per-step scripts directly so failures are attributed
 ## to the right step in the GitHub Actions UI:
-##   ci/lint-yaml.sh
-##   ci/lint-shellcheck.sh
+##   ci/lint-yaml
+##   ci/lint-shellcheck
 ##
 ## Why no other checks: bash_n is redundant with shellcheck;
 ## actionlint is not packaged in Debian (see
@@ -28,9 +28,9 @@ set -o pipefail
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." || exit 2
 
 rc=0
-bash ci/lint-yaml.sh       || rc=$?
+./ci/lint-yaml       || rc=$?
 printf '\n'
-bash ci/lint-shellcheck.sh || rc=$?
+./ci/lint-shellcheck || rc=$?
 
 if (( rc != 0 )); then
   printf '\nFAILED\n' >&2

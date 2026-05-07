@@ -1,0 +1,82 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Inputs:
+##   $1 - container name (e.g. "dryrun")
+##   $2 - debian image reference (digest-pinned recommended)
+##
+## Non-obvious flags:
+##   no --rm    : leave the container around on failure so the
+##                workflow's teardown step can pull 'docker logs'.
+##   --cgroupns=host : systemd >= 247 only boots cleanly under
+##                cgroups v2 when the container shares the host's
+##                cgroup namespace; otherwise it exits 255 silently.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+if [ "$#" -ne 2 ]; then
+   printf '%s\n' "usage: ${BASH_SOURCE[0]} <container-name> <image>" >&2
+   exit 64
+fi
+
+container_name="$1"
+image="$2"
+
+## container_entrypoint is absolute: docker-run resolves the entry
+## command before --workdir takes effect.
+host_repo="${PWD}"
+container_repo=/work
+container_entrypoint="${container_repo}/docker/dry-run-entrypoint"
+
+docker run \
+   --detach \
+   --privileged \
+   --cgroupns=host \
+   --name "${container_name}" \
+   --tmpfs /run \
+   --tmpfs /run/lock \
+   --volume /sys/fs/cgroup:/sys/fs/cgroup:rw \
+   --volume "${host_repo}":"${container_repo}" \
+   --workdir "${container_repo}" \
+   -- \
+   "${image}" \
+   "${container_entrypoint}"
+
+## 'degraded' counts: container default units (resolved, networkd-
+## wait-online, getty, ...) routinely fail in a minimal container and
+## that's fine. If a unit dry-run actually needs (approx) failed,
+## the dry-run step will fail on its own. 90s covers ~10s apt
+## install + boot.
+for attempt in $(seq 1 90); do
+   state="$(docker exec "${container_name}" systemctl is-system-running 2>/dev/null || true)"
+   case "${state}" in
+      running)
+         printf '%s\n' "systemd state: running (after ${attempt}s)"
+         exit 0
+         ;;
+      degraded)
+         printf '%s\n' "systemd state: degraded (after ${attempt}s); failed units:" >&2
+         docker exec "${container_name}" systemctl --failed --no-legend --no-pager >&2 || true
+         exit 0
+         ;;
+   esac
+   sleep 1
+done
+
+printf '%s\n' "ERROR: systemd did not become ready within 90s" >&2
+printf '%s\n' "" "--- docker ps -a (container state) ---" >&2
+docker ps -a --filter "name=^${container_name}\$" --no-trunc >&2 || true
+printf '%s\n' "" "--- docker logs ${container_name} (entrypoint output) ---" >&2
+docker logs "${container_name}" >&2 || true
+printf '%s\n' "" "--- systemctl --failed (best-effort, may fail if container is dead) ---" >&2
+docker exec "${container_name}" systemctl --failed >&2 || true
+exit 1

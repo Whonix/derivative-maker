@@ -1,0 +1,26 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## debian:trixie does not ship /sbin/init; install systemd-sysv
+## here rather than baking it into a custom image.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update -qq
+apt-get install --yes --no-install-recommends -- \
+   systemd-sysv ca-certificates
+
+## exec is REQUIRED: this script is the container's PID 1; without
+## exec, /sbin/init runs as PID > 1 and systemd's boot-check times out.
+exec /sbin/init

@@ -1,0 +1,27 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Sourced library. Defines verify_ref(): exits 0 if a ref passes
+## help-steps/git_sanity_test --mode ref against sq_git_policy_file,
+## non-zero otherwise. Caller must have sq_git_policy_file,
+## sq_git_trust_root, and the dist_build_ignore_* booleans set in
+## env (sourcing help-steps/variables provides defaults).
+
+verify_ref_self_dir="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+verify_ref_git_sanity_test="${verify_ref_self_dir}/git_sanity_test"
+test -x "${verify_ref_git_sanity_test}"
+
+verify_ref() {
+   local ref ref_type context
+
+   ref="$1"
+   ref_type="$2"
+   context="$3"
+   "${verify_ref_git_sanity_test}" \
+      --mode ref --ref "${ref}" --ref-type "${ref_type}" --context "${context}" \
+      >/dev/null 2>&1
+}

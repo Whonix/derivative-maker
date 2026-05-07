@@ -294,7 +294,6 @@ dist_build_one_parse_cmd() {
                   dist_build_image_upload_supported="true"
                elif [ "${dist_build_flavor:-}" = "source" ]; then
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
-                  dist_build_target_arch=""
                   export dist_build_source_run="true"
                else
                   parse_cmd_flavor_error
@@ -350,10 +349,8 @@ dist_build_one_parse_cmd() {
                   implicit_dist_type_vm "--target ${2:-}"
                elif [ "${2:-}" = "source" ]; then
                   build_target_counter="$(( $build_target_counter + 1 ))"
-                  dist_build_source_archive="true"
+                  export dist_build_source_archive="true"
                   dist_build_image_upload_supported="true"
-                  ## XXX: Belonging here?
-                  dist_build_target_arch=""
                else
                   parse_cmd_target_error
                fi
@@ -454,6 +451,15 @@ dist_build_one_parse_cmd() {
                   export dist_build_target_arch="${2:-}"
                   true "${cyan}dist_build_target_arch set to $dist_build_target_arch.${reset}"
                fi
+               shift 2
+               ;;
+           --policy-file)
+               if [ "${2:-}" = "" ]; then
+                  printf '%s\n' "${red}${bold}ERROR: --policy-file must not be empty.${reset}"
+                  exit 1
+               fi
+               export sq_git_policy_file="${2:-}"
+               true "${cyan}sq_git_policy_file set to ${sq_git_policy_file}.${reset}"
                shift 2
                ;;
            --initramfs)
@@ -785,12 +791,8 @@ dist_build_one_parse_cmd() {
    if [ "${dist_build_target_arch:-}" = "" ]; then
       if [ "${dist_build_source_archive:-}" = "true" ]; then
          architecture_valid=true
-         ## XXX: Belonging here?
-         dist_build_target_arch=""
       elif [ "${dist_build_source_run:-}" = "true" ]; then
          architecture_valid=true
-         ## XXX: Belonging here?
-         dist_build_target_arch=""
       else
          error "\
 ${red}${bold}Missing '--arch' option!
@@ -853,7 +855,7 @@ ${reset}"
    ## Using export, so it can be read by chroot-post.d scripts.
    export dist_build_target_arch
 
-   true "${cyan}INFO: dist_build_target_arch    (--arch): $dist_build_target_arch${reset}"
+   true "${cyan}INFO: dist_build_target_arch    (--arch): ${dist_build_target_arch:-}${reset}"
    true "${cyan}INFO: BUILD_KERNEL_PKGS       (--kernel): ${BUILD_KERNEL_PKGS:-}${reset}"
    true "${cyan}INFO: BUILD_HEADER_PKGS      (--headers): ${BUILD_HEADER_PKGS:-}${reset}"
 

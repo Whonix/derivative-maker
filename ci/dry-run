@@ -1,0 +1,22 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+if [ "${CI:-}" != "true" ]; then
+   printf '%s: refusing to run outside CI (CI != "true")\n' "${BASH_SOURCE[0]}" >&2
+   exit 1
+fi
+
+cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
+
+run-parts --exit-on-error --verbose -- ./ci/dry-run.d

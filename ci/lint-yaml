@@ -9,7 +9,7 @@
 ## that should be visible, not silently skipped.
 ##
 ## Runs in CI as the 'yaml workflow files' step of lint.yml.
-## Standalone-runnable via 'bash ci/lint-yaml.sh'.
+## Standalone-runnable via './ci/lint-yaml'.
 
 set -o nounset
 set -o errtrace

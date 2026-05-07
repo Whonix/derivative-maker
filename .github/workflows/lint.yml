@@ -57,13 +57,13 @@ jobs:
           persist-credentials: false
 
       - name: Install lint dependencies (Debian apt)
-        run: bash ci/lint-install.sh
+        run: ./ci/lint-install
 
       - name: Lint diagnostics
-        run: bash ci/lint-diagnostics.sh
+        run: ./ci/lint-diagnostics
 
       - name: Lint yaml
-        run: bash ci/lint-yaml.sh
+        run: ./ci/lint-yaml
 
       - name: Lint shellcheck
-        run: bash ci/lint-shellcheck.sh
+        run: ./ci/lint-shellcheck

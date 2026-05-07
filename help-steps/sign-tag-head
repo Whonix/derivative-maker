@@ -1,0 +1,61 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Caller (sign-and-tag) must have exported sq_git_policy_file.
+## Two phases: sign HEAD if unsigned (rewrites the commit via amend),
+## then tag HEAD if no signed tag points at it.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
+
+## variables.bsh's source cds away as a side effect. CWD must stay
+## at the caller's working tree (= the submodule when foreach lands
+## us there) so git operates on the right git db.
+saved_cwd="${PWD}"
+export dist_build_source_run=true
+export dist_build_one_parsed=true
+# shellcheck source=help-steps/pre
+source "${repo_root}/help-steps/pre"
+# shellcheck source=help-steps/variables
+source "${repo_root}/help-steps/variables"
+cd -- "${saved_cwd}"
+
+# shellcheck source=help-steps/verify-ref
+source "${repo_root}/help-steps/verify-ref"
+
+context_label="${displaypath:-main repo}"
+
+## Phase 1: sign HEAD if unsigned.
+if verify_ref HEAD commit "${context_label} HEAD"; then
+   printf '%s: %s HEAD already signed\n' "${BASH_SOURCE[0]}" "${context_label}"
+else
+   "${git_signing_command_wrapper[@]}" commit --amend --no-edit -S
+   printf '%s: %s HEAD re-signed\n' "${BASH_SOURCE[0]}" "${context_label}"
+fi
+
+## Phase 2: tag HEAD if no signed tag points at it.
+for existing_tag in $(git tag --points-at HEAD); do
+   if verify_ref "${existing_tag}" tag "${context_label} tag"; then
+      printf '%s: %s already has signed tag: %s\n' "${BASH_SOURCE[0]}" "${context_label}" "${existing_tag}"
+      exit 0
+   fi
+done
+
+commit_full_sha="$(git rev-parse HEAD)"
+if nearest_git_tag="$(git describe --abbrev=0 2>/dev/null)"; then
+   signed_tag="${nearest_git_tag}_${commit_full_sha}"
+else
+   signed_tag="tag_${commit_full_sha}"
+fi
+"${git_signing_command_wrapper[@]}" tag -a -s -m 'Signed by sign-tag-head' "${signed_tag}"
+printf '%s: tagged %s as %s\n' "${BASH_SOURCE[0]}" "${context_label}" "${signed_tag}"

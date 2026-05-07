@@ -1,0 +1,41 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Install build deps + signing deps inside the dry-run container.
+##
+## Notes on a few entries that aren't self-evident from the package
+## name:
+##   lsb-release      - help-steps/variables calls 'lsb_release'.
+##   procps           - helper-scripts trace.bsh calls 'ps'.
+##   signify-openbsd  - asserted-present by signing-key-create's
+##                      sanity_tests gate, even though the OpenPGP
+##                      path of sign-and-tag does not use it.
+##
+## TODO: deduplicate against buildconfig.d/30_dependencies.conf and
+## build-steps.d/1200_prepare-build-machine; ideally extract their
+## apt-install logic into a help-steps helper that both call.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+if [ "${CI:-}" != "true" ]; then
+   printf '%s: refusing to run outside CI\n' "${BASH_SOURCE[0]}" >&2
+   exit 1
+fi
+
+apt-get update -qq
+
+apt-get install --yes --no-install-recommends \
+   bash sudo git ca-certificates \
+   lsb-release procps \
+   python3-yaml shellcheck file moreutils \
+   cowbuilder mmdebstrap debootstrap \
+   sequoia-git sq sqop signify-openbsd safe-rm

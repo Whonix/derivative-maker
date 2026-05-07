@@ -3,21 +3,13 @@
 ## gated on the dry-run passing in the same Actions UI run; also
 ## available as workflow_dispatch for ad-hoc manual smoke tests.
 ##
-## The previous tag-push trigger has been moved to
-## run_automated_builder.yml: a single workflow run on tag now does
-## (dry-run -> build) instead of two parallel runs that did not
-## share success state.
-##
 ## See agents/github-actions-security.md for the standard
 ## permissions / persist-credentials / fork-PR / SHA-pin patterns.
 
 name: Dry-run
 
 on:
-  ## Reusable workflow entrypoint - run_automated_builder.yml's
-  ## first job calls this via 'uses: ./.github/workflows/dry-run.yml'.
   workflow_call:
-  ## Manual ad-hoc trigger from the Actions tab.
   workflow_dispatch:
 
 permissions:
@@ -28,8 +20,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ## debian:trixie - Debian 13, current stable. TODO: update for
-  ## forky. Re-pin procedure: agents/github-actions-security.md.
+  ## debian:trixie - Debian 13, current stable. TODO: forky.
+  ## Re-pin procedure: agents/github-actions-security.md.
   DEBIAN_IMAGE: 'debian:trixie@sha256:35b8ff74ead4880f22090b617372daff0ccae742eb5674455d542bef71ef1999'
 
 jobs:
@@ -41,47 +33,43 @@ jobs:
 
     timeout-minutes: 25
 
-    ## A plain `container:` block runs the steps inside a Docker
-    ## exec'd into the image, NOT under systemd as PID 1. derivative-
-    ## maker's build_machine_setup expects `systemctl start approx`
-    ## to bring up the local apt cache; without systemd as PID 1
-    ## that call is a no-op and `apt-get update` against
-    ## 127.0.0.1:9977 fails.
-    ##
-    ## Option C: run a detached, privileged container with
-    ## /sbin/init as the entrypoint so systemd boots inside; then
-    ## `docker exec` each build step into it. The host runs
-    ## ubuntu-latest (which already has systemd, only used to host
-    ## the docker daemon).
+    ## Steps run inside a privileged debian:trixie with systemd as
+    ## PID 1 so 'systemctl start approx' (the build's apt cache)
+    ## works. The host (ubuntu-latest) only hosts docker; a plain
+    ## 'container:' block does not boot systemd inside.
     steps:
-      - name: Checkout repository (with submodules)
+      - name: Checkout repository (no submodules yet)
+        ## submodules: false so the next steps can re-target each
+        ## submodule's origin URL at the fork before init.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        ## Must run BEFORE 'submodule update --init' so the rewrites
+        ## are visible to the recursive clone.
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: ./ci/configure-fork-mirror "${{ github.repository_owner }}" "${{ github.repository_owner }}"
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        ## head_ref on a fork PR is attacker-named; route it through
+        ## an env var rather than inlining (actionlint).
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
+
       - name: Start systemd-enabled Debian container
-        run: bash ci/dry-run-start-container.sh dryrun "${DEBIAN_IMAGE}"
+        run: ./docker/dry-run-start-container dryrun "${DEBIAN_IMAGE}"
 
-      - name: Install git inside container (required by submodule paths)
-        run: bash ci/dry-run-install-container-git.sh dryrun
-
-      - name: Install build prerequisites in container
-        ## --env CI=true is required: the in-container scripts'
-        ## guard clauses refuse to run unless CI=true, and `docker
-        ## exec` does not propagate the GHA runner's environment.
-        run: docker exec --env CI=true dryrun bash ci/dry-run-install.sh
-
-      - name: Drop privileges and run derivative-maker --dry-run true
-        run: docker exec --env CI=true dryrun bash ci/dry-run-derivative-maker.sh
+      - name: Run dry-run inside container
+        run: docker exec --env CI=true dryrun ./ci/dry-run
 
       - name: Tear down container
         if: always()
         run: docker rm --force dryrun || true
-
-      ## No artifact upload step: --dry-run prints to stdout (captured
-      ## by the Actions step log); nothing in help-steps/ or
-      ## build-steps.d/ writes a .log file. If a future build step
-      ## starts producing one, add the upload step back with the
-      ## actual path - don't pre-emptively glob.

@@ -1,0 +1,21 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## signing-key-create refuses to run as root, so drop to builder.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+target_user=builder
+
+cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.."
+
+./help-steps/run-as-user --chown /work -- "${target_user}" ./help-steps/sign-and-tag
