@@ -488,9 +488,9 @@ mode_submodules() {
    [ -r "${MYDIR}/git_sanity_test" ] || die "helper script not found or not readable: '${MYDIR}/git_sanity_test'"
 
    export MYDIR
-   sq_git_trust_root=HEAD \
-      git submodule foreach --recursive \
-         'bash "$MYDIR/git_sanity_test" --mode working-tree --context "$displaypath"'
+   ## TODO: why did we hardcode the following variable here? sq_git_trust_root=HEAD
+   git submodule foreach --recursive \
+      'bash "$MYDIR/git_sanity_test" --mode working-tree --context "$displaypath"'
 }
 
 mode_all() {
