@@ -148,6 +148,12 @@ git config --global gpg.openpgp.program "${PWD}/help-steps/sq-git-wrapper"
 git config --global commit.gpgsign true
 git config --global tag.gpgsign true
 git config --global user.email "${DEBEMAIL}"
+## user.name: any non-empty string. git aborts the amend below with
+## 'fatal: empty ident name' if user.name is unset. Use the same
+## fixed CI label we passed to 'sq-git policy authorize' above so
+## the author identity in the rewritten commit lines up with the
+## policy entry.
+git config --global user.name "ci-ephemeral-key"
 
 ## (6) Re-sign HEAD with the CI key. --amend --no-edit rewrites the
 ## tip without changing its content; -S forces a signature pass
