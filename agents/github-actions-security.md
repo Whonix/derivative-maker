@@ -1,5 +1,13 @@
 # GitHub Actions security - required patterns
 
+For org-wide cross-repo conventions (reusable workflows, the
+`github.*` constraint in `jobs.<id>.uses:`, `schedule:`-must-be-at-
+caller, cross-repo `uses:` pinning), see
+`packages/kicksecure/developer-meta-files/agents/github-actions.md`
+([upstream](https://github.com/Kicksecure/developer-meta-files/blob/master/agents/github-actions.md)).
+This file covers the **derivative-maker-specific** security patterns
+only.
+
 When editing `.github/workflows/*.yml`, every workflow MUST:
 
 1. **`permissions: contents: read` at the workflow top level.**
