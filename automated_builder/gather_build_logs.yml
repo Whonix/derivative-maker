@@ -23,11 +23,16 @@
     - name: Copy install_source log
       fetch:
         src: "/home/ansible/install_source.log"
-        dest: "./logs/install_source.log"
+        ## Path relative to ansible-playbook cwd (the repo root).
+        ## Must match the workflow's upload-artifacts 'path:'
+        ## argument; previously this wrote to ./logs/ at the repo
+        ## root while the upload step read ./automated_builder/logs/,
+        ## so the artifact was effectively empty.
+        dest: "./automated_builder/logs/install_source.log"
         flat: yes
 
     - name: Copy build log
       fetch:
         src: "/home/ansible/build.log"
-        dest: "./logs/build.log"
+        dest: "./automated_builder/logs/build.log"
         flat: yes

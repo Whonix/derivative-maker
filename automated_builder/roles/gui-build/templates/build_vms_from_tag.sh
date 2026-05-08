@@ -14,14 +14,22 @@ readonly BUILD_LOG='/home/ansible/build.log'
 ## stderr. Ansible captures the script's stderr and surfaces it in
 ## the task output, so the actual build error becomes visible in the
 ## CI log without having to SSH back to the VPS to read build.log.
+##
+## Output is wrapped in GitHub Actions ::group::/::endgroup::
+## workflow commands; even though this script runs on the VPS, the
+## tokens propagate through ansible's stdout into the runner's log,
+## where the Actions log viewer renders them as a collapsible block.
+## Failure paths are noisy by definition - keeping the 200-line tail
+## one click away (collapsed by default) keeps the surrounding log
+## scannable.
 on_exit() {
   local rc=$?
   if [ "${rc}" -ne 0 ] && [ -r "${BUILD_LOG}" ]; then
-    printf '%s\n' \
-      "" \
-      "=== build_vms_from_tag.sh: failed (rc=${rc}). Tail of '${BUILD_LOG}': ===" >&2
+    printf '::group::build.log tail (rc=%s)\n' "${rc}" >&2
+    printf '%s\n' "=== Tail of '${BUILD_LOG}' (last 200 lines) ===" >&2
     tail --lines=200 -- "${BUILD_LOG}" >&2 || true
     printf '%s\n' '=== end of build.log tail ===' >&2
+    printf '::endgroup::\n' >&2
   fi
   exit "${rc}"
 }
