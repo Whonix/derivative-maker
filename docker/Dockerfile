@@ -1,7 +1,14 @@
 ## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
-FROM debian:trixie-slim AS baseimage
+## debian:trixie-slim manifest digest as of 2026-05-08, resolved via
+## the Docker Hub registry API. Re-resolve with:
+##   curl -sS -H "Authorization: Bearer $(curl -s 'https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/debian:pull' | jq -r .token)" \
+##        -H 'Accept: application/vnd.docker.distribution.manifest.list.v2+json' \
+##        -D - -o /dev/null \
+##        https://registry-1.docker.io/v2/library/debian/manifests/trixie-slim \
+##        | grep -i docker-content-digest
+FROM debian:trixie-slim@sha256:cedb1ef40439206b673ee8b33a46a03a0c9fa90bf3732f54704f99cb061d2c5a AS baseimage
 
 ENV \
 USER=user \
