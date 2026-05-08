@@ -30,6 +30,13 @@ xtrace_restore
 
 export ANSIBLE_HOST_KEY_CHECKING=False
 
+## Pull readability config (yaml callback, deprecation silence,
+## stderr-on-failure) from automated_builder/ansible.cfg. Without
+## this, ansible's default callback dumps failed task results as
+## one-line JSON with '\n'-as-text, which the GitHub Actions log
+## viewer renders as a single illegible line.
+export ANSIBLE_CONFIG="${PWD}/automated_builder/ansible.cfg"
+
 main() {
   decrypt_vault
   run_builder
