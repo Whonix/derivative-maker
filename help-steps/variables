@@ -263,7 +263,7 @@ export dist_build_ignore_uncommitted
 ##   1. Code defaults (this file)
 ##   2. ${source_code_folder_dist}/buildconfig.d/*  (in-tree, ships with code)
 ##   3. /etc/buildconfig-dist.d/*                   (system override)
-##   4. ../buildconfig.d/*                          (user/wrapper override)
+##   4. ${HOMEVAR}/buildconfig.d/*                  (user override)
 ##   5. Environment variables
 ##   6. Command-line options (parse-cmd)
 ##
@@ -1110,7 +1110,7 @@ fi
 
 ## {{{ buildconfig.d
 
-[ -n "${dist_build_config_dirs_list:-}" ] || dist_build_config_dirs_list="${source_code_folder_dist}/buildconfig.d /etc/buildconfig-dist.d ../buildconfig.d"
+[ -n "${dist_build_config_dirs_list:-}" ] || dist_build_config_dirs_list="${source_code_folder_dist}/buildconfig.d /etc/buildconfig-dist.d ${HOMEVAR}/buildconfig.d"
 
 dist_build_source_config_dir() {
    true "${cyan}INFO: Checking if dist_build_config_dir_item $dist_build_config_dir_item exists...${reset}"
