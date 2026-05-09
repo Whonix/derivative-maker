@@ -101,9 +101,7 @@ signify_key_create() {
    true "INFO: END of ${FUNCNAME[0]}"
 }
 
-## OpenPGP policy persistent setup. Replaces the per-build ephemeral-
-## policy churn that lived in help-steps/sign-and-tag. After this
-## function:
+## OpenPGP policy persistent setup. After this function:
 ##
 ##   ${openpgp_policy_file_user} = a copy of ${source_code_folder_dist}/
 ##                                 openpgp-policy.toml with the local
@@ -111,13 +109,15 @@ signify_key_create() {
 ##                                 --project-maintainer alongside the
 ##                                 upstream maintainer keys.
 ##   ${openpgp_cert_file_user}   = the local maintainer's public cert
-##                                 (output of `sq cert export --all`).
+##                                 (output of
+##                                 `sq cert export --cert-email "${DEBEMAIL}"`).
 ##
-## Idempotent at the result level: re-running this script after
-## upstream rotates a maintainer key in the shipped openpgp-policy.toml
-## refreshes the user-side copy. Operator runs signing-key-create
-## once per machine, then again after any pull that touches the
-## shipped policy.
+## Idempotent at the file-existence level: each file is created
+## only if absent. Pre-existing files are PRESERVED (see the
+## per-step comments inside the function for the provisioning
+## rationale). To force a refresh after upstream rotates a
+## maintainer key in the shipped openpgp-policy.toml, the
+## operator deletes the user-side file(s) and re-runs.
 ##
 ## Path locations live in help-steps/variables (openpgp_policy_file_user,
 ## openpgp_cert_file_user). User override only - the /etc/buildconfig.d/

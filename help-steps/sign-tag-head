@@ -12,13 +12,12 @@
 ## Args:
 ##   $1 - context label, used in operator-facing log lines to
 ##        identify which repo / submodule the message is about.
-##        Pass 'main repo' (or any short identifier) for the parent
-##        repo invocation; pass "${displaypath}" inside
+##        Pass 'main repo' (or any short identifier) for the
+##        parent repo invocation; pass "${displaypath}" inside
 ##        'git submodule foreach' since git sets that env var to
-##        the submodule's relative path. Required: the previous
-##        '"${displaypath:-main repo}"' auto-detection silently
-##        relabelled the parent repo's output if displaypath
-##        leaked in from a parent shell.
+##        the submodule's relative path. Required - no fallback,
+##        a missing arg fails the script at the parameter
+##        expansion below.
 
 set -o errexit
 set -o nounset

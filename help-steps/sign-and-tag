@@ -40,7 +40,7 @@ source "${repo_root}/help-steps/variables"
 
 cd -- "${repo_root}"
 
-## Refuse to run for redistributable builds. Two reasons:
+## Refuse to run for redistributable builds:
 ##
 ##   1. Redistributable builds (dist_build_redistributable=true,
 ##      set by help-steps/dm-build-official) rely on offline-signed
@@ -48,14 +48,13 @@ cd -- "${repo_root}"
 ##      defeats the offline-key trust root and produces images
 ##      whose tag history doesn't match what shipped upstream.
 ##   2. The maintainer's redistributable-build signing key lives
-##      OFFLINE by design; this script's openpgp_policy_setup ->
-##      sq cert export path needs the local sq cert store to
-##      contain the cert, which it deliberately doesn't on a
-##      redistributable-build host.
+##      OFFLINE by design; the local sq cert store on a
+##      redistributable-build host deliberately does not contain
+##      the cert this script's openpgp_policy_setup -> sq cert
+##      export path needs.
 ##
-## sign-and-tag's only legitimate caller is ci/dry-run.d/200_sign-and-tag
-## (the CI dry-run pipeline). Personal builds may also invoke it.
-## Production / redistributable builds must not.
+## Legitimate callers: ci/dry-run.d/200_sign-and-tag and personal
+## builds.
 if [ "${dist_build_redistributable:-}" = 'true' ]; then
    printf '%s\n' \
       "${BASH_SOURCE[0]}: refusing to run for redistributable build" \
@@ -69,9 +68,10 @@ if [ "${dist_build_redistributable:-}" = 'true' ]; then
    exit 1
 fi
 
-## Idempotent setup. Re-running picks up upstream maintainer-key
-## rotation if project_policy changed since last invocation. The
-## script is a no-op on the cert side once a key exists.
+## Idempotent: signing-key-create preserves pre-existing
+## ${openpgp_policy_file_user} / ${openpgp_cert_file_user}, so this
+## is a no-op once both files are in place. Operator force-refreshes
+## by deleting the file(s) and re-running.
 ./help-steps/signing-key-create
 
 policy_file="$(openpgp_policy_resolve)"
@@ -91,10 +91,9 @@ export sq_git_policy_file="${policy_file}"
 ./help-steps/sign-tag-head 'main repo'
 
 ## '$toplevel' and '$displaypath' are foreach's env, expanded by
-## its child shell. displaypath is the submodule's relative path -
+## its child shell. $displaypath is the submodule's relative path,
 ## passed explicitly to sign-tag-head as the context label so the
 ## per-submodule output identifies which submodule the line is
-## about. Auto-detection from inside sign-tag-head was removed in
-## favour of this explicit argument.
+## about.
 # shellcheck disable=SC2016
 git submodule foreach --recursive '"$toplevel/help-steps/sign-tag-head" "$displaypath"'
