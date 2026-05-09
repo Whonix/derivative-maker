@@ -37,13 +37,18 @@ cd -- "${repo_root}"
 ## root. CI is exempt - the dry-run pipeline uses an ephemeral
 ## key + dist_build_redistributable=true and still needs to
 ## exercise sign-and-tag.
-if [ "${dist_build_redistributable:-}" = 'true' ] && [ "${CI:-}" != 'true' ]; then
-   printf '%s\n' \
-      "${BASH_SOURCE[0]}: refusing to run for redistributable build" \
-      "  (dist_build_redistributable=true, CI is not 'true')" \
-      "Redistributable builds use offline-signed upstream tags" \
-      "exclusively." >&2
-   exit 1
+if [ "${dist_build_redistributable}" = 'true' ]; then
+   true "INFO: ${BASH_SOURCE[0]}: dist_build_redistributable=true detected"
+   if [ "${CI}" = 'true' ]; then
+      true "INFO: ${BASH_SOURCE[0]}: CI=true, allowing sign+tag against ephemeral key"
+   else
+      printf '%s\n' \
+         "${BASH_SOURCE[0]}: refusing to run for redistributable build" \
+         "  (dist_build_redistributable=true, CI is not 'true')" \
+         "Redistributable builds use offline-signed upstream tags" \
+         "exclusively." >&2
+      exit 1
+   fi
 fi
 
 if [ -z "${openpgp_policy_file_resolved}" ]; then
