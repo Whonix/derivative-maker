@@ -1102,10 +1102,10 @@ fi
 
 ## {{{ buildconfig.d
 
-[ -n "${dist_build_config_dirs:-}" ] || dist_build_config_dirs="${source_code_folder_dist}/buildconfig.d /etc/buildconfig-dist.d ../buildconfig.d"
+[ -n "${dist_build_config_dirs_list_list:-}" ] || dist_build_config_dirs_list_list="${source_code_folder_dist}/buildconfig.d /etc/buildconfig-dist.d ../buildconfig.d"
 
 dist_build_source_config_dir() {
-   true "${cyan}INFO: Checking if dist_build_config_dir $dist_build_config_dir exists...${reset}"
+   true "${cyan}INFO: Checking if dist_build_config_dir_item $dist_build_config_dir_item exists...${reset}"
    if [ -d "$1" ]; then
       true "${cyan}INFO: Parsing $1...${reset}"
       shopt -s nullglob
@@ -1119,9 +1119,10 @@ dist_build_source_config_dir() {
    fi
 }
 
-for dist_build_config_dir in $dist_build_config_dirs; do
-   dist_build_source_config_dir "$dist_build_config_dir"
+for dist_build_config_dir_item in $dist_build_config_dirs_list_list_list; do
+   dist_build_source_config_dir "$dist_build_config_dir_item"
 done
+unset dist_build_config_dir_item
 
 if [ ! "${dist_build_custom_config_dir:-}" = "" ]; then
    dist_build_source_config_dir "$dist_build_custom_config_dir"
@@ -1143,7 +1144,7 @@ fi
 ## read by sign-and-tag and any consumer of sq_git_policy_file.
 ##
 ## Layered the same way as buildconfig.d/*.conf - each entry of
-## dist_build_config_dirs may carry an openpgp-policy.toml /
+## dist_build_config_dirs_list may carry an openpgp-policy.toml /
 ## openpgp-cert.pem; later entries override earlier ones.
 [ -n "${openpgp_policy_filename:-}" ] || openpgp_policy_filename='openpgp-policy.toml'
 [ -n "${openpgp_cert_filename:-}" ]   || openpgp_cert_filename='openpgp-cert.pem'
@@ -1153,22 +1154,22 @@ fi
 [ -n "${openpgp_policy_file_project:-}" ] || openpgp_policy_file_project="${source_code_folder_dist}/buildconfig.d/${openpgp_policy_filename}"
 
 ## Write target for signing-key-create = the highest-precedence
-## (= last) entry of dist_build_config_dirs - the "user/wrapper
+## (= last) entry of dist_build_config_dirs_list - the "user/wrapper
 ## override" location per the convention documented at
 ## variables:254.
-[ -n "${openpgp_policy_dir_user:-}" ]  || openpgp_policy_dir_user="${dist_build_config_dirs##* }"
+[ -n "${openpgp_policy_dir_user:-}" ]  || openpgp_policy_dir_user="${dist_build_config_dirs_list_list##* }"
 [ -n "${openpgp_policy_file_user:-}" ] || openpgp_policy_file_user="${openpgp_policy_dir_user}/${openpgp_policy_filename}"
 [ -n "${openpgp_cert_file_user:-}" ]   || openpgp_cert_file_user="${openpgp_policy_dir_user}/${openpgp_cert_filename}"
 
 ## ${openpgp_policy_file_resolved} = highest-precedence existing-
-## and-readable openpgp-policy.toml across dist_build_config_dirs,
+## and-readable openpgp-policy.toml across dist_build_config_dirs_list,
 ## or empty if none exists. Consumers that require a maintainer-
 ## authorized policy (sign-and-tag) bail out on empty. Iterate
 ## forward and let the LAST match win = matches the .conf
 ## sourcing precedence (later entry overrides earlier).
 if [ -z "${openpgp_policy_file_resolved:-}" ]; then
    openpgp_policy_file_resolved=""
-   for openpgp_policy_dir in $dist_build_config_dirs; do
+   for openpgp_policy_dir in $dist_build_config_dirs_list_list; do
       if [ -r "${openpgp_policy_dir}/${openpgp_policy_filename}" ]; then
          openpgp_policy_file_resolved="${openpgp_policy_dir}/${openpgp_policy_filename}"
       fi
@@ -1187,7 +1188,7 @@ export openpgp_policy_file_resolved
 ## Redistributable builds must not pick up an override policy from
 ## a contaminated host; dm-build-official is responsible for
 ## ensuring no openpgp-policy.toml exists in any
-## dist_build_config_dirs entry above the shipped one, or for
+## dist_build_config_dirs_list entry above the shipped one, or for
 ## pinning sq_git_policy_file explicitly.
 [[ -v sq_git_policy_file ]] || \
    sq_git_policy_file="${openpgp_policy_file_resolved:-${openpgp_policy_file_project}}"

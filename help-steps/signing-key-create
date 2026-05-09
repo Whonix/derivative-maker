@@ -100,7 +100,7 @@ signify_key_create() {
 ##                                 (sq cert export --cert-email)
 ##
 ## ${openpgp_policy_dir_user} is the highest-precedence entry of
-## ${dist_build_config_dirs} (= the user/wrapper override
+## ${dist_build_config_dirs_list} (= the user/wrapper override
 ## location; see help-steps/variables). Lower-precedence entries
 ## (in particular /etc/buildconfig-dist.d/) can be admin-
 ## provisioned with an openpgp-policy.toml outside this script.
