@@ -1,0 +1,24 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Bootstrap signing material (OpenPGP key, signify keypair, policy
+## file, maintainer cert) for the build user before 200_sign-and-tag
+## consumes them. Mirrors build-steps.d/1200_prepare-build-machine.
+## Idempotent.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+target_user=builder
+
+cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.."
+
+./help-steps/run-as-user --chown /work -- "${target_user}" ./help-steps/signing-key-create

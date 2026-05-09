@@ -6,21 +6,16 @@
 ## AI-Assisted
 
 ## Sign+tag HEAD for the parent repo and every submodule via the
-## sign-tag-head leaf, using the persistent OpenPGP policy file
-## written by help-steps/signing-key-create. The caller is
-## responsible for guarding against running this on a developer
-## machine.
+## sign-tag-head leaf.
 ##
-## After signing-key-create:
-##   ${openpgp_policy_file_user} = ~/buildconfig.d/openpgp-policy.toml
-##                                 (project_policy + local maintainer
-##                                  cert authorized)
-## OR (admin pre-provisioned, no per-user step):
-##   ${openpgp_policy_file_system} = /etc/buildconfig.d/openpgp-policy.toml
+## Preconditions:
+##   - signing key for ${DEBEMAIL} exists in the sq keystore
+##   - a maintainer-authorized policy file exists at one of
+##     ${openpgp_policy_file_user} / ${openpgp_policy_file_system}
 ##
-## openpgp_policy_resolve picks the user override first, then the
-## system file. If neither exists this script bails out: the operator
-## must run signing-key-create.
+## help-steps/signing-key-create produces both idempotently and is
+## invoked by build-steps.d/1200_prepare-build-machine (real builds)
+## and ci/dry-run.d/150_signing-key-create (CI dry-run).
 
 set -o errexit
 set -o nounset
@@ -40,53 +35,36 @@ source "${repo_root}/help-steps/variables"
 
 cd -- "${repo_root}"
 
-## Refuse to run for redistributable builds:
-##
-##   1. Redistributable builds (dist_build_redistributable=true,
-##      set by help-steps/dm-build-official) rely on offline-signed
-##      upstream tags exclusively. Re-tagging or re-signing locally
-##      defeats the offline-key trust root and produces images
-##      whose tag history doesn't match what shipped upstream.
-##   2. The maintainer's redistributable-build signing key lives
-##      OFFLINE by design; the local sq cert store on a
-##      redistributable-build host deliberately does not contain
-##      the cert this script's openpgp_policy_setup -> sq cert
-##      export path needs.
-##
-## Legitimate callers: ci/dry-run.d/200_sign-and-tag and personal
-## builds.
+## Redistributable builds rely on offline-signed upstream tags;
+## re-tagging or re-signing locally defeats the offline-key trust
+## root. Legitimate callers: ci/dry-run.d/200_sign-and-tag and
+## personal builds.
 if [ "${dist_build_redistributable:-}" = 'true' ]; then
    printf '%s\n' \
       "${BASH_SOURCE[0]}: refusing to run for redistributable build" \
       "  (dist_build_redistributable=true)" \
       "Redistributable builds use offline-signed upstream tags" \
-      "exclusively; the local-cert authorize + per-build sign+tag" \
-      "flow this script implements is for personal / CI dry-run" \
-      "builds only. If this fired during a real CI dry-run, check" \
+      "exclusively. If this fired during a real CI dry-run, check" \
       "whether dist_build_redistributable was inherited from the" \
       "outer build environment via env or buildconfig.d/*.conf." >&2
    exit 1
 fi
 
-## Idempotent: signing-key-create preserves pre-existing
-## ${openpgp_policy_file_user} / ${openpgp_cert_file_user}, so this
-## is a no-op once both files are in place. Operator force-refreshes
-## by deleting the file(s) and re-running.
-./help-steps/signing-key-create
-
-policy_file="$(openpgp_policy_resolve)"
-if [ -z "${policy_file}" ]; then
+if [ -z "${openpgp_policy_file_resolved}" ]; then
    printf '%s\n' \
-      "${BASH_SOURCE[0]}: no OpenPGP policy file at" \
+      "${BASH_SOURCE[0]}: no maintainer-authorized OpenPGP policy at" \
       "  ${openpgp_policy_file_user}" \
       "  or ${openpgp_policy_file_system}" \
-      "Either run help-steps/signing-key-create (writes the user-side" \
-      "path) or pre-provision either path manually." >&2
+      "Run help-steps/signing-key-create to create the user-side" \
+      "policy, or pre-provision either path manually." >&2
    exit 1
 fi
-printf '%s\n' "${BASH_SOURCE[0]}: using policy ${policy_file}"
+printf '%s\n' "${BASH_SOURCE[0]}: using policy ${sq_git_policy_file}"
 
-export sq_git_policy_file="${policy_file}"
+## Fail fast on a misconfigured keystore (e.g. split-gpg-2
+## unreachable) before sign-tag-head's destructive 'commit --amend -S'
+## walks every submodule.
+./help-steps/signing-key-test
 
 ./help-steps/sign-tag-head 'main repo'
 

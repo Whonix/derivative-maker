@@ -241,9 +241,6 @@ export target_architecture_pretty_name
 export BUILD_KERNEL_PKGS
 export BUILD_HEADER_PKGS
 
-[[ -v sq_git_policy_file ]] || sq_git_policy_file="${source_code_folder_dist}/openpgp-policy.toml"
-export sq_git_policy_file
-
 ## Default the user-overridable verification flags to "false" so that
 ## 'help-steps/git_sanity_test' can require them to be set explicitly
 ## (security: caller must make an explicit decision; no implicit defaults
@@ -1142,41 +1139,45 @@ fi
 ## {{{ OpenPGP policy + cert paths
 ##
 ## Persistent locations for the sq-git policy file and the
-## maintainer's exported cert. Written by help-steps/signing-key-create;
-## read by help-steps/sign-and-tag and any other consumer that
-## exports sq_git_policy_file.
+## maintainer's exported public cert. Written by signing-key-create;
+## read by sign-and-tag and any consumer of sq_git_policy_file.
 ##
-## Read order: the user override (~/buildconfig.d/) takes precedence
-## over the system-wide path (/etc/buildconfig.d/). signing-key-create
-## auto-writes to the user location only - the system path is a place
-## an admin can drop a pre-authorized policy that all users on the
-## host share without any per-user re-authorize step.
-##
-## NB: $openpgp_cert_file_user holds the PUBLIC cert (output of
-## `sq cert export --all`, not `sq key export`). Storing it in a
-## predictable, $HOMEVAR-rooted path beats writing it to /tmp:
-## predictable path, no race window between mktemp and read,
-## no orphan in /tmp on script failure.
+## Read order: user (~/buildconfig.d/) before system
+## (/etc/buildconfig.d/). signing-key-create writes to user only;
+## the system path is for admin pre-provisioning shared across
+## users on a host.
 [ -n "${openpgp_policy_file_user:-}" ]   || openpgp_policy_file_user="${HOMEVAR}/buildconfig.d/openpgp-policy.toml"
 [ -n "${openpgp_policy_file_system:-}" ] || openpgp_policy_file_system='/etc/buildconfig.d/openpgp-policy.toml'
 [ -n "${openpgp_cert_file_user:-}" ]     || openpgp_cert_file_user="${HOMEVAR}/buildconfig.d/openpgp-cert.pem"
 
-## Resolve the active policy file. Echoes the path of the first
-## existing-and-readable file in the user-then-system precedence
-## order, or the empty string if neither exists. Callers should
-## refuse to proceed on empty (i.e. signing-key-create has not been
-## run yet).
-openpgp_policy_resolve() {
-   if [ -r "${openpgp_policy_file_user}" ]; then
-      printf '%s' "${openpgp_policy_file_user}"
-      return 0
+## ${openpgp_policy_file_resolved} = first existing-and-readable file
+## in user-then-system precedence, or empty string if neither exists.
+## Consumers that require a maintainer-authorized policy (sign-and-tag)
+## bail out on empty.
+if [ -z "${openpgp_policy_file_resolved:-}" ]; then
+   if   [ -r "${openpgp_policy_file_user}" ];   then openpgp_policy_file_resolved="${openpgp_policy_file_user}"
+   elif [ -r "${openpgp_policy_file_system}" ]; then openpgp_policy_file_resolved="${openpgp_policy_file_system}"
+   else openpgp_policy_file_resolved=""
    fi
-   if [ -r "${openpgp_policy_file_system}" ]; then
-      printf '%s' "${openpgp_policy_file_system}"
-      return 0
-   fi
-   printf ''
-}
+fi
+export openpgp_policy_file_resolved
+
+## Default ${sq_git_policy_file} for every consumer (sign-tag-head,
+## verify-ref, git_sanity_test, ...). Precedence:
+##   1. caller pre-set (env / parse-cmd)
+##   2. ${openpgp_policy_file_resolved} (user, then system) - this
+##      one carries the local maintainer cert; the shipped fallback
+##      does not, so verify_ref against (3) rejects local-signed HEADs.
+##   3. ${source_code_folder_dist}/openpgp-policy.toml (shipped)
+##
+## Redistributable builds must not pick up a user-side policy from
+## a contaminated host; dm-build-official is responsible for
+## ensuring neither ${openpgp_policy_file_user} nor
+## ${openpgp_policy_file_system} exists, or for pinning
+## sq_git_policy_file explicitly.
+[[ -v sq_git_policy_file ]] || \
+   sq_git_policy_file="${openpgp_policy_file_resolved:-${source_code_folder_dist}/openpgp-policy.toml}"
+export sq_git_policy_file
 
 ## }}}
 

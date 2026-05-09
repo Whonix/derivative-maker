@@ -50,22 +50,10 @@ gpg_key_create() {
 
    true "INFO: OpenPGP key with uid DEBEMAIL $DEBEMAIL does not exist yet. Generating OpenPGP key..."
 
-   ## Not idempotent. (Would generate different key.)
-   ##
-   ## Useful for CI to test 'dm-prepare-release' image signing.
-   ##
-   ## 'sqop': Not stateful.
-   ## * In theory, sqop would be more suitable. 'sqop' does not use 'gpg-agent'.
-   ## * In practice, redistributable builds are created using Qubes 'split-gpt-2',
-   ##   which is using 'gpg-agent'. Hence, 'sq' is being used.
-   ## 'sqop generate-key | tee -- private-key-path >/dev/null'
-   ##
-   ## 'sq': Stateful.
-   ## '--without-password' / '--expiration never':
-   ##  * Not useful on CI.
-   ## -* Users who did not study 'sq' have no benefit.
-   ## -* Users that studied 'sq' manually generate the key.
-   ##
+   ## sq (stateful, gpg-agent) rather than sqop (stateless): Qubes
+   ## split-gpg-2 routes via gpg-agent.
+   ## --without-password / --expiration never: CI-friendly; humans
+   ## who care about either generate the key manually.
    ## TODO: Debian forky: Drop or upgrade '--profile rfc9580' depending on availability.
    sq key generate --profile rfc9580 --own-key --email "$DEBEMAIL" --without-password --expiration never
 
@@ -101,27 +89,20 @@ signify_key_create() {
    true "INFO: END of ${FUNCNAME[0]}"
 }
 
-## OpenPGP policy persistent setup. After this function:
+## OpenPGP policy persistent setup. Produces:
+##   ${openpgp_policy_file_user} = ${source_code_folder_dist}/openpgp-policy.toml
+##                                 + local maintainer cert authorized
+##                                   as --project-maintainer
+##   ${openpgp_cert_file_user}   = local maintainer public cert
+##                                 (sq cert export --cert-email)
 ##
-##   ${openpgp_policy_file_user} = a copy of ${source_code_folder_dist}/
-##                                 openpgp-policy.toml with the local
-##                                 maintainer's cert authorized as
-##                                 --project-maintainer alongside the
-##                                 upstream maintainer keys.
-##   ${openpgp_cert_file_user}   = the local maintainer's public cert
-##                                 (output of
-##                                 `sq cert export --cert-email "${DEBEMAIL}"`).
+## Idempotent: each file is created only if absent. Pre-existing
+## files are preserved, supporting both re-runs and admin
+## provisioning. To force refresh, delete and re-run.
 ##
-## Idempotent at the file-existence level: each file is created
-## only if absent. Pre-existing files are PRESERVED (see the
-## per-step comments inside the function for the provisioning
-## rationale). To force a refresh after upstream rotates a
-## maintainer key in the shipped openpgp-policy.toml, the
-## operator deletes the user-side file(s) and re-runs.
-##
-## Path locations live in help-steps/variables (openpgp_policy_file_user,
-## openpgp_cert_file_user). User override only - the /etc/buildconfig.d/
-## system path is read by openpgp_policy_resolve but never written here.
+## Path locations come from help-steps/variables. The system-wide
+## /etc/buildconfig.d/ path is read by variables but never written
+## here - admin provisioning only.
 openpgp_policy_setup() {
    local project_policy="${source_code_folder_dist}/openpgp-policy.toml"
    local user_policy_dir
@@ -132,58 +113,23 @@ openpgp_policy_setup() {
       return 0
    fi
 
-   ## 0700 on the parent dir keeps other local users out of the
-   ## cert + policy file. The cert is public so the dir mode is
-   ## defense-in-depth; the policy file is also non-secret. mkdir
-   ## --parents is idempotent.
+   ## 0700 on the parent dir is defense-in-depth - both files are
+   ## public/non-secret.
    mkdir --parents -- "${user_policy_dir}"
    chmod -- 0700 "${user_policy_dir}"
 
-   ## Idempotent: each file is created only if absent. Pre-existing
-   ## files are PRESERVED, not overwritten. This supports two use
-   ## cases:
-   ##
-   ##   1. Provisioning. An admin / setup script can drop pre-built
-   ##      versions of openpgp_cert_file_user and openpgp_policy_file_user
-   ##      ahead of time; signing-key-create will leave them alone.
-   ##   2. Re-running this script. The existing files are presumed
-   ##      correct (authored either by a previous run or by an
-   ##      operator). signing-key-create stays a no-op on the second
-   ##      and subsequent runs.
-   ##
-   ## To force a refresh (e.g. after upstream rotates a maintainer
-   ## key in project_policy, or after rotating the local cert),
-   ## delete the file(s) and re-run. Same explicit-action pattern
-   ## as gpg_key_create's "skip if cert exists for ${DEBEMAIL}".
-
-   ## Cert export. Email-scoped (--cert-email "${DEBEMAIL}") rather
-   ## than --all so only the maintainer's cert is authorized in the
-   ## policy. Critical for redistributable builds in Qubes split-gpg-2:
-   ## the build VM's local cert store may carry test certs, rotated
-   ## old certs, or certs from unrelated projects; --all would
-   ## indiscriminately authorize every one of them as a
-   ## project-maintainer.
-   ## Email selection is split-gpg-2-safe: it consults the build
-   ## VM's local public-cert store only, no private-key access (the
-   ## private key lives in the dedicated split-gpg-2 VM by design).
-   ## File mode 0600 is defense-in-depth - 'sq cert export' emits
-   ## public certificates ('sq key export' would emit secret).
+   ## Cert export, email-scoped. --all would authorize every cert
+   ## in the local store (test certs, rotated certs, certs from
+   ## unrelated projects) as project-maintainer - in Qubes
+   ## split-gpg-2 the build VM's cert store is shared and not
+   ## curated for this purpose.
+   ## sponge (moreutils) when available for atomic rename;
+   ## tee fallback is non-atomic but still appears in xtrace where
+   ## bare '>' would not.
    if [ -r "${openpgp_cert_file_user}" ]; then
-      true "INFO: ${openpgp_cert_file_user} already exists; preserving (provisioned or carried over). Delete to force re-export."
+      true "INFO: ${openpgp_cert_file_user} already exists; preserving. Delete to force re-export."
    else
       true "INFO: exporting local maintainer cert (DEBEMAIL=${DEBEMAIL}) -> ${openpgp_cert_file_user}"
-      ## Prefer sponge (moreutils) when available: buffers stdin in
-      ## memory then atomically renames into place. Crash-safe -
-      ## an interrupted write leaves the destination file
-      ## untouched, preserving the idempotence guarantee above
-      ## (next run sees no file, redoes the export).
-      ##
-      ## tee fallback is non-atomic (writes byte-by-byte) but
-      ## still beats bare '>' for this script's '-x' xtrace
-      ## visibility: the target path shows up in the trace where
-      ## a redirection target would not.
-      ##
-      ## Both forms accept '--' end-of-options. R-062.
       if command -v sponge >/dev/null; then
          sq cert export --cert-email "${DEBEMAIL}" \
             | sponge -- "${openpgp_cert_file_user}"
@@ -194,17 +140,11 @@ openpgp_policy_setup() {
       chmod -- 0600 "${openpgp_cert_file_user}"
    fi
 
-   ## Policy file. The presence of a pre-existing file means it has
-   ## been authored already (provisioned admin policy, or previous
-   ## run). Don't run sq-git policy authorize on it - the existing
-   ## file's authorized-maintainer list is presumed correct. After
-   ## this, sq-git verification with
-   ## --policy-file=${openpgp_policy_file_user} accepts the
-   ## upstream maintainer keys (preserved from project_policy or
-   ## from whatever the provisioning step put there) and the local
-   ## maintainer.
+   ## Policy file. Pre-existing -> authored already (provisioned or
+   ## previous run); preserve. The authorized-maintainer list is
+   ## presumed correct.
    if [ -r "${openpgp_policy_file_user}" ]; then
-      true "INFO: ${openpgp_policy_file_user} already exists; preserving (provisioned or carried over). Delete to force re-derive from ${project_policy}."
+      true "INFO: ${openpgp_policy_file_user} already exists; preserving. Delete to force re-derive from ${project_policy}."
       true "INFO: END of ${FUNCNAME[0]}"
       return 0
    fi

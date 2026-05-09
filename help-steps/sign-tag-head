@@ -5,19 +5,13 @@
 
 ## AI-Assisted
 
-## Caller (sign-and-tag) must have exported sq_git_policy_file.
 ## Two phases: sign HEAD if unsigned (rewrites the commit via amend),
 ## then tag HEAD if no signed tag points at it.
 ##
 ## Args:
-##   $1 - context label, used in operator-facing log lines to
-##        identify which repo / submodule the message is about.
-##        Pass 'main repo' (or any short identifier) for the
-##        parent repo invocation; pass "${displaypath}" inside
-##        'git submodule foreach' since git sets that env var to
-##        the submodule's relative path. Required - no fallback,
-##        a missing arg fails the script at the parameter
-##        expansion below.
+##   $1 - context label for operator-facing log lines. Pass
+##        'main repo' for the parent repo, "${displaypath}" inside
+##        'git submodule foreach'. Required.
 
 set -o errexit
 set -o nounset
@@ -53,15 +47,10 @@ else
    printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} HEAD re-signed"
 fi
 
-## Phase 2: tag HEAD according to the working-tree policy in
-## help-steps/git_sanity_test (see mode_working_tree): valid states
-## are exactly zero or exactly one signed annotated tag at HEAD;
-## any other state is a hard error there. We mirror that classification
-## so we don't drop the repo into a multi-tag state which the next
-## sanity check would reject.
-##
-## Use the same idiom git_sanity_test uses (for-each-ref + readarray
-## with %(refname)) rather than '$(git tag ...)' word-splitting.
+## Phase 2: tag HEAD. git_sanity_test (mode_working_tree) requires
+## exactly zero or one signed annotated tag at HEAD; mirror that
+## classification so we don't leave the repo in a state the next
+## sanity check rejects.
 git_tags_at_head_cmd=( git for-each-ref --points-at=HEAD --format='%(refname)' refs/tags )
 git_tags_at_head_output="$( "${git_tags_at_head_cmd[@]}" )"
 if [ -n "${git_tags_at_head_output:-}" ]; then
