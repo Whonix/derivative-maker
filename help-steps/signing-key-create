@@ -118,8 +118,8 @@ openpgp_policy_setup() {
       openpgp_cert_file_resolved="${openpgp_cert_file_user}"
    fi
 
-   if [ -r "${openpgp_policy_file_user}" ]; then
-      true "INFO: ${openpgp_policy_file_user} already exists; preserving. Delete to force re-derive from ${openpgp_policy_file_project}."
+   if [ -n "${openpgp_policy_file_resolved}" ]; then
+      true "INFO: ${openpgp_policy_file_resolved} already exists; preserving. Delete to force re-derive from ${openpgp_policy_file_project}."
       true "INFO: END of ${FUNCNAME[0]}"
       return 0
    fi
@@ -127,13 +127,14 @@ openpgp_policy_setup() {
    true "INFO: copying shipped project policy ${openpgp_policy_file_project} -> ${openpgp_policy_file_user}"
    cp -- "${openpgp_policy_file_project}" "${openpgp_policy_file_user}"
    chmod -- 0600 "${openpgp_policy_file_user}"
+   openpgp_policy_file_resolved="${openpgp_policy_file_user}"
 
-   true "INFO: authorizing local maintainer cert as project-maintainer in ${openpgp_policy_file_user}"
-   true "INFO:   --policy-file        ${openpgp_policy_file_user}"
+   true "INFO: authorizing local maintainer cert as project-maintainer in ${openpgp_policy_file_resolved}"
+   true "INFO:   --policy-file        ${openpgp_policy_file_resolved}"
    true "INFO:   --project-maintainer ${DEBFULLNAME}"
    true "INFO:   cert                 ${openpgp_cert_file_resolved}"
    sq-git policy authorize \
-      --policy-file "${openpgp_policy_file_user}" \
+      --policy-file "${openpgp_policy_file_resolved}" \
       --project-maintainer \
       "${DEBFULLNAME}" \
       "${openpgp_cert_file_resolved}"
