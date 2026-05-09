@@ -112,8 +112,12 @@ openpgp_policy_setup() {
       true "INFO: ${openpgp_cert_file_resolved} already exists; preserving. Delete to force re-export."
    else
       true "INFO: exporting local maintainer cert (DEBEMAIL=${DEBEMAIL}) -> ${openpgp_cert_file_user}"
-      sq cert export --cert-email "${DEBEMAIL}" \
-         | sponge -- "${openpgp_cert_file_user}"
+      if test -f "${openpgp_cert_file_user}"; then
+         error "BUG: Refusing to overwrite already existing openpgp_cert_file_user '${openpgp_cert_file_user}'!"
+         ## Make sure we really exit.
+         exit 1
+      fi
+      sq cert export --cert-email "${DEBEMAIL}" | sponge -- "${openpgp_cert_file_user}"
       chmod -- 0600 "${openpgp_cert_file_user}"
       openpgp_cert_file_resolved="${openpgp_cert_file_user}"
    fi
@@ -133,6 +137,7 @@ openpgp_policy_setup() {
    true "INFO:   --policy-file        ${openpgp_policy_file_resolved}"
    true "INFO:   --project-maintainer ${DEBFULLNAME}"
    true "INFO:   cert                 ${openpgp_cert_file_resolved}"
+
    sq-git policy authorize \
       --policy-file "${openpgp_policy_file_resolved}" \
       --project-maintainer \
