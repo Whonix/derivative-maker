@@ -26,15 +26,6 @@ shopt -s inherit_errexit
 
 true "${BASH_SOURCE[0]} INFO: begin"
 
-## Suppress .pyc creation. helper-scripts ships Python entry-points
-## (sanitize-string, ...) under packages/kicksecure/helper-scripts/usr/bin/;
-## without this, running them populates the submodule with __pycache__/*.pyc,
-## which the unicode/newline sanity check in build-steps.d/1200 then
-## flags as "missing newline at end of file" (.pyc binaries don't end
-## in 0x0A). Setting at help-steps/pre source-time covers every entry
-## point (build-steps, ci/dry-run.d, sign-and-tag, etc.).
-export PYTHONDONTWRITEBYTECODE=1
-
 ## Source helper-scripts libraries that pre depends on. xtrace.bsh
 ## must be loaded first because the colors source below is wrapped in
 ## xtrace_off / xtrace_restore (and the trap functions further down
