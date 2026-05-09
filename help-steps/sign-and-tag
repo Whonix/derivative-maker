@@ -34,13 +34,12 @@ cd -- "${repo_root}"
 
 ## Redistributable builds rely on offline-signed upstream tags;
 ## re-tagging or re-signing locally defeats the offline-key trust
-## root. CI is exempt - the dry-run pipeline uses an ephemeral
-## key + dist_build_redistributable=true and still needs to
-## exercise sign-and-tag.
+## root. CI is exempt - the dry-run pipeline runs against a
+## CI-generated signing key and still needs to exercise sign-and-tag.
 if [ "${dist_build_redistributable}" = 'true' ]; then
    true "INFO: ${BASH_SOURCE[0]}: dist_build_redistributable=true detected"
    if [ "${CI}" = 'true' ]; then
-      true "INFO: ${BASH_SOURCE[0]}: CI=true, allowing sign+tag against ephemeral key"
+      true "INFO: ${BASH_SOURCE[0]}: CI=true, allowing sign+tag"
    else
       printf '%s\n' \
          "${BASH_SOURCE[0]}: refusing to run for redistributable build" \
