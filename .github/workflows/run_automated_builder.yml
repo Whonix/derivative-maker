@@ -69,18 +69,6 @@ jobs:
           persist-credentials: false
 
       - name: Install ansible
-        ## Switched from 'pip install ansible' (with setup-python
-        ## pinning Python 3.13) to apt-installed ansible. Reasons:
-        ## (a) Scorecard PinnedDependenciesID flagged the bare pip
-        ##     install (no hash pinning) - the Debian/Ubuntu archive
-        ##     is itself a signed trust root, no per-package hash
-        ##     pinning needed.
-        ## (b) Drops the actions/setup-python step entirely - nothing
-        ##     else here pins Python 3.13. Ubuntu's bundled Python +
-        ##     the apt 'ansible' package are sufficient.
-        ## ansible 9.x in the Ubuntu archive supports Python 3.10+;
-        ## the runner's bundled Python is 3.12 on ubuntu-latest
-        ## (24.04). Compatible.
         run: |
           sudo --non-interactive apt-get update --error-on=any
           sudo --non-interactive apt-get install --yes --no-install-recommends \

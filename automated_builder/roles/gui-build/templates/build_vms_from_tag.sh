@@ -40,9 +40,6 @@ true "$0: START"
 export CI=true
 
 main() {
-  ## tee so build output is logged AND visible in the Ansible task
-  ## output. pipefail so a non-zero exit from build_command
-  ## propagates through the pipe.
   set -o pipefail
   build_command "$@" 2>&1 | tee --append -- "${BUILD_LOG}"
 }
