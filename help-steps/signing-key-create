@@ -99,13 +99,15 @@ signify_key_create() {
 ##   ${openpgp_cert_file_user}   = local maintainer public cert
 ##                                 (sq cert export --cert-email)
 ##
+## ${openpgp_policy_dir_user} is the highest-precedence entry of
+## ${dist_build_config_dirs} (= the user/wrapper override
+## location; see help-steps/variables). Lower-precedence entries
+## (in particular /etc/buildconfig-dist.d/) can be admin-
+## provisioned with an openpgp-policy.toml outside this script.
+##
 ## Idempotent: each file is created only if absent. Pre-existing
 ## files are preserved, supporting both re-runs and admin
 ## provisioning. To force refresh, delete and re-run.
-##
-## Path locations come from help-steps/variables. The system-wide
-## /etc/buildconfig.d/ path is read by variables but never written
-## here - admin provisioning only.
 openpgp_policy_setup() {
    if [ ! -r "${openpgp_policy_file_project}" ]; then
       true "INFO: ${openpgp_policy_file_project} not present; skipping openpgp-policy setup"

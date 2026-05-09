@@ -1142,41 +1142,53 @@ fi
 ## maintainer's exported public cert. Written by signing-key-create;
 ## read by sign-and-tag and any consumer of sq_git_policy_file.
 ##
-## Read order: user (~/buildconfig.d/) before system
-## (/etc/buildconfig.d/). signing-key-create writes to user only;
-## the system path is for admin pre-provisioning shared across
-## users on a host.
-[ -n "${openpgp_policy_file_user:-}" ]    || openpgp_policy_file_user="${HOMEVAR}/buildconfig.d/openpgp-policy.toml"
-[ -n "${openpgp_policy_file_system:-}" ]  || openpgp_policy_file_system='/etc/buildconfig.d/openpgp-policy.toml'
-[ -n "${openpgp_policy_file_project:-}" ] || openpgp_policy_file_project="${source_code_folder_dist}/openpgp-policy.toml"
-[ -n "${openpgp_policy_dir_user:-}" ]     || openpgp_policy_dir_user="${openpgp_policy_file_user%/*}"
-[ -n "${openpgp_cert_file_user:-}" ]      || openpgp_cert_file_user="${HOMEVAR}/buildconfig.d/openpgp-cert.pem"
+## Layered the same way as buildconfig.d/*.conf - each entry of
+## dist_build_config_dirs may carry an openpgp-policy.toml /
+## openpgp-cert.pem; later entries override earlier ones.
+[ -n "${openpgp_policy_filename:-}" ] || openpgp_policy_filename='openpgp-policy.toml'
+[ -n "${openpgp_cert_filename:-}" ]   || openpgp_cert_filename='openpgp-cert.pem'
 
-## ${openpgp_policy_file_resolved} = first existing-and-readable file
-## in user-then-system precedence, or empty string if neither exists.
-## Consumers that require a maintainer-authorized policy (sign-and-tag)
-## bail out on empty.
+## Shipped in-tree project policy (lowest precedence; upstream
+## maintainer keys only, no local cert).
+[ -n "${openpgp_policy_file_project:-}" ] || openpgp_policy_file_project="${source_code_folder_dist}/buildconfig.d/${openpgp_policy_filename}"
+
+## Write target for signing-key-create = the highest-precedence
+## (= last) entry of dist_build_config_dirs - the "user/wrapper
+## override" location per the convention documented at
+## variables:254.
+[ -n "${openpgp_policy_dir_user:-}" ]  || openpgp_policy_dir_user="${dist_build_config_dirs##* }"
+[ -n "${openpgp_policy_file_user:-}" ] || openpgp_policy_file_user="${openpgp_policy_dir_user}/${openpgp_policy_filename}"
+[ -n "${openpgp_cert_file_user:-}" ]   || openpgp_cert_file_user="${openpgp_policy_dir_user}/${openpgp_cert_filename}"
+
+## ${openpgp_policy_file_resolved} = highest-precedence existing-
+## and-readable openpgp-policy.toml across dist_build_config_dirs,
+## or empty if none exists. Consumers that require a maintainer-
+## authorized policy (sign-and-tag) bail out on empty. Iterate
+## forward and let the LAST match win = matches the .conf
+## sourcing precedence (later entry overrides earlier).
 if [ -z "${openpgp_policy_file_resolved:-}" ]; then
-   if   [ -r "${openpgp_policy_file_user}" ];   then openpgp_policy_file_resolved="${openpgp_policy_file_user}"
-   elif [ -r "${openpgp_policy_file_system}" ]; then openpgp_policy_file_resolved="${openpgp_policy_file_system}"
-   else openpgp_policy_file_resolved=""
-   fi
+   openpgp_policy_file_resolved=""
+   for openpgp_policy_dir in $dist_build_config_dirs; do
+      if [ -r "${openpgp_policy_dir}/${openpgp_policy_filename}" ]; then
+         openpgp_policy_file_resolved="${openpgp_policy_dir}/${openpgp_policy_filename}"
+      fi
+   done
+   unset openpgp_policy_dir
 fi
 export openpgp_policy_file_resolved
 
 ## Default ${sq_git_policy_file} for every consumer (sign-tag-head,
 ## verify-ref, git_sanity_test, ...). Precedence:
 ##   1. caller pre-set (env / parse-cmd)
-##   2. ${openpgp_policy_file_resolved} (user, then system) - this
-##      one carries the local maintainer cert; the shipped fallback
-##      does not, so verify_ref against (3) rejects local-signed HEADs.
-##   3. ${openpgp_policy_file_project} (shipped in-tree)
+##   2. ${openpgp_policy_file_resolved} - highest-precedence
+##      buildconfig.d entry that contains an openpgp-policy.toml
+##   3. ${openpgp_policy_file_project} (shipped in-tree fallback)
 ##
-## Redistributable builds must not pick up a user-side policy from
+## Redistributable builds must not pick up an override policy from
 ## a contaminated host; dm-build-official is responsible for
-## ensuring neither ${openpgp_policy_file_user} nor
-## ${openpgp_policy_file_system} exists, or for pinning
-## sq_git_policy_file explicitly.
+## ensuring no openpgp-policy.toml exists in any
+## dist_build_config_dirs entry above the shipped one, or for
+## pinning sq_git_policy_file explicitly.
 [[ -v sq_git_policy_file ]] || \
    sq_git_policy_file="${openpgp_policy_file_resolved:-${openpgp_policy_file_project}}"
 export sq_git_policy_file
