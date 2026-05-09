@@ -1170,8 +1170,6 @@ if [ -z "${openpgp_policy_file_resolved:-}" ]; then
    openpgp_policy_search_paths="${openpgp_policy_search_paths%$'\n'}"
    unset openpgp_policy_dir openpgp_policy_candidate
 fi
-export openpgp_policy_file_resolved
-export openpgp_policy_search_paths
 
 ## ${sq_git_policy_file} precedence:
 ##   1. caller pre-set (env / parse-cmd)

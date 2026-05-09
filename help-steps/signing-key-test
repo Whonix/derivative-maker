@@ -25,7 +25,7 @@ source variables
 main() {
    true "make_use_debsign: $make_use_debsign"
 
-   sq-git policy describe &>/dev/null
+   sq-git policy describe --policy-file "${sq_git_policy_file}" >/dev/null
 
    true "INFO: Attempting to test digital signature creation using --signer-email $DEBEMAIL"
 
