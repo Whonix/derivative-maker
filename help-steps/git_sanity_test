@@ -25,7 +25,11 @@ export HELPER_SCRIPTS_PATH="${MYDIR}/../packages/kicksecure/helper-scripts"
 ## /usr/lib/python3/dist-packages/, so PYTHONPATH needs the
 ## submodule equivalent too.
 PATH="${HELPER_SCRIPTS_PATH}/usr/bin:${PATH}"
-PYTHONPATH="${HELPER_SCRIPTS_PATH}/usr/lib/python3/dist-packages${PYTHONPATH:+:${PYTHONPATH}}"
+if [ -n "${PYTHONPATH:-}" ]; then
+   PYTHONPATH="${HELPER_SCRIPTS_PATH}/usr/lib/python3/dist-packages:${PYTHONPATH}"
+else
+   PYTHONPATH="${HELPER_SCRIPTS_PATH}/usr/lib/python3/dist-packages"
+fi
 export PYTHONPATH
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/get_colors.sh"
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/log_run_die.sh"
