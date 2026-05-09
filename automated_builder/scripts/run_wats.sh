@@ -15,12 +15,6 @@ main() {
 prepare_environment() {
   ## We no longer use a default password of 'changeme', so there is no need
   ## to pipe it in here.
-  ## Apt-only - dogtail is in Debian as 'python3-dogtail'. Previous
-  ## 'pip3 install dogtail' was unpinned and triggered Scorecard's
-  ## PinnedDependenciesID; the Debian archive's signed package trust
-  ## root substitutes for per-package hash pinning. python3-pip is
-  ## still installed only because other tooling in this VM may need
-  ## pip; remove if it ever stops being needed.
   sudo --non-interactive -- apt-get update -q
   sudo --non-interactive -- apt-get install --yes --no-install-recommends -- \
     git python3-behave python3-dogtail python3-pip python3-pyatspi

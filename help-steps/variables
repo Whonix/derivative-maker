@@ -1146,9 +1146,11 @@ fi
 ## (/etc/buildconfig.d/). signing-key-create writes to user only;
 ## the system path is for admin pre-provisioning shared across
 ## users on a host.
-[ -n "${openpgp_policy_file_user:-}" ]   || openpgp_policy_file_user="${HOMEVAR}/buildconfig.d/openpgp-policy.toml"
-[ -n "${openpgp_policy_file_system:-}" ] || openpgp_policy_file_system='/etc/buildconfig.d/openpgp-policy.toml'
-[ -n "${openpgp_cert_file_user:-}" ]     || openpgp_cert_file_user="${HOMEVAR}/buildconfig.d/openpgp-cert.pem"
+[ -n "${openpgp_policy_file_user:-}" ]    || openpgp_policy_file_user="${HOMEVAR}/buildconfig.d/openpgp-policy.toml"
+[ -n "${openpgp_policy_file_system:-}" ]  || openpgp_policy_file_system='/etc/buildconfig.d/openpgp-policy.toml'
+[ -n "${openpgp_policy_file_project:-}" ] || openpgp_policy_file_project="${source_code_folder_dist}/openpgp-policy.toml"
+[ -n "${openpgp_policy_dir_user:-}" ]     || openpgp_policy_dir_user="${openpgp_policy_file_user%/*}"
+[ -n "${openpgp_cert_file_user:-}" ]      || openpgp_cert_file_user="${HOMEVAR}/buildconfig.d/openpgp-cert.pem"
 
 ## ${openpgp_policy_file_resolved} = first existing-and-readable file
 ## in user-then-system precedence, or empty string if neither exists.
@@ -1168,7 +1170,7 @@ export openpgp_policy_file_resolved
 ##   2. ${openpgp_policy_file_resolved} (user, then system) - this
 ##      one carries the local maintainer cert; the shipped fallback
 ##      does not, so verify_ref against (3) rejects local-signed HEADs.
-##   3. ${source_code_folder_dist}/openpgp-policy.toml (shipped)
+##   3. ${openpgp_policy_file_project} (shipped in-tree)
 ##
 ## Redistributable builds must not pick up a user-side policy from
 ## a contaminated host; dm-build-official is responsible for
@@ -1176,7 +1178,7 @@ export openpgp_policy_file_resolved
 ## ${openpgp_policy_file_system} exists, or for pinning
 ## sq_git_policy_file explicitly.
 [[ -v sq_git_policy_file ]] || \
-   sq_git_policy_file="${openpgp_policy_file_resolved:-${source_code_folder_dist}/openpgp-policy.toml}"
+   sq_git_policy_file="${openpgp_policy_file_resolved:-${openpgp_policy_file_project}}"
 export sq_git_policy_file
 
 ## }}}
