@@ -48,11 +48,8 @@ fi
 
 if [ -z "${openpgp_policy_file_resolved}" ]; then
    printf '%s\n' \
-      "${BASH_SOURCE[0]}: no ${openpgp_policy_filename} found in any of:" >&2
-   for dir in $dist_build_config_dirs_list; do
-      printf '%s\n' "  ${dir}/${openpgp_policy_filename}" >&2
-   done
-   printf '%s\n' \
+      "${BASH_SOURCE[0]}: no ${openpgp_policy_filename} found in any of:" \
+      "${openpgp_policy_search_paths}" \
       "Run help-steps/signing-key-create or pre-provision a path manually." >&2
    exit 1
 fi
