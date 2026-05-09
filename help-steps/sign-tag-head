@@ -62,6 +62,7 @@ fi
 
 case "${#tags_at_head[@]}" in
    0)
+      printf '%s\n' "${BASH_SOURCE[0]}: ${context_label} has no tag at HEAD; will create a signed tag below"
       ## Fall through to create a signed tag.
       ;;
    1)
@@ -84,5 +85,6 @@ if nearest_git_tag="$(git describe --abbrev=0 2>/dev/null)"; then
 else
    signed_tag="tag_${commit_full_sha}"
 fi
+printf '%s\n' "${BASH_SOURCE[0]}: creating signed annotated tag for ${context_label}: ${signed_tag} (commit ${commit_full_sha})"
 "${git_signing_command_wrapper[@]}" tag -a -s -m 'Signed by sign-tag-head' "${signed_tag}"
 printf '%s\n' "${BASH_SOURCE[0]}: tagged ${context_label} as ${signed_tag}"
