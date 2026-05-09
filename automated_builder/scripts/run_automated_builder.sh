@@ -30,10 +30,6 @@ xtrace_restore
 
 export ANSIBLE_HOST_KEY_CHECKING=False
 
-## Apply automated_builder/ansible.cfg (yaml stdout callback so the
-## GitHub Actions log viewer renders failed-task output legibly).
-export ANSIBLE_CONFIG="${PWD}/automated_builder/ansible.cfg"
-
 main() {
   decrypt_vault
   run_builder
