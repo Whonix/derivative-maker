@@ -1161,20 +1161,31 @@ fi
 [ -n "${openpgp_policy_file_user:-}" ] || openpgp_policy_file_user="${openpgp_policy_dir_user}/${openpgp_policy_filename}"
 [ -n "${openpgp_cert_file_user:-}" ]   || openpgp_cert_file_user="${openpgp_policy_dir_user}/${openpgp_cert_filename}"
 
-## Candidate paths searched (one element per dir) and
-## ${openpgp_policy_file_resolved} = last existing-and-readable
-## one, or empty if none. sign-and-tag bails on empty.
+## Walk dist_build_config_dirs_list once for both policy and cert.
+## ${openpgp_policy_file_resolved} / ${openpgp_cert_file_resolved}
+## = last existing-and-readable file of each kind, or empty if
+## none. Search-paths arrays are kept for sign-and-tag's bail-out
+## error message. sign-and-tag bails when the policy is empty;
+## signing-key-create uses the cert-resolved value (or writes to
+## openpgp_cert_file_user when empty).
 if [ -z "${openpgp_policy_file_resolved:-}" ]; then
    openpgp_policy_file_resolved=""
+   openpgp_cert_file_resolved=""
    openpgp_policy_search_paths=()
+   openpgp_cert_search_paths=()
    for openpgp_policy_dir in $dist_build_config_dirs_list; do
       openpgp_policy_candidate="${openpgp_policy_dir}/${openpgp_policy_filename}"
+      openpgp_cert_candidate="${openpgp_policy_dir}/${openpgp_cert_filename}"
       openpgp_policy_search_paths+=( "  ${openpgp_policy_candidate}" )
+      openpgp_cert_search_paths+=( "  ${openpgp_cert_candidate}" )
       if [ -r "${openpgp_policy_candidate}" ]; then
          openpgp_policy_file_resolved="${openpgp_policy_candidate}"
       fi
+      if [ -r "${openpgp_cert_candidate}" ]; then
+         openpgp_cert_file_resolved="${openpgp_cert_candidate}"
+      fi
    done
-   unset openpgp_policy_dir openpgp_policy_candidate
+   unset openpgp_policy_dir openpgp_policy_candidate openpgp_cert_candidate
 fi
 
 ## ${sq_git_policy_file} precedence:

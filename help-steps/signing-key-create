@@ -108,13 +108,14 @@ openpgp_policy_setup() {
    ## Email-scoped: --all would authorize every cert in the local
    ## store (test, rotated, unrelated) as project-maintainer; in
    ## Qubes split-gpg-2 the cert store is shared and not curated.
-   if [ -r "${openpgp_cert_file_user}" ]; then
-      true "INFO: ${openpgp_cert_file_user} already exists; preserving. Delete to force re-export."
+   if [ -n "${openpgp_cert_file_resolved}" ]; then
+      true "INFO: ${openpgp_cert_file_resolved} already exists; preserving. Delete to force re-export."
    else
       true "INFO: exporting local maintainer cert (DEBEMAIL=${DEBEMAIL}) -> ${openpgp_cert_file_user}"
       sq cert export --cert-email "${DEBEMAIL}" \
          | sponge -- "${openpgp_cert_file_user}"
       chmod -- 0600 "${openpgp_cert_file_user}"
+      openpgp_cert_file_resolved="${openpgp_cert_file_user}"
    fi
 
    if [ -r "${openpgp_policy_file_user}" ]; then
@@ -130,12 +131,12 @@ openpgp_policy_setup() {
    true "INFO: authorizing local maintainer cert as project-maintainer in ${openpgp_policy_file_user}"
    true "INFO:   --policy-file        ${openpgp_policy_file_user}"
    true "INFO:   --project-maintainer ${DEBFULLNAME}"
-   true "INFO:   cert                 ${openpgp_cert_file_user}"
+   true "INFO:   cert                 ${openpgp_cert_file_resolved}"
    sq-git policy authorize \
       --policy-file "${openpgp_policy_file_user}" \
       --project-maintainer \
       "${DEBFULLNAME}" \
-      "${openpgp_cert_file_user}"
+      "${openpgp_cert_file_resolved}"
 
    true "INFO: END of ${FUNCNAME[0]}"
 }
