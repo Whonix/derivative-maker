@@ -80,8 +80,8 @@ if [ -z "${policy_file}" ]; then
       "${BASH_SOURCE[0]}: no OpenPGP policy file at" \
       "  ${openpgp_policy_file_user}" \
       "  or ${openpgp_policy_file_system}" \
-      "Run help-steps/signing-key-create first to write the user-side" \
-      "policy, or pre-provision the system path." >&2
+      "Either run help-steps/signing-key-create (writes the user-side" \
+      "path) or pre-provision either path manually." >&2
    exit 1
 fi
 printf '%s\n' "${BASH_SOURCE[0]}: using policy ${policy_file}"
