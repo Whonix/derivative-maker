@@ -150,7 +150,20 @@ openpgp_policy_setup() {
    ## public certificates only ('sq key export' would emit secret).
    ## File mode 0600 is defense-in-depth, not a confidentiality
    ## requirement.
-   sq cert export --all > "${openpgp_cert_file_user}"
+   ##
+   ## Email-scoped (--cert-email "${DEBEMAIL}") rather than --all so
+   ## only the maintainer's cert is authorized in the policy.
+   ## Critical for redistributable builds in Qubes split-gpg-2:
+   ## the build VM's local cert store may carry test certs, rotated
+   ## old certs, or certs from unrelated projects; --all would
+   ## indiscriminately authorize every one of them as a
+   ## project-maintainer in the policy file.
+   ## Email selection is split-gpg-2-safe: it consults the build
+   ## VM's local public-cert store only, no private-key access (the
+   ## private key lives in the dedicated split-gpg-2 VM by design).
+   ## Matches the gpg_key_create / gpg_key_debugging convention used
+   ## elsewhere in this script.
+   sq cert export --cert-email "${DEBEMAIL}" > "${openpgp_cert_file_user}"
    chmod -- 0600 "${openpgp_cert_file_user}"
 
    ## Authorize the local cert as a project maintainer in the
