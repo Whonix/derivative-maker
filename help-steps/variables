@@ -1137,6 +1137,49 @@ if [ ! "${dist_build_conf_file:-}" = "" ]; then
    fi
 fi
 
+## }}}
+
+## {{{ OpenPGP policy + cert paths
+##
+## Persistent locations for the sq-git policy file and the
+## maintainer's exported cert. Written by help-steps/signing-key-create;
+## read by help-steps/sign-and-tag and any other consumer that
+## exports sq_git_policy_file.
+##
+## Read order: the user override (~/buildconfig.d/) takes precedence
+## over the system-wide path (/etc/buildconfig.d/). signing-key-create
+## auto-writes to the user location only - the system path is a place
+## an admin can drop a pre-authorized policy that all users on the
+## host share without any per-user re-authorize step.
+##
+## NB: $openpgp_cert_file_user holds the PUBLIC cert (output of
+## `sq cert export --all`, not `sq key export`). Storing it in a
+## predictable, $HOMEVAR-rooted path beats writing it to /tmp:
+## predictable path, no race window between mktemp and read,
+## no orphan in /tmp on script failure.
+[ -n "${openpgp_policy_file_user:-}" ]   || openpgp_policy_file_user="${HOMEVAR}/buildconfig.d/openpgp-policy.toml"
+[ -n "${openpgp_policy_file_system:-}" ] || openpgp_policy_file_system='/etc/buildconfig.d/openpgp-policy.toml'
+[ -n "${openpgp_cert_file_user:-}" ]     || openpgp_cert_file_user="${HOMEVAR}/buildconfig.d/openpgp-cert.pem"
+
+## Resolve the active policy file. Echoes the path of the first
+## existing-and-readable file in the user-then-system precedence
+## order, or the empty string if neither exists. Callers should
+## refuse to proceed on empty (i.e. signing-key-create has not been
+## run yet).
+openpgp_policy_resolve() {
+   if [ -r "${openpgp_policy_file_user}" ]; then
+      printf '%s' "${openpgp_policy_file_user}"
+      return 0
+   fi
+   if [ -r "${openpgp_policy_file_system}" ]; then
+      printf '%s' "${openpgp_policy_file_system}"
+      return 0
+   fi
+   printf ''
+}
+
+## }}}
+
 ## Late validation: redistributable builds disallow disabling the binary
 ## derivative repository by default, because the resulting images would not
 ## be able to fetch updates from the official APT repository. To override

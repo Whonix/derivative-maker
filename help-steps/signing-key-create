@@ -27,11 +27,13 @@ main() {
    gpg_key_create "$@"
    gpg_key_debugging "$@"
    signify_key_create "$@"
+   openpgp_policy_setup "$@"
    true "INFO: END of ${FUNCNAME[0]}"
 }
 
 sanity_tests() {
    command -v sq >/dev/null
+   command -v sq-git >/dev/null
    command -v sqop >/dev/null
    command -v signify-openbsd >/dev/null
 }
@@ -95,6 +97,72 @@ signify_key_create() {
    ## Not idempotent. (Would generate different key.)
    signify-openbsd -n -G -p "$signify_public_key" -s "$signify_private_key" -c "derivative-maker"
    popd >/dev/null
+
+   true "INFO: END of ${FUNCNAME[0]}"
+}
+
+## OpenPGP policy persistent setup. Replaces the per-build ephemeral-
+## policy churn that lived in help-steps/sign-and-tag. After this
+## function:
+##
+##   ${openpgp_policy_file_user} = a copy of ${source_code_folder_dist}/
+##                                 openpgp-policy.toml with the local
+##                                 maintainer's cert authorized as
+##                                 --project-maintainer alongside the
+##                                 upstream maintainer keys.
+##   ${openpgp_cert_file_user}   = the local maintainer's public cert
+##                                 (output of `sq cert export --all`).
+##
+## Idempotent at the result level: re-running this script after
+## upstream rotates a maintainer key in the shipped openpgp-policy.toml
+## refreshes the user-side copy. Operator runs signing-key-create
+## once per machine, then again after any pull that touches the
+## shipped policy.
+##
+## Path locations live in help-steps/variables (openpgp_policy_file_user,
+## openpgp_cert_file_user). User override only - the /etc/buildconfig.d/
+## system path is read by openpgp_policy_resolve but never written here.
+openpgp_policy_setup() {
+   local project_policy="${source_code_folder_dist}/openpgp-policy.toml"
+   local user_policy_dir
+   user_policy_dir="$(dirname -- "${openpgp_policy_file_user}")"
+
+   if [ ! -r "${project_policy}" ]; then
+      true "INFO: ${project_policy} not present; skipping openpgp-policy setup"
+      return 0
+   fi
+
+   ## 0700 on the parent dir keeps other local users out of the
+   ## cert + policy file. The cert is public so the dir mode is
+   ## defense-in-depth; the policy file is also non-secret. mkdir
+   ## --parents is idempotent.
+   mkdir --parents -- "${user_policy_dir}"
+   chmod -- 0700 "${user_policy_dir}"
+
+   ## Always overwrite from the shipped project_policy so a re-run
+   ## picks up upstream maintainer-key rotation. The local cert is
+   ## re-authorized below; the file content ends up identical to
+   ## the previous run for the same inputs.
+   cp -- "${project_policy}" "${openpgp_policy_file_user}"
+   chmod -- 0600 "${openpgp_policy_file_user}"
+
+   ## Public cert export. NOT secret - 'sq cert export' emits
+   ## public certificates only ('sq key export' would emit secret).
+   ## File mode 0600 is defense-in-depth, not a confidentiality
+   ## requirement.
+   sq cert export --all > "${openpgp_cert_file_user}"
+   chmod -- 0600 "${openpgp_cert_file_user}"
+
+   ## Authorize the local cert as a project maintainer in the
+   ## user-side policy file. After this, sq-git verification with
+   ## --policy-file=${openpgp_policy_file_user} accepts both the
+   ## upstream maintainer keys (preserved from project_policy) and
+   ## the local maintainer.
+   sq-git policy authorize \
+      --policy-file "${openpgp_policy_file_user}" \
+      --project-maintainer \
+      "${DEBFULLNAME}" \
+      "${openpgp_cert_file_user}"
 
    true "INFO: END of ${FUNCNAME[0]}"
 }

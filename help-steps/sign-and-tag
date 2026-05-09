@@ -5,11 +5,22 @@
 
 ## AI-Assisted
 
-## Mint an ephemeral OpenPGP cert, build a policy that authorizes
-## it on top of the upstream maintainer keys, then sign+tag HEAD
-## for the parent repo and every submodule via the sign-tag-head
-## leaf. The caller is responsible for guarding against running
-## this on a developer machine.
+## Sign+tag HEAD for the parent repo and every submodule via the
+## sign-tag-head leaf, using the persistent OpenPGP policy file
+## written by help-steps/signing-key-create. The caller is
+## responsible for guarding against running this on a developer
+## machine.
+##
+## After signing-key-create:
+##   ${openpgp_policy_file_user} = ~/buildconfig.d/openpgp-policy.toml
+##                                 (project_policy + local maintainer
+##                                  cert authorized)
+## OR (admin pre-provisioned, no per-user step):
+##   ${openpgp_policy_file_system} = /etc/buildconfig.d/openpgp-policy.toml
+##
+## openpgp_policy_resolve picks the user override first, then the
+## system file. If neither exists this script bails out: the operator
+## must run signing-key-create.
 
 set -o errexit
 set -o nounset
@@ -29,26 +40,24 @@ source "${repo_root}/help-steps/variables"
 
 cd -- "${repo_root}"
 
+## Idempotent setup. Re-running picks up upstream maintainer-key
+## rotation if project_policy changed since last invocation. The
+## script is a no-op on the cert side once a key exists.
 ./help-steps/signing-key-create
 
-ephemeral_cert_pem="$(mktemp)"
-sq cert export --all > "${ephemeral_cert_pem}"
+policy_file="$(openpgp_policy_resolve)"
+if [ -z "${policy_file}" ]; then
+   printf '%s\n' \
+      "${BASH_SOURCE[0]}: no OpenPGP policy file at" \
+      "  ${openpgp_policy_file_user}" \
+      "  or ${openpgp_policy_file_system}" \
+      "Run help-steps/signing-key-create first to write the user-side" \
+      "policy, or pre-provision the system path." >&2
+   exit 1
+fi
+printf '%s\n' "${BASH_SOURCE[0]}: using policy ${policy_file}"
 
-mkdir --parents -- "${binary_build_folder_dist}"
-ephemeral_policy="${binary_build_folder_dist}/openpgp-policy.toml"
-project_policy="${repo_root}/openpgp-policy.toml"
-test -r "${project_policy}"
-cp -- "${project_policy}" "${ephemeral_policy}"
-
-sq-git policy authorize \
-   --policy-file "${ephemeral_policy}" \
-   --project-maintainer \
-   "${DEBFULLNAME}" \
-   "${ephemeral_cert_pem}"
-safe-rm --force -- "${ephemeral_cert_pem}"
-printf '%s\n' "${BASH_SOURCE[0]}: wrote policy to ${ephemeral_policy}"
-
-export sq_git_policy_file="${ephemeral_policy}"
+export sq_git_policy_file="${policy_file}"
 
 ./help-steps/sign-tag-head
 
