@@ -19,13 +19,17 @@ target_user=builder
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.."
 
-target_home="$(getent passwd "${target_user}" | cut -d: -f6)"
-
+## --policy-file is intentionally omitted: help-steps/variables
+## walks ${dist_build_config_dirs_list} for openpgp-policy.toml,
+## and 150_signing-key-create has populated
+## ${HOMEVAR}/buildconfig.d/openpgp-policy.toml with the local
+## maintainer cert authorized. The resolved value is what
+## sign-and-tag verified earlier in the dry-run, so it has to be
+## the policy the build itself uses.
 timeout 1200 \
    ./help-steps/run-as-user --chown "${PWD}" -- \
       "${target_user}" \
       ./derivative-maker \
-         --policy-file "${target_home}/derivative-binary/openpgp-policy.toml" \
          --dry-run true \
          --unsupported-os true \
          --allow-uncommitted true \
