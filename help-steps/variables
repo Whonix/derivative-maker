@@ -241,9 +241,6 @@ export target_architecture_pretty_name
 export BUILD_KERNEL_PKGS
 export BUILD_HEADER_PKGS
 
-[[ -v sq_git_policy_file ]] || sq_git_policy_file="${source_code_folder_dist}/openpgp-policy.toml"
-export sq_git_policy_file
-
 ## Default the user-overridable verification flags to "false" so that
 ## 'help-steps/git_sanity_test' can require them to be set explicitly
 ## (security: caller must make an explicit decision; no implicit defaults
@@ -254,11 +251,19 @@ export sq_git_policy_file
 export dist_build_ignore_untagged
 export dist_build_ignore_uncommitted
 
+## Default to "false" so callers can use literal-string equality
+## tests (= 'false' / = 'true') without having to second-guess the
+## unset case. dm-build-official-one sets dist_build_redistributable
+## to "true" for redistributable builds; CI is set to "true" by
+## GitHub Actions and most other CI runners.
+[ -n "${dist_build_redistributable:-}" ] || dist_build_redistributable="false"
+[ -n "${CI:-}" ]                         || CI="false"
+
 ## Configuration precedence (lowest -> highest):
 ##   1. Code defaults (this file)
 ##   2. ${source_code_folder_dist}/buildconfig.d/*  (in-tree, ships with code)
 ##   3. /etc/buildconfig-dist.d/*                   (system override)
-##   4. ../buildconfig.d/*                          (user/wrapper override)
+##   4. ${HOMEVAR}/buildconfig.d/*                  (user override)
 ##   5. Environment variables
 ##   6. Command-line options (parse-cmd)
 ##
@@ -1105,10 +1110,10 @@ fi
 
 ## {{{ buildconfig.d
 
-[ -n "${dist_build_config_dirs:-}" ] || dist_build_config_dirs="${source_code_folder_dist}/buildconfig.d /etc/buildconfig-dist.d ../buildconfig.d"
+[ -n "${dist_build_config_dirs_list:-}" ] || dist_build_config_dirs_list="${source_code_folder_dist}/buildconfig.d /etc/buildconfig-dist.d ${HOMEVAR}/buildconfig.d"
 
 dist_build_source_config_dir() {
-   true "${cyan}INFO: Checking if dist_build_config_dir $dist_build_config_dir exists...${reset}"
+   true "${cyan}INFO: Checking if dist_build_config_dir_item $dist_build_config_dir_item exists...${reset}"
    if [ -d "$1" ]; then
       true "${cyan}INFO: Parsing $1...${reset}"
       shopt -s nullglob
@@ -1122,9 +1127,10 @@ dist_build_source_config_dir() {
    fi
 }
 
-for dist_build_config_dir in $dist_build_config_dirs; do
-   dist_build_source_config_dir "$dist_build_config_dir"
+for dist_build_config_dir_item in $dist_build_config_dirs_list; do
+   dist_build_source_config_dir "$dist_build_config_dir_item"
 done
+unset dist_build_config_dir_item
 
 if [ ! "${dist_build_custom_config_dir:-}" = "" ]; then
    dist_build_source_config_dir "$dist_build_custom_config_dir"
@@ -1136,6 +1142,66 @@ if [ ! "${dist_build_conf_file:-}" = "" ]; then
       source "$dist_build_conf_file"
    fi
 fi
+
+## }}}
+
+## {{{ OpenPGP policy + cert paths
+##
+## Layered the same way as buildconfig.d/*.conf via
+## dist_build_config_dirs_list; later entries override earlier
+## ones. Written by signing-key-create, read by sign-and-tag.
+[ -n "${openpgp_policy_filename:-}" ] || openpgp_policy_filename='openpgp-policy.toml'
+[ -n "${openpgp_cert_filename:-}" ]   || openpgp_cert_filename='openpgp-cert.pem'
+
+## Shipped in-tree (upstream maintainer keys only, no local cert).
+[ -n "${openpgp_policy_file_project:-}" ] || openpgp_policy_file_project="${source_code_folder_dist}/buildconfig.d/${openpgp_policy_filename}"
+
+## signing-key-create writes to the highest-precedence (last) entry.
+[ -n "${openpgp_policy_dir_user:-}" ]  || openpgp_policy_dir_user="${dist_build_config_dirs_list##* }"
+[ -n "${openpgp_policy_file_user:-}" ] || openpgp_policy_file_user="${openpgp_policy_dir_user}/${openpgp_policy_filename}"
+[ -n "${openpgp_cert_file_user:-}" ]   || openpgp_cert_file_user="${openpgp_policy_dir_user}/${openpgp_cert_filename}"
+
+## Walk dist_build_config_dirs_list once for both policy and cert.
+## ${openpgp_policy_file_resolved} / ${openpgp_cert_file_resolved}
+## = last existing-and-readable file of each kind, or empty if
+## none. Search-paths arrays are kept for sign-and-tag's bail-out
+## error message. sign-and-tag bails when the policy is empty;
+## signing-key-create uses the cert-resolved value (or writes to
+## openpgp_cert_file_user when empty).
+if [ -z "${openpgp_policy_file_resolved:-}" ]; then
+   openpgp_policy_file_resolved=""
+   openpgp_cert_file_resolved=""
+   openpgp_policy_search_paths=()
+   openpgp_cert_search_paths=()
+   for openpgp_policy_dir in $dist_build_config_dirs_list; do
+      openpgp_policy_candidate="${openpgp_policy_dir}/${openpgp_policy_filename}"
+      openpgp_cert_candidate="${openpgp_policy_dir}/${openpgp_cert_filename}"
+      openpgp_policy_search_paths+=( "  ${openpgp_policy_candidate}" )
+      openpgp_cert_search_paths+=( "  ${openpgp_cert_candidate}" )
+      if [ -r "${openpgp_policy_candidate}" ]; then
+         openpgp_policy_file_resolved="${openpgp_policy_candidate}"
+      fi
+      if [ -r "${openpgp_cert_candidate}" ]; then
+         openpgp_cert_file_resolved="${openpgp_cert_candidate}"
+      fi
+   done
+   unset openpgp_policy_dir openpgp_policy_candidate openpgp_cert_candidate
+fi
+
+## ${sq_git_policy_file} precedence:
+##   1. caller pre-set (env / parse-cmd)
+##   2. ${openpgp_policy_file_resolved}
+##   3. ${openpgp_policy_file_project}
+##
+## Redistributable builds must not pick up a contaminated override;
+## dm-build-official ensures no openpgp-policy.toml exists in any
+## dist_build_config_dirs_list entry above the shipped one, or
+## pins sq_git_policy_file explicitly.
+[[ -v sq_git_policy_file ]] || \
+   sq_git_policy_file="${openpgp_policy_file_resolved:-${openpgp_policy_file_project}}"
+export sq_git_policy_file
+
+## }}}
 
 ## Late validation: redistributable builds disallow disabling the binary
 ## derivative repository by default, because the resulting images would not

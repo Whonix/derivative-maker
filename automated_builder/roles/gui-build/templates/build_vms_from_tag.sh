@@ -10,18 +10,22 @@ shopt -s shift_verbose
 
 readonly BUILD_LOG='/home/ansible/build.log'
 
-## On a non-zero exit, dump the tail of /home/ansible/build.log to
-## stderr. Ansible captures the script's stderr and surfaces it in
-## the task output, so the actual build error becomes visible in the
-## CI log without having to SSH back to the VPS to read build.log.
+## On non-zero exit, dump the build.log tail to stderr. Ansible
+## captures the script's stderr and surfaces it in the task output,
+## so the actual build error is visible in the CI log without an
+## SSH back to the VPS.
+##
+## Wrap in GitHub Actions ::group::/::endgroup:: tokens; they
+## propagate through ansible's stdout to the runner log, where the
+## Actions viewer renders the tail as a collapsible block.
 on_exit() {
   local rc=$?
   if [ "${rc}" -ne 0 ] && [ -r "${BUILD_LOG}" ]; then
-    printf '%s\n' \
-      "" \
-      "=== build_vms_from_tag.sh: failed (rc=${rc}). Tail of '${BUILD_LOG}': ===" >&2
+    printf '%s\n' "::group::build.log tail (rc=${rc})" >&2
+    printf '%s\n' "=== Tail of '${BUILD_LOG}' (last 200 lines) ===" >&2
     tail --lines=200 -- "${BUILD_LOG}" >&2 || true
     printf '%s\n' '=== end of build.log tail ===' >&2
+    printf '%s\n' '::endgroup::' >&2
   fi
   exit "${rc}"
 }
@@ -32,11 +36,6 @@ true "$0: START"
 export CI=true
 
 main() {
-  ## Use 'tee' so build output is both logged to file and visible in the
-  ## Ansible task output. Previously all output was silently redirected,
-  ## making CI failures opaque ("non-zero return code" with no details).
-  ## Using 'pipefail' so a non-zero exit from build_command propagates
-  ## through the pipe.
   set -o pipefail
   build_command "$@" 2>&1 | tee --append -- "${BUILD_LOG}"
 }

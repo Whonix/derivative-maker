@@ -27,13 +27,16 @@ main() {
    gpg_key_create "$@"
    gpg_key_debugging "$@"
    signify_key_create "$@"
+   openpgp_policy_setup "$@"
    true "INFO: END of ${FUNCNAME[0]}"
 }
 
 sanity_tests() {
    command -v sq >/dev/null
+   command -v sq-git >/dev/null
    command -v sqop >/dev/null
    command -v signify-openbsd >/dev/null
+   command -v sponge >/dev/null
 }
 
 gpg_key_create() {
@@ -48,22 +51,10 @@ gpg_key_create() {
 
    true "INFO: OpenPGP key with uid DEBEMAIL $DEBEMAIL does not exist yet. Generating OpenPGP key..."
 
-   ## Not idempotent. (Would generate different key.)
-   ##
-   ## Useful for CI to test 'dm-prepare-release' image signing.
-   ##
-   ## 'sqop': Not stateful.
-   ## * In theory, sqop would be more suitable. 'sqop' does not use 'gpg-agent'.
-   ## * In practice, redistributable builds are created using Qubes 'split-gpt-2',
-   ##   which is using 'gpg-agent'. Hence, 'sq' is being used.
-   ## 'sqop generate-key | tee -- private-key-path >/dev/null'
-   ##
-   ## 'sq': Stateful.
-   ## '--without-password' / '--expiration never':
-   ##  * Not useful on CI.
-   ## -* Users who did not study 'sq' have no benefit.
-   ## -* Users that studied 'sq' manually generate the key.
-   ##
+   ## sq (stateful, gpg-agent) rather than sqop (stateless): Qubes
+   ## split-gpg-2 routes via gpg-agent.
+   ## --without-password / --expiration never: CI-friendly; humans
+   ## who care about either generate the key manually.
    ## TODO: Debian forky: Drop or upgrade '--profile rfc9580' depending on availability.
    sq key generate --profile rfc9580 --own-key --email "$DEBEMAIL" --without-password --expiration never
 
@@ -95,6 +86,57 @@ signify_key_create() {
    ## Not idempotent. (Would generate different key.)
    signify-openbsd -n -G -p "$signify_public_key" -s "$signify_private_key" -c "derivative-maker"
    popd >/dev/null
+
+   true "INFO: END of ${FUNCNAME[0]}"
+}
+
+## OpenPGP policy persistent setup. Writes to
+## ${openpgp_policy_dir_user} (highest-precedence entry of
+## ${dist_build_config_dirs_list}); lower-precedence entries can be
+## admin-provisioned outside this script. Idempotent: each file
+## created only if absent. To force refresh, delete and re-run.
+openpgp_policy_setup() {
+   if [ ! -r "${openpgp_policy_file_project}" ]; then
+      true "INFO: ${openpgp_policy_file_project} not present; skipping openpgp-policy setup"
+      return 0
+   fi
+
+   ## 0700: defense-in-depth; both files are public/non-secret.
+   mkdir --parents -- "${openpgp_policy_dir_user}"
+   chmod -- 0700 "${openpgp_policy_dir_user}"
+
+   ## Email-scoped: --all would authorize every cert in the local
+   ## store (test, rotated, unrelated) as project-maintainer; in
+   ## Qubes split-gpg-2 the cert store is shared and not curated.
+   if [ -n "${openpgp_cert_file_resolved}" ]; then
+      true "INFO: ${openpgp_cert_file_resolved} already exists; preserving. Delete to force re-export."
+   else
+      true "INFO: exporting local maintainer cert (DEBEMAIL=${DEBEMAIL}) -> ${openpgp_cert_file_user}"
+      sq cert export --cert-email "${DEBEMAIL}" \
+         | sponge -- "${openpgp_cert_file_user}"
+      chmod -- 0600 "${openpgp_cert_file_user}"
+      openpgp_cert_file_resolved="${openpgp_cert_file_user}"
+   fi
+
+   if [ -r "${openpgp_policy_file_user}" ]; then
+      true "INFO: ${openpgp_policy_file_user} already exists; preserving. Delete to force re-derive from ${openpgp_policy_file_project}."
+      true "INFO: END of ${FUNCNAME[0]}"
+      return 0
+   fi
+
+   true "INFO: copying shipped project policy ${openpgp_policy_file_project} -> ${openpgp_policy_file_user}"
+   cp -- "${openpgp_policy_file_project}" "${openpgp_policy_file_user}"
+   chmod -- 0600 "${openpgp_policy_file_user}"
+
+   true "INFO: authorizing local maintainer cert as project-maintainer in ${openpgp_policy_file_user}"
+   true "INFO:   --policy-file        ${openpgp_policy_file_user}"
+   true "INFO:   --project-maintainer ${DEBFULLNAME}"
+   true "INFO:   cert                 ${openpgp_cert_file_resolved}"
+   sq-git policy authorize \
+      --policy-file "${openpgp_policy_file_user}" \
+      --project-maintainer \
+      "${DEBFULLNAME}" \
+      "${openpgp_cert_file_resolved}"
 
    true "INFO: END of ${FUNCNAME[0]}"
 }

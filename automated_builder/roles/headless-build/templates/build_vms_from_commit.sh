@@ -11,11 +11,6 @@ true "$0: START"
 export CI=true
 
 main() {
-  ## Use 'tee' so build output is both logged to file and visible in the
-  ## Ansible task output.  Previously all output was silently redirected,
-  ## making CI failures opaque ("non-zero return code" with no details).
-  ## Using 'pipefail' so a non-zero exit from build_command propagates
-  ## through the pipe.
   set -o pipefail
   build_command "$@" 2>&1 | tee -a /home/ansible/build.log
 }

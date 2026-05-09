@@ -9,6 +9,12 @@ set -o errtrace
 ## xtrace_off / xtrace_restore come from help-steps/pre, which the three
 ## CI entrypoint scripts source before sourcing this file.
 
+export ANSIBLE_CONFIG="${PWD}/automated_builder/ansible.cfg"
+
+## Duplicated in .github/workflows/run_automated_builder.yml
+## (actions/upload-artifact path:); keep the two in sync.
+automated_builder_logs_dir="./automated_builder/logs"
+
 decrypt_vault() {
   check_vault_value
   if [ "${ANSIBLE_VAULT_VALUE:-}" == "ANSIBLE_VAULT" ]; then

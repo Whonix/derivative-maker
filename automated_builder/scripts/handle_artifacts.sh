@@ -22,6 +22,11 @@ xtrace_restore
 
 export ANSIBLE_HOST_KEY_CHECKING=False
 
+## Ansible's fetch module does not auto-mkdir the dest tree, and
+## upload-artifacts fails the step if the dir is missing on the
+## "remote VPS unreachable" failure path.
+mkdir -p -- "${automated_builder_logs_dir}"
+
 main() {
   decrypt_vault
   gather_logs
@@ -29,7 +34,9 @@ main() {
 }
 
 gather_logs() {
-  ansible-playbook -i automated_builder/inventory automated_builder/gather_build_logs.yml
+  ansible-playbook -i automated_builder/inventory \
+    -e "logs_dir=${automated_builder_logs_dir}" \
+    automated_builder/gather_build_logs.yml
 }
 
 main

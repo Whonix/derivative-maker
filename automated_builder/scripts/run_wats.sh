@@ -16,8 +16,8 @@ prepare_environment() {
   ## We no longer use a default password of 'changeme', so there is no need
   ## to pipe it in here.
   sudo --non-interactive -- apt-get update -q
-  sudo --non-interactive -- apt-get install git python3-behave python3-pip python3-pyatspi -yq
-  pip3 install dogtail -q
+  sudo --non-interactive -- apt-get install --yes --no-install-recommends -- \
+    git python3-behave python3-dogtail python3-pip python3-pyatspi
   gsettings set org.gnome.desktop.interface toolkit-accessibility true
 }
 
