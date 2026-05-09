@@ -36,6 +36,9 @@ sanity_tests() {
    command -v sq-git >/dev/null
    command -v sqop >/dev/null
    command -v signify-openbsd >/dev/null
+   ## sponge: moreutils, used by openpgp_policy_setup for atomic
+   ## cert-export write.
+   command -v sponge >/dev/null
 }
 
 gpg_key_create() {
@@ -122,21 +125,15 @@ openpgp_policy_setup() {
    ## in the local store (test certs, rotated certs, certs from
    ## unrelated projects) as project-maintainer - in Qubes
    ## split-gpg-2 the build VM's cert store is shared and not
-   ## curated for this purpose.
-   ## sponge (moreutils) when available for atomic rename;
-   ## tee fallback is non-atomic but still appears in xtrace where
-   ## bare '>' would not.
+   ## curated for this purpose. sponge for atomic rename + xtrace
+   ## visibility (vs bare '>'); availability guaranteed by
+   ## moreutils dependency, asserted in sanity_tests.
    if [ -r "${openpgp_cert_file_user}" ]; then
       true "INFO: ${openpgp_cert_file_user} already exists; preserving. Delete to force re-export."
    else
       true "INFO: exporting local maintainer cert (DEBEMAIL=${DEBEMAIL}) -> ${openpgp_cert_file_user}"
-      if command -v sponge >/dev/null; then
-         sq cert export --cert-email "${DEBEMAIL}" \
-            | sponge -- "${openpgp_cert_file_user}"
-      else
-         sq cert export --cert-email "${DEBEMAIL}" \
-            | tee -- "${openpgp_cert_file_user}" >/dev/null
-      fi
+      sq cert export --cert-email "${DEBEMAIL}" \
+         | sponge -- "${openpgp_cert_file_user}"
       chmod -- 0600 "${openpgp_cert_file_user}"
    fi
 

@@ -25,11 +25,11 @@ readonly BUILD_LOG='/home/ansible/build.log'
 on_exit() {
   local rc=$?
   if [ "${rc}" -ne 0 ] && [ -r "${BUILD_LOG}" ]; then
-    printf '::group::build.log tail (rc=%s)\n' "${rc}" >&2
+    printf '%s\n' "::group::build.log tail (rc=${rc})" >&2
     printf '%s\n' "=== Tail of '${BUILD_LOG}' (last 200 lines) ===" >&2
     tail --lines=200 -- "${BUILD_LOG}" >&2 || true
     printf '%s\n' '=== end of build.log tail ===' >&2
-    printf '::endgroup::\n' >&2
+    printf '%s\n' '::endgroup::' >&2
   fi
   exit "${rc}"
 }
@@ -40,11 +40,9 @@ true "$0: START"
 export CI=true
 
 main() {
-  ## Use 'tee' so build output is both logged to file and visible in the
-  ## Ansible task output. Previously all output was silently redirected,
-  ## making CI failures opaque ("non-zero return code" with no details).
-  ## Using 'pipefail' so a non-zero exit from build_command propagates
-  ## through the pipe.
+  ## tee so build output is logged AND visible in the Ansible task
+  ## output. pipefail so a non-zero exit from build_command
+  ## propagates through the pipe.
   set -o pipefail
   build_command "$@" 2>&1 | tee --append -- "${BUILD_LOG}"
 }
