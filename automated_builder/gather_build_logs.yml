@@ -23,8 +23,6 @@
     - name: Copy install_source log
       fetch:
         src: "/home/ansible/install_source.log"
-        ## logs_dir passed via -e from handle_artifacts.sh; matches
-        ## the workflow's upload-artifacts 'path:' argument.
         dest: "{{ logs_dir }}/install_source.log"
         flat: yes
 

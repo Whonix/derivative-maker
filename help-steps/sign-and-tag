@@ -5,17 +5,14 @@
 
 ## AI-Assisted
 
-## Sign+tag HEAD for the parent repo and every submodule via the
-## sign-tag-head leaf.
+## Sign+tag HEAD for the parent repo and every submodule.
 ##
-## Preconditions:
-##   - signing key for ${DEBEMAIL} exists in the sq keystore
-##   - a maintainer-authorized policy file exists at one of
-##     ${openpgp_policy_file_user} / ${openpgp_policy_file_system}
-##
-## help-steps/signing-key-create produces both idempotently and is
-## invoked by build-steps.d/1200_prepare-build-machine (real builds)
-## and ci/dry-run.d/150_signing-key-create (CI dry-run).
+## Preconditions (produced by help-steps/signing-key-create, which
+## runs from build-steps.d/1200_prepare-build-machine for real
+## builds and ci/dry-run.d/150_signing-key-create for CI dry-run):
+##   - signing key for ${DEBEMAIL} in the sq keystore
+##   - a maintainer-authorized policy file at one of the
+##     ${dist_build_config_dirs_list} entries
 
 set -o errexit
 set -o nounset
@@ -37,8 +34,7 @@ cd -- "${repo_root}"
 
 ## Redistributable builds rely on offline-signed upstream tags;
 ## re-tagging or re-signing locally defeats the offline-key trust
-## root. Legitimate callers: ci/dry-run.d/200_sign-and-tag and
-## personal builds.
+## root.
 if [ "${dist_build_redistributable:-}" = 'true' ]; then
    printf '%s\n' \
       "${BASH_SOURCE[0]}: refusing to run for redistributable build" \
@@ -52,11 +48,12 @@ fi
 
 if [ -z "${openpgp_policy_file_resolved}" ]; then
    printf '%s\n' \
-      "${BASH_SOURCE[0]}: no maintainer-authorized OpenPGP policy at" \
-      "  ${openpgp_policy_file_user}" \
-      "  or ${openpgp_policy_file_system}" \
-      "Run help-steps/signing-key-create to create the user-side" \
-      "policy, or pre-provision either path manually." >&2
+      "${BASH_SOURCE[0]}: no ${openpgp_policy_filename} found in any of:" >&2
+   for dir in $dist_build_config_dirs_list; do
+      printf '%s\n' "  ${dir}/${openpgp_policy_filename}" >&2
+   done
+   printf '%s\n' \
+      "Run help-steps/signing-key-create or pre-provision a path manually." >&2
    exit 1
 fi
 printf '%s\n' "${BASH_SOURCE[0]}: using policy ${sq_git_policy_file}"
@@ -68,10 +65,8 @@ printf '%s\n' "${BASH_SOURCE[0]}: using policy ${sq_git_policy_file}"
 
 ./help-steps/sign-tag-head 'main repo'
 
-## '$toplevel' and '$displaypath' are foreach's env, expanded by
-## its child shell. $displaypath is the submodule's relative path,
-## passed explicitly to sign-tag-head as the context label so the
-## per-submodule output identifies which submodule the line is
-## about.
+## $toplevel + $displaypath are set by foreach in the child shell;
+## passed as context label so per-submodule output identifies its
+## origin.
 # shellcheck disable=SC2016
 git submodule foreach --recursive '"$toplevel/help-steps/sign-tag-head" "$displaypath"'

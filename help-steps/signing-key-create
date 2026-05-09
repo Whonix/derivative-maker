@@ -92,40 +92,24 @@ signify_key_create() {
    true "INFO: END of ${FUNCNAME[0]}"
 }
 
-## OpenPGP policy persistent setup. Produces:
-##   ${openpgp_policy_file_user} = ${openpgp_policy_file_project}
-##                                 + local maintainer cert authorized
-##                                   as --project-maintainer
-##   ${openpgp_cert_file_user}   = local maintainer public cert
-##                                 (sq cert export --cert-email)
-##
-## ${openpgp_policy_dir_user} is the highest-precedence entry of
-## ${dist_build_config_dirs_list} (= the user/wrapper override
-## location; see help-steps/variables). Lower-precedence entries
-## (in particular /etc/buildconfig-dist.d/) can be admin-
-## provisioned with an openpgp-policy.toml outside this script.
-##
-## Idempotent: each file is created only if absent. Pre-existing
-## files are preserved, supporting both re-runs and admin
-## provisioning. To force refresh, delete and re-run.
+## OpenPGP policy persistent setup. Writes to
+## ${openpgp_policy_dir_user} (highest-precedence entry of
+## ${dist_build_config_dirs_list}); lower-precedence entries can be
+## admin-provisioned outside this script. Idempotent: each file
+## created only if absent. To force refresh, delete and re-run.
 openpgp_policy_setup() {
    if [ ! -r "${openpgp_policy_file_project}" ]; then
       true "INFO: ${openpgp_policy_file_project} not present; skipping openpgp-policy setup"
       return 0
    fi
 
-   ## 0700 on the parent dir is defense-in-depth - both files are
-   ## public/non-secret.
+   ## 0700: defense-in-depth; both files are public/non-secret.
    mkdir --parents -- "${openpgp_policy_dir_user}"
    chmod -- 0700 "${openpgp_policy_dir_user}"
 
-   ## Cert export, email-scoped. --all would authorize every cert
-   ## in the local store (test certs, rotated certs, certs from
-   ## unrelated projects) as project-maintainer - in Qubes
-   ## split-gpg-2 the build VM's cert store is shared and not
-   ## curated for this purpose. sponge for atomic rename + xtrace
-   ## visibility (vs bare '>'); availability guaranteed by
-   ## moreutils dependency, asserted in sanity_tests.
+   ## Email-scoped: --all would authorize every cert in the local
+   ## store (test, rotated, unrelated) as project-maintainer; in
+   ## Qubes split-gpg-2 the cert store is shared and not curated.
    if [ -r "${openpgp_cert_file_user}" ]; then
       true "INFO: ${openpgp_cert_file_user} already exists; preserving. Delete to force re-export."
    else
@@ -135,9 +119,6 @@ openpgp_policy_setup() {
       chmod -- 0600 "${openpgp_cert_file_user}"
    fi
 
-   ## Policy file. Pre-existing -> authored already (provisioned or
-   ## previous run); preserve. The authorized-maintainer list is
-   ## presumed correct.
    if [ -r "${openpgp_policy_file_user}" ]; then
       true "INFO: ${openpgp_policy_file_user} already exists; preserving. Delete to force re-derive from ${openpgp_policy_file_project}."
       true "INFO: END of ${FUNCNAME[0]}"

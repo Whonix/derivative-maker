@@ -22,10 +22,8 @@ xtrace_restore
 
 export ANSIBLE_HOST_KEY_CHECKING=False
 
-## Ensure the destination directory exists before the playbook's
-## 'fetch' tasks run; ansible's fetch module does not auto-mkdir
-## the dest tree if the path includes a missing directory and the
-## upload-artifacts step needs the directory present even on the
+## Ansible's fetch module does not auto-mkdir the dest tree, and
+## upload-artifacts fails the step if the dir is missing on the
 ## "remote VPS unreachable" failure path.
 mkdir -p -- "${automated_builder_logs_dir}"
 

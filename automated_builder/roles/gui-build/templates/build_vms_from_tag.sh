@@ -10,18 +10,14 @@ shopt -s shift_verbose
 
 readonly BUILD_LOG='/home/ansible/build.log'
 
-## On a non-zero exit, dump the tail of /home/ansible/build.log to
-## stderr. Ansible captures the script's stderr and surfaces it in
-## the task output, so the actual build error becomes visible in the
-## CI log without having to SSH back to the VPS to read build.log.
+## On non-zero exit, dump the build.log tail to stderr. Ansible
+## captures the script's stderr and surfaces it in the task output,
+## so the actual build error is visible in the CI log without an
+## SSH back to the VPS.
 ##
-## Output is wrapped in GitHub Actions ::group::/::endgroup::
-## workflow commands; even though this script runs on the VPS, the
-## tokens propagate through ansible's stdout into the runner's log,
-## where the Actions log viewer renders them as a collapsible block.
-## Failure paths are noisy by definition - keeping the 200-line tail
-## one click away (collapsed by default) keeps the surrounding log
-## scannable.
+## Wrap in GitHub Actions ::group::/::endgroup:: tokens; they
+## propagate through ansible's stdout to the runner log, where the
+## Actions viewer renders the tail as a collapsible block.
 on_exit() {
   local rc=$?
   if [ "${rc}" -ne 0 ] && [ -r "${BUILD_LOG}" ]; then
