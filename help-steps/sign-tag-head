@@ -8,6 +8,17 @@
 ## Caller (sign-and-tag) must have exported sq_git_policy_file.
 ## Two phases: sign HEAD if unsigned (rewrites the commit via amend),
 ## then tag HEAD if no signed tag points at it.
+##
+## Args:
+##   $1 - context label, used in operator-facing log lines to
+##        identify which repo / submodule the message is about.
+##        Pass 'main repo' (or any short identifier) for the parent
+##        repo invocation; pass "${displaypath}" inside
+##        'git submodule foreach' since git sets that env var to
+##        the submodule's relative path. Required: the previous
+##        '"${displaypath:-main repo}"' auto-detection silently
+##        relabelled the parent repo's output if displaypath
+##        leaked in from a parent shell.
 
 set -o errexit
 set -o nounset
@@ -33,7 +44,7 @@ cd -- "${saved_cwd}"
 # shellcheck source=help-steps/verify-ref
 source "${repo_root}/help-steps/verify-ref"
 
-context_label="${displaypath:-main repo}"
+context_label="${1:?context label arg required (e.g. \"main repo\" for the parent or \"${displaypath}\" inside git-submodule-foreach)}"
 
 ## Phase 1: sign HEAD if unsigned.
 if verify_ref HEAD commit "${context_label} HEAD"; then

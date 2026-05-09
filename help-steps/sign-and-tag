@@ -59,8 +59,13 @@ printf '%s\n' "${BASH_SOURCE[0]}: using policy ${policy_file}"
 
 export sq_git_policy_file="${policy_file}"
 
-./help-steps/sign-tag-head
+./help-steps/sign-tag-head 'main repo'
 
-## '$toplevel' is foreach's env, expanded by its child shell.
+## '$toplevel' and '$displaypath' are foreach's env, expanded by
+## its child shell. displaypath is the submodule's relative path -
+## passed explicitly to sign-tag-head as the context label so the
+## per-submodule output identifies which submodule the line is
+## about. Auto-detection from inside sign-tag-head was removed in
+## favour of this explicit argument.
 # shellcheck disable=SC2016
-git submodule foreach --recursive '"$toplevel/help-steps/sign-tag-head"'
+git submodule foreach --recursive '"$toplevel/help-steps/sign-tag-head" "$displaypath"'
