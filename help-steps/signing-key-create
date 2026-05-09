@@ -171,7 +171,25 @@ openpgp_policy_setup() {
    if [ -r "${openpgp_cert_file_user}" ]; then
       true "INFO: ${openpgp_cert_file_user} already exists; preserving (provisioned or carried over). Delete to force re-export."
    else
-      sq cert export --cert-email "${DEBEMAIL}" > "${openpgp_cert_file_user}"
+      ## Prefer sponge (moreutils) when available: buffers stdin in
+      ## memory then atomically renames into place. Crash-safe -
+      ## an interrupted write leaves the destination file
+      ## untouched, preserving the idempotence guarantee above
+      ## (next run sees no file, redoes the export).
+      ##
+      ## tee fallback is non-atomic (writes byte-by-byte) but
+      ## still beats bare '>' for this script's '-x' xtrace
+      ## visibility: the target path shows up in the trace where
+      ## a redirection target would not.
+      ##
+      ## Both forms accept '--' end-of-options. R-062.
+      if command -v sponge >/dev/null; then
+         sq cert export --cert-email "${DEBEMAIL}" \
+            | sponge -- "${openpgp_cert_file_user}"
+      else
+         sq cert export --cert-email "${DEBEMAIL}" \
+            | tee -- "${openpgp_cert_file_user}" >/dev/null
+      fi
       chmod -- 0600 "${openpgp_cert_file_user}"
    fi
 
