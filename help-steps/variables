@@ -251,6 +251,16 @@ export BUILD_HEADER_PKGS
 export dist_build_ignore_untagged
 export dist_build_ignore_uncommitted
 
+## Default to "false" so callers can use literal-string equality
+## tests (= 'false' / = 'true') without having to second-guess the
+## unset case. dm-build-official-one sets dist_build_redistributable
+## to "true" for redistributable builds; CI is set to "true" by
+## GitHub Actions and most other CI runners.
+[ -n "${dist_build_redistributable:-}" ] || dist_build_redistributable="false"
+[ -n "${CI:-}" ]                         || CI="false"
+export dist_build_redistributable
+export CI
+
 ## Configuration precedence (lowest -> highest):
 ##   1. Code defaults (this file)
 ##   2. ${source_code_folder_dist}/buildconfig.d/*  (in-tree, ships with code)
