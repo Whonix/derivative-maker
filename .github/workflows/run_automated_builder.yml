@@ -50,6 +50,7 @@ jobs:
     needs: dry-run
     if: github.repository == 'Whonix/derivative-maker'
     runs-on: ubuntu-latest
+    timeout-minutes: 240
     env:
       ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
       GIT_REPO: ${{ github.repository }}
