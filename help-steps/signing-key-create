@@ -93,23 +93,26 @@ signify_key_create() {
 ## OpenPGP policy persistent setup. Writes to
 ## ${openpgp_policy_dir_user} (highest-precedence entry of
 ## ${dist_build_config_dirs_list}); lower-precedence entries can be
-## admin-provisioned outside this script. Idempotent: each file
-## created only if absent. To force refresh, delete and re-run.
+## admin-provisioned outside this script. Idempotent.
+##
+## Same flow used by both end-user developer machines and CI:
+## the local maintainer's persistent OpenPGP cert (the one minted
+## above by gpg_key_create against ${DEBEMAIL}) is always
+## authorized as project-maintainer in the user-level policy file.
 openpgp_policy_setup() {
    if [ ! -r "${openpgp_policy_file_project}" ]; then
       true "INFO: ${openpgp_policy_file_project} not present; skipping openpgp-policy setup"
       return 0
    fi
 
-   ## TODO: do not create for redistributeable builds
-
    ## 0700: defense-in-depth; both files are public/non-secret.
    mkdir --parents -- "${openpgp_policy_dir_user}"
    chmod -- 0700 "${openpgp_policy_dir_user}"
 
-   ## Email-scoped: --all would authorize every cert in the local
-   ## store (test, rotated, unrelated) as project-maintainer; in
-   ## Qubes split-gpg-2 the cert store is shared and not curated.
+   ## Cert export. Email-scoped: --all would authorize every cert
+   ## in the local store (test, rotated, unrelated) as
+   ## project-maintainer; in Qubes split-gpg-2 the cert store is
+   ## shared and not curated.
    if [ -n "${openpgp_cert_file_resolved}" ]; then
       true "INFO: ${openpgp_cert_file_resolved} already exists; preserving. Delete to force re-export."
    else
@@ -124,15 +127,32 @@ openpgp_policy_setup() {
       openpgp_cert_file_resolved="${openpgp_cert_file_user}"
    fi
 
-   if [ -n "${openpgp_policy_file_resolved}" ]; then
-      true "INFO: ${openpgp_policy_file_resolved} already exists; preserving. Delete to force re-derive from ${openpgp_policy_file_project}."
-      true "INFO: END of ${FUNCNAME[0]}"
-      return 0
+   ## Ensure the USER-LEVEL policy file (highest-priority entry
+   ## in the search path) exists and has the local maintainer cert
+   ## authorized.
+   ##
+   ## The previous logic returned early when ANY policy was
+   ## resolved (project / etc / user) - in CI and on systems where
+   ## the project policy is shipped checked-in, the project policy
+   ## always exists, so the user-level override was never written
+   ## and the local cert was never authorized in any policy. The
+   ## downstream sq-git verification then failed because the
+   ## resolved policy did not include the just-generated key.
+   ##
+   ## Now: idempotently derive the user-level policy from the
+   ## project policy (only when missing) and run 'sq-git policy
+   ## authorize' for the local cert (sq-git's authorize is itself
+   ## idempotent on already-authorized certs - safe to re-run on
+   ## developer machines that already have a customized user-level
+   ## policy). The local cert is the same persistent key the user
+   ## generated above; not an ephemeral CI-only cert.
+   if [ ! -f "${openpgp_policy_file_user}" ]; then
+      true "INFO: copying shipped project policy ${openpgp_policy_file_project} -> ${openpgp_policy_file_user}"
+      cp -- "${openpgp_policy_file_project}" "${openpgp_policy_file_user}"
+      chmod -- 0600 "${openpgp_policy_file_user}"
+   else
+      true "INFO: ${openpgp_policy_file_user} already exists; refreshing local-cert authorization."
    fi
-
-   true "INFO: copying shipped project policy ${openpgp_policy_file_project} -> ${openpgp_policy_file_user}"
-   cp -- "${openpgp_policy_file_project}" "${openpgp_policy_file_user}"
-   chmod -- 0600 "${openpgp_policy_file_user}"
    openpgp_policy_file_resolved="${openpgp_policy_file_user}"
 
    true "INFO: authorizing local maintainer cert as project-maintainer in ${openpgp_policy_file_resolved}"
@@ -148,5 +168,6 @@ openpgp_policy_setup() {
 
    true "INFO: END of ${FUNCNAME[0]}"
 }
+
 
 main "$@"
