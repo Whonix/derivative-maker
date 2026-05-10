@@ -64,10 +64,31 @@ printf '%s\n' "${BASH_SOURCE[0]}: using policy ${sq_git_policy_file}"
 ## walks every submodule.
 ./help-steps/signing-key-test
 
-./help-steps/sign-tag-head 'main repo'
-
+## Phase 1: sign submodules first (recursively, depth-first per
+## git's foreach order). For submodules whose HEAD is unsigned,
+## sign-tag-head runs 'commit --amend -S' which changes the
+## submodule's HEAD SHA. For submodules already at a signed-tag
+## release, sign-tag-head is a no-op for that submodule's HEAD.
+##
 ## $toplevel + $displaypath are set by foreach in the child shell;
 ## passed as context label so per-submodule output identifies its
 ## origin.
 # shellcheck disable=SC2016
 git submodule foreach --recursive '"$toplevel/help-steps/sign-tag-head" "$displaypath"'
+
+## Phase 2: stage updated gitlinks in the parent's index so the
+## parent's about-to-happen amend in Phase 3 captures the
+## post-Phase-1 submodule HEADs. Iterate top-level submodules only
+## (no --recursive) - 'git add -- <path>' from the outermost repo
+## against a path inside another submodule fails ('submodule X is
+## contained in path'); intermediate submodules update their own
+## gitlinks via THEIR amend during Phase 1.
+# shellcheck disable=SC2016
+git submodule foreach '
+   cd "$toplevel"
+   git add -- "$displaypath"
+'
+
+## Phase 3: sign the parent. The amend now includes the staged
+## submodule gitlink updates from Phase 2.
+./help-steps/sign-tag-head 'main repo'
