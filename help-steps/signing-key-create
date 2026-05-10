@@ -101,6 +101,8 @@ openpgp_policy_setup() {
       return 0
    fi
 
+   ## TODO: do not create for redistributeable builds
+
    ## 0700: defense-in-depth; both files are public/non-secret.
    mkdir --parents -- "${openpgp_policy_dir_user}"
    chmod -- 0700 "${openpgp_policy_dir_user}"
