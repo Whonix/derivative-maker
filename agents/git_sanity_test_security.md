@@ -179,6 +179,11 @@ when the type is statically known.
 | It is a remote-tracking branch | `refs/remotes/<remote>/<name>` |
 | It is a commit object | peel: `<expr>^{commit}` |
 
+There is an exception to the above rule, which is when using `git switch`
+without `--detach`. In this instance the bare branch name must be specified
+WITHOUT `refs/heads/` in front of it. Specifying `refs/heads/` here results in
+`git switch` erroring out, and not specifying it is safe here (see below).
+
 ### Prefer `git switch --detach` over `git checkout`
 
 For HEAD-changing operations on a ref:
@@ -196,6 +201,8 @@ default is itself a useful guard for branch-only call sites.
 
 ## Future directions
 
-- If sequoia-git adds `sq-git verify-tag` using the policy file,
-  the `extract-openpgp-policy-trusted-certs` + `split_tag` + `sqop
-  verify` workaround can be replaced with a single sq-git call.
+- Sequoia-git has added `sq-git verify-tag` using the policy file,
+  so we will eventually be able to replace the
+  `extract-openpgp-policy-trusted-certs` + `split_tag` + `sqop verify`
+  workaround with a single sq-git call. This will have to wait until Debian
+  Forky, as the feature does not exist in Debian Trixie's sq-git.

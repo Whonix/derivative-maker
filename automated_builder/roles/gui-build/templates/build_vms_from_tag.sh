@@ -20,6 +20,7 @@ readonly BUILD_LOG='/home/ansible/build.log'
 ## Actions viewer renders the tail as a collapsible block.
 on_exit() {
   local rc=$?
+  trap - EXIT
   if [ "${rc}" -ne 0 ] && [ -r "${BUILD_LOG}" ]; then
     printf '%s\n' "::group::build.log tail (rc=${rc})" >&2
     printf '%s\n' "=== Tail of '${BUILD_LOG}' (last 200 lines) ===" >&2

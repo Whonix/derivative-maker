@@ -51,8 +51,7 @@ fi
 ## exactly zero or one signed annotated tag at HEAD; mirror that
 ## classification so we don't leave the repo in a state the next
 ## sanity check rejects.
-git_tags_at_head_cmd=( git for-each-ref --points-at=HEAD --format='%(refname)' refs/tags )
-git_tags_at_head_output="$( "${git_tags_at_head_cmd[@]}" )"
+git_tags_at_head_output="$(git for-each-ref --points-at=HEAD --format='%(refname)' refs/tags)"
 if [ -n "${git_tags_at_head_output:-}" ]; then
    readarray -t tags_at_head <<< "${git_tags_at_head_output}"
 else
@@ -62,7 +61,7 @@ fi
 case "${#tags_at_head[@]}" in
    0)
       true "INFO: ${context_label} has no tag at HEAD; will create a signed tag below"
-      ## Fall through to create a signed tag.
+      ## Signed tag creation occurs later.
       ;;
    1)
       if verify_ref "${tags_at_head[0]}" tag "${context_label} tag"; then
@@ -85,5 +84,8 @@ else
    signed_tag="tag_${commit_full_sha}"
 fi
 printf '%s\n' "${BASH_SOURCE[0]}: creating signed annotated tag for ${context_label}: ${signed_tag} (commit ${commit_full_sha})"
-"${git_signing_command_wrapper[@]}" tag -a -s -m 'Signed by sign-tag-head' "${signed_tag}"
+## Don't pass `-a` here, as that is documented as creating "an unsigned,
+## annotated tag object" in the git-tag(1) manpage. `-s` is sufficient to make
+## an annotated, signed tag.
+"${git_signing_command_wrapper[@]}" tag -s -m 'Signed by sign-tag-head' "${signed_tag}"
 printf '%s\n' "${BASH_SOURCE[0]}: tagged ${context_label} as ${signed_tag}"
