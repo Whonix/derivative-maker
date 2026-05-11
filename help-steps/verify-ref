@@ -15,7 +15,7 @@ verify_ref_self_dir="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}"
 verify_ref_git_sanity_test="${verify_ref_self_dir}/git_sanity_test"
 test -x "${verify_ref_git_sanity_test}"
 
-## TODO: rename to avoid same same as in git_sanity_test
+## TODO: rename to avoid same name as in git_sanity_test
 verify_ref() {
    local ref ref_type context
 
