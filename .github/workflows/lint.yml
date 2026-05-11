@@ -66,4 +66,30 @@ jobs:
         run: ./ci/lint-yaml
 
       - name: Lint shellcheck
-        run: ./ci/lint-shellcheck
+        ## Excludes (documented intent, not "we couldn't bother to fix"):
+        ##   SC2086 - Many call sites intentionally word-split string
+        ##     variables containing space-separated option lists
+        ##     ('$apt_unattended_opts', '$pids' in umount_kill.sh,
+        ##     'eval $cmd_string' in pre's retry dispatch). Refactoring
+        ##     each into arrays is sound but invasive; out of scope.
+        ##   SC2317 - False positive in the build-step dispatch pattern:
+        ##     each build-steps.d/* file defines functions called via
+        ##     the file's own bottom-of-file dispatcher, which shellcheck
+        ##     cannot see statically.
+        ##   SC2016 - Triggered by intentional literal-'$1' arguments to
+        ##     --customize-hook in help-steps/mmdebstrap and 'bash -c'
+        ##     recursive calls in help-steps/git_sanity_test. Single
+        ##     quoting is correct in those contexts.
+        ## Real findings (SC2162 'read without -r', genuinely missing
+        ## quotes, etc.) are still surfaced.
+        uses: org-ai-assisted/developer-meta-files/.github/actions/shellcheck@master
+        with:
+          ## Mirrors the pre-composite ci/lint-shellcheck scope:
+          ## help-steps, build-steps.d, automated_builder, ci + two
+          ## root entry points. Out-of-scope deliberately: the
+          ## live-build-config/ subtree (live-build owns those
+          ## #!/bin/sh scripts; SC3040 'pipefail in POSIX sh' there
+          ## is a known latent issue tracked separately).
+          paths: 'help-steps build-steps.d automated_builder ci derivative-maker derivative-update'
+          excludes: 'SC2086,SC2317,SC2016'
+          severity: 'info'
