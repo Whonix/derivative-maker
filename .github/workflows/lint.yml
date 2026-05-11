@@ -93,6 +93,3 @@ jobs:
           paths: 'help-steps build-steps.d automated_builder ci derivative-maker derivative-update'
           excludes: 'SC2086,SC2317,SC2016'
           severity: 'info'
-          ## Force bash mode to match the prior --shell=bash override.
-          ## All listed paths ship #!/bin/bash scripts.
-          shell: 'bash'
