@@ -21,6 +21,8 @@ on:
     tags:
       - '*'
 
+  workflow_dispatch:
+
 permissions:
   contents: read
 

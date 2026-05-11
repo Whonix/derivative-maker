@@ -14,6 +14,7 @@ on:
   push:
     tags:
       - '*'
+  workflow_dispatch:
 
 ## Upstream-only gate: build:if uses a literal repo string (not env)
 ## because GitHub Actions does not expose env in job-level if:.
@@ -21,6 +22,7 @@ on:
 ## repo, so forks must skip the heavy paths.
 ##
 ## See agents/github-actions-security.md.
+
 permissions:
   contents: read
 
