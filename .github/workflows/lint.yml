@@ -84,6 +84,15 @@ jobs:
         ## quotes, etc.) are still surfaced.
         uses: org-ai-assisted/developer-meta-files/.github/actions/shellcheck@master
         with:
-          paths: '.'
+          ## Mirrors the pre-composite ci/lint-shellcheck scope:
+          ## help-steps, build-steps.d, automated_builder, ci + two
+          ## root entry points. Out-of-scope deliberately: the
+          ## live-build-config/ subtree (live-build owns those
+          ## #!/bin/sh scripts; SC3040 'pipefail in POSIX sh' there
+          ## is a known latent issue tracked separately).
+          paths: 'help-steps build-steps.d automated_builder ci derivative-maker derivative-update'
           excludes: 'SC2086,SC2317,SC2016'
           severity: 'info'
+          ## Force bash mode to match the prior --shell=bash override.
+          ## All listed paths ship #!/bin/bash scripts.
+          shell: 'bash'
