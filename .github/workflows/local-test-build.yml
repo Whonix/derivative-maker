@@ -26,18 +26,16 @@ on:
 permissions:
   contents: read
 
-## Differentiated by event type so PR and tag runs do not
-## cross-cancel (see agents/github-actions.md G-A-006):
-##   PR push  -> '<workflow>-pr'  group: any in-flight PR run
-##               gets cancelled. Different PRs share this group
-##               so the latest push wins, regardless of PR number.
-##   Tag push -> '<workflow>-tag' group: any in-flight tag-build
-##               gets cancelled (newer tag supersedes). PR runs
-##               are unaffected because they live in the other
-##               group. Right because the build job is ~1-3
-##               hours and should not be cancellable by a PR push.
+## Per-ref cancellation (see agents/github-actions.md G-A-006).
+## github.ref is unique per PR and per tag, so each PR-N and each
+## tag has its own concurrency group:
+##   PR  -> refs/pull/N/merge   (one group per PR)
+##   tag -> refs/tags/<tag>     (one group per tag)
+## A new push on a PR cancels only that PR's in-flight run; a tag
+## push cannot cancel any PR (different ref => different group);
+## different PRs never cross-cancel.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && 'tag' || 'pr' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
