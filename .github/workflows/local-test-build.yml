@@ -50,7 +50,7 @@ jobs:
   ## for why we prefer 'uses: ./...' over an event-driven
   ## workflow_run trigger here.
   dry-run:
-    uses: ./.github/workflows/dry-run.yml
+    uses: ./.github/workflows/local-build-dry-run.yml
     ## The reusable workflow only needs contents: read. Pass it
     ## explicitly so a future tightening of the parent's
     ## workflow-level permissions block does not silently strip the
