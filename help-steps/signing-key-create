@@ -132,12 +132,11 @@ openpgp_policy_setup() {
    ## authorized.
    ##
    ## The previous logic returned early when ANY policy was
-   ## resolved (project / etc / user) - in CI and on systems where
-   ## the project policy is shipped checked-in, the project policy
-   ## always exists, so the user-level override was never written
-   ## and the local cert was never authorized in any policy. The
-   ## downstream sq-git verification then failed because the
-   ## resolved policy did not include the just-generated key.
+   ## resolved (project / etc / user) - the project policy always
+   ## exists, so the user-level override was never written and the
+   ## local cert was never authorized in any policy. The downstream
+   ## sq-git verification then failed because the resolved policy did
+   ## not include the just-generated key.
    ##
    ## Now: idempotently derive the user-level policy from the
    ## project policy (only when missing) and run 'sq-git policy

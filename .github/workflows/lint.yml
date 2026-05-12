@@ -68,7 +68,7 @@ jobs:
         run: ./ci/lint-yaml
 
       - name: Lint shellcheck
-        ## Excludes (documented intent, not "we couldn't bother to fix"):
+        ## Excludes:
         ##   SC2086 - Many call sites intentionally word-split string
         ##     variables containing space-separated option lists
         ##     ('$apt_unattended_opts', '$pids' in umount_kill.sh,
@@ -82,8 +82,6 @@ jobs:
         ##     --customize-hook in help-steps/mmdebstrap and 'bash -c'
         ##     recursive calls in help-steps/git_sanity_test. Single
         ##     quoting is correct in those contexts.
-        ## Real findings (SC2162 'read without -r', genuinely missing
-        ## quotes, etc.) are still surfaced.
         uses: org-ai-assisted/developer-meta-files/.github/actions/shellcheck@master
         with:
           ## Mirrors the pre-composite ci/lint-shellcheck scope:
