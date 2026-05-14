@@ -87,12 +87,12 @@ jobs:
 
       - name: Run automated builder
         run: |
-          ./automated_builder/scripts/run_automated_builder.sh $ANSIBLE_VAULT_PASSWORD
+          ./automated_builder/scripts/run_automated_builder.sh "$ANSIBLE_VAULT_PASSWORD"
 
       - name: Handle artifacts
         if: always()
         run: |
-          ./automated_builder/scripts/handle_artifacts.sh $ANSIBLE_VAULT_PASSWORD
+          ./automated_builder/scripts/handle_artifacts.sh "$ANSIBLE_VAULT_PASSWORD"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
@@ -104,4 +104,4 @@ jobs:
       - name: Teardown build
         if: always()
         run: |
-          ./automated_builder/scripts/teardown_build.sh $ANSIBLE_VAULT_PASSWORD
+          ./automated_builder/scripts/teardown_build.sh "$ANSIBLE_VAULT_PASSWORD"
