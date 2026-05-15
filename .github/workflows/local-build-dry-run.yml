@@ -15,16 +15,28 @@ on:
 permissions:
   contents: read
 
-## No reusable-side concurrency block. Per developer-meta-files'
-## agents/github-actions.md G-A-006: github.workflow inside a
-## reusable resolves to the caller's workflow name, so a reusable
-## that declares the same group key as its caller produces an
-## identical lock and self-cancels (Actions surfaces this as
-## "Canceling since a deadlock was detected for concurrency
-## group: ..."). The caller (local-test-build.yml) already carries
-## a per-ref cancellable group; that lock covers this reusable's
-## runs. Direct workflow_dispatch runs of this file are ad-hoc
-## smoke tests with no cancellation semantics needed.
+## Concurrency: per developer-meta-files' agents/github-actions.md
+## G-A-006, github.workflow inside a reusable resolves to the
+## caller's workflow name. local-test-build.yml calls this file
+## via `uses: ./.github/workflows/local-build-dry-run.yml` and
+## carries `${{ github.workflow }}-${{ github.ref }}` itself, so a
+## bare same-key here would collide with the caller and trip the
+## deadlock detector ("Canceling since a deadlock was detected for
+## concurrency group: ..."). The trailing literal `-dry-run` is the
+## differentiator the caller does not carry, matching the codeql
+## reusable's `${{ inputs.language }}` pattern.
+##
+## This file is `local-` prefixed (repo-private, never propagated)
+## but is also dispatchable standalone via workflow_dispatch for
+## ad-hoc smoke tests. The same key works in both modes:
+##   called via uses:   group = "00 Run automated builder-<ref>-dry-run"
+##                       caller's group = "00 Run automated builder-<ref>"
+##                       different keys -> no deadlock
+##   workflow_dispatch  group = "Dry-run-<ref>-dry-run"
+##                       unique per ref -> standard cancel-on-push
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-dry-run
+  cancel-in-progress: true
 
 env:
   ## debian:trixie - Debian 13, current stable. TODO: forky.
