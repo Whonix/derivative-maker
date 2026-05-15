@@ -120,3 +120,45 @@ jobs:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
         run: |
           ./automated_builder/scripts/teardown_build.sh "$ANSIBLE_VAULT_PASSWORD"
+
+      - name: Reclaim workspace ownership
+        if: always()
+        ## The automated builder runs ansible playbooks that invoke
+        ## sudo / mmdebstrap / chroot, leaving root-owned files in
+        ## $GITHUB_WORKSPACE. The host runner can no longer mkdir
+        ## into the workspace (e.g. for actions/checkout below)
+        ## until ownership is restored. Same fix as the 'dry-run'
+        ## job in local-build-dry-run.yml. Passwordless sudo is
+        ## available on ubuntu-latest hosted runners.
+        run: sudo chown -R "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
+
+      - name: Checkout developer-meta-files (summary script)
+        if: always()
+        ## Needed for ci/step-summary-emit.sh. derivative-maker
+        ## does not vendor a copy; checkout @master keeps the org's
+        ## single source of truth. Pinned SHA matches the existing
+        ## actions/checkout in this file. Checked out into .dmf
+        ## (sibling of the recursive workspace, not inside any
+        ## submodule path).
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          repository: org-ai-assisted/developer-meta-files
+          ref: master
+          path: .dmf
+          persist-credentials: false
+
+      - name: Emit step summary
+        if: always()
+        ## Headline panel for the Actions tab. The dry-run job has
+        ## its own panel (local-build-dry-run.yml); this one covers
+        ## the heavy build job. Template values through env: per
+        ## developer-meta-files#87.
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          ./.dmf/ci/step-summary-emit.sh \
+            --tool 'Automated builder' \
+            --column-header field \
+            --row "outcome=${JOB_STATUS}" \
+            --row "ref-type=${REF_TYPE}" \
+            --row "ref-name=${REF_NAME}"
