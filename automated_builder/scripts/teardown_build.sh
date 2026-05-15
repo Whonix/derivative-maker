@@ -29,7 +29,12 @@ main() {
 }
 
 run_builder() {
-  ansible-playbook automated_builder/roles/common/tasks/delete_inventory.yml
+  ## '-i localhost,' is Ansible inline-inventory syntax (trailing comma
+  ## means "host list", not a filename). Pairs with hosts:localhost +
+  ## connection:local in delete_inventory.yml. Without -i, ansible-playbook
+  ## emits "No inventory was parsed" / "provided hosts list is empty"
+  ## warnings on every invocation.
+  ansible-playbook -i localhost, automated_builder/roles/common/tasks/delete_inventory.yml
 }
 
 main
