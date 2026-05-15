@@ -61,8 +61,17 @@ jobs:
     if: github.repository == 'Whonix/derivative-maker'
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    ## ANSIBLE_VAULT_PASSWORD lives in step-level env on the
+    ## three steps that consume it (Run automated builder, Handle
+    ## artifacts, Teardown build) - not here at job level. Keeping
+    ## it off the job env removes it from the environment of the
+    ## Checkout / Install ansible / Upload artifacts steps that
+    ## don't need it. Matches the step-level pattern coverity's
+    ## reusable adopted for COVERITY_TOKEN / COVERITY_EMAIL after
+    ## its canonical-repos refactor (see
+    ## developer-meta-files/agents/github-actions-consumer-templates.md
+    ## "Coverity canonical-repos gate placement").
     env:
-      ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
       GIT_REPO: ${{ github.repository }}
       REF_NAME: ${{ github.ref_name }}
       REF_TYPE: ${{ github.ref_type }}
@@ -86,11 +95,15 @@ jobs:
             ansible
 
       - name: Run automated builder
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
         run: |
           ./automated_builder/scripts/run_automated_builder.sh "$ANSIBLE_VAULT_PASSWORD"
 
       - name: Handle artifacts
         if: always()
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
         run: |
           ./automated_builder/scripts/handle_artifacts.sh "$ANSIBLE_VAULT_PASSWORD"
 
@@ -103,5 +116,7 @@ jobs:
 
       - name: Teardown build
         if: always()
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
         run: |
           ./automated_builder/scripts/teardown_build.sh "$ANSIBLE_VAULT_PASSWORD"
