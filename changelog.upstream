@@ -1,3 +1,47 @@
+commit 80080c706129603d92c3775abb89ab84c4f6cb6b
+Merge: 32d1c5cbe e4f1b2f11
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 17:52:50 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit 32d1c5cbeedafcffb1b12a49df2051240a9d68af
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 21:51:44 2026 +0000
+
+    bumped changelog version
+
+commit e4f1b2f1149b22e827cdab7d432e53758dac17c4
+Merge: 4641a80d0 d82cca770
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Fri May 15 17:51:07 2026 -0400
+
+    Merge pull request #35 from org-ai-assisted/claude/review-developer-meta-files-vHKKI
+
+    automated_builder: replace removed community.general.yaml callback
+
+commit d82cca7703cb051c6f2aa366d31263851a939de5
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 15 21:43:43 2026 +0000
+
+    automated_builder: replace removed community.general.yaml callback
+
+    `community.general` 12.0.0 removed the `yaml` stdout callback plugin
+    that automated_builder/ansible.cfg used to route results through.
+    Live CI emits:
+
+        Error: The 'community.general.yaml' callback plugin has been
+        removed. The plugin has been superseded by the option
+        `result_format=yaml` in callback plugin ansible.builtin.default
+        from ansible-core 2.13 onwards. This feature was removed from
+        collection 'community.general' version 12.0.0.
+
+    Switch to the supported replacement called out in the error
+    message: built-in ansible.builtin.default callback with
+    `result_format = yaml`. Equivalent output (multi-line YAML for
+    task results), no community.general dependency. Available since
+    ansible-core 2.13.
+
 commit 4641a80d08e25dfc05ee7ab5ffa9bf122c66d6d4
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Fri May 15 20:13:48 2026 +0000
