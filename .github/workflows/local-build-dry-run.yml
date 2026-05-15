@@ -93,6 +93,16 @@ jobs:
         if: always()
         run: docker rm --force dryrun || true
 
+      - name: Reclaim workspace ownership
+        if: always()
+        ## The privileged dryrun container ran ./ci/dry-run as root,
+        ## leaving root-owned files in the bind-mounted $GITHUB_WORKSPACE.
+        ## The host runner can no longer mkdir into the workspace
+        ## (e.g. for actions/checkout below) until ownership is
+        ## restored. Passwordless sudo is available on ubuntu-latest
+        ## hosted runners.
+        run: sudo chown -R "$(id -u):$(id -g)" "${GITHUB_WORKSPACE}"
+
       - name: Checkout developer-meta-files (summary script)
         if: always()
         ## Needed for ci/step-summary-emit.sh. derivative-maker
