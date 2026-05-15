@@ -1,3 +1,44 @@
+commit d8f8c987977b2977e7d33f4b9d1bfe9c601248c6
+Merge: fcf21b066 a5fa10074
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 18:59:35 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/fix-ansible-inventory-warning-Uo9HU'
+
+commit a5fa1007446302c6bcf89166dcb02651036ff802
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 15 22:40:50 2026 +0000
+
+    automated_builder: silence "No inventory was parsed" warnings
+
+    `automated_builder/scripts/run_automated_builder.sh` and
+    `automated_builder/scripts/teardown_build.sh` both invoke
+    `ansible-playbook automated_builder/roles/common/tasks/delete_inventory.yml`
+    without `-i`. With no inventory file, ansible-playbook falls back to
+    implicit-localhost mode and emits two warnings on every run (visible
+    in CI alongside the now-fixed callback plugin error):
+
+        Warning: No inventory was parsed, only implicit localhost is
+        available
+        Warning: provided hosts list is empty, only localhost is
+        available. Note that the implicit localhost does not match 'all'
+
+    Switch the playbook to `hosts: localhost` and feed an inline inventory
+    via `-i localhost,` (trailing comma = "this is a host list, not a
+    filename"). Because the implicit-localhost path auto-pairs
+    `connection=local` and the explicit path does not, set
+    `connection: local` on the play so Ansible does not try to SSH to the
+    controller. The play only calls `community.digitalocean` modules
+    (REST against the DO API), so no remote host is ever involved; also
+    set `gather_facts: false` to match the sibling plays
+    (`automated_builder/main.yml`, `automated_builder/gather_build_logs.yml`).
+
+commit fcf21b066dd764db8dedf3c63c6a5fd3a6790fd3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 21:53:02 2026 +0000
+
+    bumped changelog version
+
 commit 80080c706129603d92c3775abb89ab84c4f6cb6b
 Merge: 32d1c5cbe e4f1b2f11
 Author: Patrick Schleizer <adrelanos@whonix.org>
