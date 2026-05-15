@@ -93,3 +93,31 @@ jobs:
           paths: 'help-steps build-steps.d automated_builder ci derivative-maker derivative-update'
           excludes: 'SC2086,SC2317,SC2016'
           severity: 'info'
+
+      - name: Checkout developer-meta-files (summary script)
+        if: always()
+        ## Needed for ci/step-summary-emit.sh. The shellcheck step
+        ## above pulls dmf for its composite action but doesn't
+        ## leave a workspace copy; an explicit checkout keeps this
+        ## step independent of upstream's internal layout. Pinned
+        ## SHA matches the actions/checkout in this file.
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          repository: org-ai-assisted/developer-meta-files
+          ref: master
+          path: .dmf
+          persist-credentials: false
+
+      - name: Emit step summary
+        if: always()
+        ## Headline panel for the Actions tab. Per-linter pass/fail
+        ## is already visible as discrete steps; this panel is for
+        ## the at-a-glance row on the PR Checks tab. Template
+        ## values routed through env: per developer-meta-files#87.
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          ./.dmf/ci/step-summary-emit.sh \
+            --tool 'Lint' \
+            --column-header field \
+            --row "outcome=${JOB_STATUS}"
