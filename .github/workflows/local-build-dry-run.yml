@@ -15,9 +15,16 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+## No reusable-side concurrency block. Per developer-meta-files'
+## agents/github-actions.md G-A-006: github.workflow inside a
+## reusable resolves to the caller's workflow name, so a reusable
+## that declares the same group key as its caller produces an
+## identical lock and self-cancels (Actions surfaces this as
+## "Canceling since a deadlock was detected for concurrency
+## group: ..."). The caller (local-test-build.yml) already carries
+## a per-ref cancellable group; that lock covers this reusable's
+## runs. Direct workflow_dispatch runs of this file are ad-hoc
+## smoke tests with no cancellation semantics needed.
 
 env:
   ## debian:trixie - Debian 13, current stable. TODO: forky.
