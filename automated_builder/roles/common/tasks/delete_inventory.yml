@@ -1,6 +1,19 @@
 ---
+## hosts: localhost + connection: local pair with the '-i localhost,'
+## inline inventory passed by the two callers
+## (automated_builder/scripts/run_automated_builder.sh,
+## automated_builder/scripts/teardown_build.sh). Without an explicit
+## inventory, ansible-playbook emits "No inventory was parsed, only
+## implicit localhost is available" and "provided hosts list is empty,
+## only localhost is available." The implicit-localhost path also
+## auto-pairs connection=local; once we feed an explicit inventory,
+## connection must be set here so Ansible does not try to SSH to the
+## controller. The play only calls community.digitalocean modules
+## (REST against the DO API), so no remote host is involved.
 - name: Destroy any existing droplets
-  hosts: 127.0.0.1
+  hosts: localhost
+  connection: local
+  gather_facts: false
   vars_files:
     - ../vars/secrets.yml
   tasks:
