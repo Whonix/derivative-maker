@@ -1,3 +1,1929 @@
+commit bfe8451fd4ed9431192c298f65495ba872f91f57
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 14:34:37 2026 -0400
+
+    .
+
+commit 2bdeda05ae7580bbe28a3fb2b54536bbacee48d5
+Merge: e9222f1b0 42a88b126
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 14:34:19 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit e9222f1b095d355aabaeea273a5721dd9f66f5ed
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 13:47:37 2026 -0400
+
+    comment
+
+commit 42a88b126ced9de0fed9050d22583134f55ece77
+Merge: 6f31852e1 80ba4a4e2
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Fri May 15 13:43:09 2026 -0400
+
+    Merge pull request #34 from org-ai-assisted/claude/audit-github-actions-security-vXOos
+
+    ci: emit step summary on all three local-* workflows
+
+commit 7f90afc5e20552012eaf9ae23c4fc48b2afb43d4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 13:35:08 2026 -0400
+
+    cleanup
+
+commit 80ba4a4e2e33bacc31aed725a869734e9badae35
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Fri May 15 13:34:25 2026 -0400
+
+    ci: reclaim workspace ownership before summary checkout
+
+    Fix dry-run failure on PR #34: the privileged dryrun container
+    ran ./ci/dry-run as root, leaving root-owned files in the
+    bind-mounted $GITHUB_WORKSPACE. The host runner then could not
+    mkdir into the workspace for the actions/checkout that brings
+    in developer-meta-files for the step summary script:
+
+      ##[error]EACCES: permission denied, mkdir
+      '/home/runner/work/derivative-maker/derivative-maker/.dmf'
+
+    Add a 'sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"'
+    step right before the new checkout. Passwordless sudo is
+    available on ubuntu-latest hosted runners. The step is
+    'if: always()' so it also fires when the actual dry-run /
+    build steps fail - the panel is what tells operators what
+    went wrong, so it must always run.
+
+    Apply the same fix preemptively to local-test-build.yml's
+    'build' job: the automated builder runs ansible / mmdebstrap /
+    chroot which has the same root-ownership pattern. The build
+    job is gated to 'Whonix/derivative-maker' so it does not
+    fire on this PR, but the fix is the standard one and the cost
+    is one cheap step.
+
+    local-lint.yml does not need this: its whole 'checks' job
+    runs inside a debian:trixie container so the workspace UID
+    is consistent throughout - confirmed green on PR #34.
+
+commit 62f514f5e811ecae5a74b0238dc4cfdfc56a613c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 13:33:37 2026 -0400
+
+    comments
+
+commit f207af94360085600cc6f73bb1b9934030b90488
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 13:30:55 2026 -0400
+
+    .
+
+commit 2d6548121155d65794be9659171cbf2d44b84b60
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Fri May 15 13:26:04 2026 -0400
+
+    ci: emit step summary on all three local-* workflows
+
+    Closes the last summary-panel gap in derivative-maker. Each
+    result-producing local-* workflow now writes a headline panel
+    to $GITHUB_STEP_SUMMARY so the Actions tab shows outcome at a
+    glance instead of just a green check.
+
+    Files touched:
+    - local-build-dry-run.yml: panel on the 'dry-run' job (also
+      fires when the workflow is reused from 00 Run automated
+      builder).
+    - local-lint.yml: panel on the 'checks' job; per-linter
+      pass/fail remains visible as discrete steps.
+    - local-test-build.yml: panel on the heavy 'build' job; the
+      dry-run job is handled by the reusable.
+
+    All three follow the same pattern as helper-scripts#37 and
+    developer-meta-files#88: extra actions/checkout of
+    org-ai-assisted/developer-meta-files@master into .dmf/ to bring
+    in ci/step-summary-emit.sh (derivative-maker does not vendor a
+    copy), then an 'Emit step summary' step with 'if: always()' so
+    the panel fires on success and failure alike. Template values
+    flow through env: per developer-meta-files#87 to keep CodeQL
+    inline-${...}-in-run: warnings off.
+
+    No behavior change to the build pipeline itself - the new steps
+    only write to $GITHUB_STEP_SUMMARY.
+
+commit af4863664545eb550a04cee80631bc8ae75b7833
+Merge: 133f4cf4a 6f31852e1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 13:20:57 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit 6f31852e13ad1b1ad18c9ab8058956dc2bea553a
+Merge: 1d313c759 639bf1265
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Fri May 15 11:55:24 2026 -0400
+
+    Merge pull request #33 from org-ai-assisted/claude/audit-github-actions-security-PcwM2
+
+    local-test-build: scope $ANSIBLE_VAULT_PASSWORD to step env only
+
+commit 639bf126526cd0d39738d9de60359a42fd884744
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Fri May 15 11:49:25 2026 -0400
+
+commit 1d313c759be6056cc855050e3821c99b33e01acb
+Merge: 6606ab8df 61a9019ab
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Fri May 15 08:28:45 2026 -0400
+
+    Merge pull request #32 from org-ai-assisted/claude/audit-github-actions-security-PcwM2
+
+    local-build-dry-run: drop self-cancelling concurrency block
+
+commit 61a9019ab04a14c506daa51f3a53bbb790576540
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Fri May 15 08:22:07 2026 -0400
+
+    local-build-dry-run: use -dry-run suffix instead of bare removal
+
+    The earlier commit on this branch removed the concurrency block
+    entirely, which fixes the deadlock when called via uses: from
+    local-test-build.yml but loses serialization for the standalone
+    workflow_dispatch case. local-build-dry-run.yml declares
+    `on: workflow_call, workflow_dispatch` and is documented as an
+    ad-hoc manual smoke test surface; the standalone case deserves
+    the same "cancel my own prior in-flight run" semantics that
+    every other top-level workflow gets.
+
+    Switch to the codeql differentiation pattern: keep the block,
+    add a literal `-dry-run` suffix the caller does not carry. Same
+    key works in both invocation modes:
+
+      called via uses:  "00 Run automated builder-<ref>-dry-run"
+                        caller's key: "00 Run automated builder-<ref>"
+                        different -> no deadlock
+
+      workflow_dispatch "Dry-run-<ref>-dry-run"
+                        unique per ref -> standard cancel-on-push
+
+    Rationale captured in inline comment, including the explicit note
+    that the `local-` prefix (G-A-005, propagation signal) does not
+    exempt a file from G-A-006 (the reusable-side resolution rule
+    applies to any file invoked via uses:, regardless of filename
+    convention).
+
+commit 5020a7285838a9b432ae7b19723e7de266f7c002
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Fri May 15 06:35:01 2026 -0400
+
+    local-build-dry-run: drop concurrency block (self-cancel bug)
+
+    The reusable's concurrency group key resolves identically to
+    local-test-build.yml's (its only caller) because github.workflow
+    inside a reusable expands to the caller's name. With
+    cancel-in-progress: true the reusable cancels its own caller
+    the moment it tries to acquire the slot, and the workflow fails
+    before the dry-run job registers - the run's jobs API shows only
+    `build` (skipped by the fork-gate). Every local-test-build.yml
+    run since 2026-05-12T20:28:21 (commit f83f141, which moved the
+    caller to `${{ github.workflow }}-${{ github.ref }}`, the same
+    key shape this reusable already carried) has exhibited the
+    deadlock.
+
+    Fix per developer-meta-files' agents/github-actions.md G-A-006:
+    reusables omit concurrency entirely when the caller's cancellable
+    group covers the call. local-test-build.yml's per-ref group does.
+
+commit 6606ab8df2554e8058b15ba92dd24cf67c68c3b1
+Merge: e2f39fffb 0e75d2c12
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Thu May 14 18:49:02 2026 -0400
+
+    Merge pull request #31 from org-ai-assisted/claude/audit-github-actions-security-PcwM2
+
+    workflows: harden against new GHA attack patterns
+
+commit 0e75d2c125f622761a99311811ee38006d278eed
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Thu May 14 18:38:51 2026 -0400
+
+    consumer-claude-code: pre-filter @claude on comment events
+
+    Surfaced during a GHA security audit against the patterns in
+    https://securitylab.github.com/resources/github-actions-new-patterns-and-mitigations/.
+
+    issue_comment and pull_request_review_comment triggers fire a runner
+    spin-up on every comment. The reusable workflow's job-level if: then
+    gates the actual work behind a @claude substring check + allowed-users
+    roster. Doing the cheap substring test in the consumer wrapper too
+    prevents the unnecessary runner spin-up for unrelated comments.
+
+    This is an operational fix (saves CI minutes on noisy comment
+    threads), not a security fix; the in-reusable gate already prevents
+    unauthorized execution.
+
+    Byte-identical to the canonical template in developer-meta-files.
+
+commit 7b1e9608a67521729552819511e4876b30074204
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Thu May 14 18:37:58 2026 -0400
+
+    local-test-build: quote $ANSIBLE_VAULT_PASSWORD in shell invocations
+
+    Surfaced during a GHA security audit against the patterns in
+    https://securitylab.github.com/resources/github-actions-new-patterns-and-mitigations/.
+
+    Three steps invoked their wrapper script with the secret unquoted
+    (run_automated_builder.sh, handle_artifacts.sh, teardown_build.sh).
+    A vault password is unlikely to contain whitespace, but a quoted
+    positional arg is unambiguously safer and removes the word-splitting
+    class entirely. Trigger remains push-on-tag / workflow_dispatch, so
+    no attacker-controlled input reaches these lines either way.
+
+commit e2f39fffba567a2b86cdcbde180db78326447200
+Merge: e1902fcc5 f83f14150
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Tue May 12 19:56:17 2026 -0400
+
+    Merge pull request #30 from org-ai-assisted/claude/review-github-actions-IQwcy
+
+    local-test-build: switch to per-ref concurrency group
+
+commit f83f141504e8214fa5bca92e6d0aaacb3b1af463
+Author: Claude <noreply@anthropic.com>
+Date:   Tue May 12 20:27:06 2026 +0000
+
+    local-test-build: switch to per-ref concurrency group
+
+    The previous group key collapsed all PRs into a single
+    '<workflow>-pr' group, which with cancel-in-progress: true meant
+    a new push on PR-2 would cancel the in-flight build on PR-1 (and
+    vice versa). Cross-PR cancellation has no defensible semantics:
+    PRs are independent units of work and a push on one does not
+    invalidate a build on another.
+
+    Switch to the standard per-ref pattern used by the rest of the
+    org's CI. github.ref is already unique per PR (refs/pull/N/merge)
+    and per tag (refs/tags/<tag>), so:
+
+      - PR-N push cancels only prior PR-N runs (correct)
+      - Tag pushes never cancel PRs (different ref -> different group)
+      - Different PRs never cross-cancel
+      - New commit on same PR cancels its own in-flight run
+
+    The original rationale 'the 3-hour build should not be cancellable
+    by a PR push' is already satisfied by per-ref grouping - tag and
+    PR refs differ, so cancel-in-progress: true cannot cross those
+    boundaries. The event-type-differentiated pattern was solving a
+    problem that did not exist, while creating the cross-PR
+    cancellation bug.
+
+commit e1902fcc53ca77ab5031f438ba49bed38c1c90a7
+Merge: 823a7fd8e 6022260c3
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Tue May 12 15:32:10 2026 -0400
+
+    Merge pull request #29 from org-ai-assisted/claude/review-github-actions-IQwcy
+
+    workflow triggers: normalize pull_request to branches: [master]
+
+commit 6022260c3d6407408933e34f9b03d7b4f2f96b5f
+Author: Claude <noreply@anthropic.com>
+Date:   Tue May 12 19:26:00 2026 +0000
+
+    workflow triggers: normalize pull_request to branches: [master]
+
+    Propagate dmf canonical updates for consumer-claude-code.yml and
+    consumer-codex-review.yml: bare `pull_request:` ->
+    `pull_request: branches: [master]`. Matches the byte-identical
+    canonical in
+    developer-meta-files/consumer-templates/.github/workflows/.
+
+    Practical impact: PRs targeting feature branches no longer fire
+    the AI reviews. The org's typical workflow (feature-branch ->
+    master PR) is unaffected.
+
+commit 823a7fd8e21262576165ced904c6b5efa4a32006
+Merge: d090a0ab4 284152d68
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Tue May 12 12:50:32 2026 -0400
+
+    Merge pull request #28 from org-ai-assisted/claude/review-github-actions-IQwcy
+
+    workflows: rename legacy unprefixed to consumer- prefix
+
+commit 284152d68f6f9e805036e817b9b110647d1b2768
+Author: Claude <noreply@anthropic.com>
+Date:   Tue May 12 16:44:43 2026 +0000
+
+    workflows: align consumer-*.yml byte-identical to dmf canonicals
+
+    Follow-up to the rename commit: in addition to renaming the
+    files, content must be byte-identical to the canonical wrappers
+    in developer-meta-files/consumer-templates/.github/workflows/.
+
+    Differences absorbed by this commit:
+
+    - scorecard.yml cron slot: per-repo allocation -> uniform
+      org-wide '0 6 * * 0' (the canonical's slot).
+    - Header comments: switched to the standard "Managed by
+      pkg_update_consumer_workflows" template so contributors see
+      the propagation contract.
+
+    User-facing `name:` fields unchanged.
+
+    Spec:
+    https://github.com/org-ai-assisted/developer-meta-files/blob/master/agents/github-actions-consumer-templates.md
+
+commit af5d09a4c6d95bee10bbdc52afe18c79e9d42cad
+Author: Claude <noreply@anthropic.com>
+Date:   Tue May 12 16:42:56 2026 +0000
+
+    workflows: rename legacy unprefixed to consumer- prefix
+
+    Per consumer-template architecture (G-A-005, three-prefix
+    convention): wrappers around developer-meta-files reusables
+    carry the `consumer-` prefix. This is the bulk rollout of the
+    prefix to this repo's universal wrappers.
+
+    Each file is byte-identical to its corresponding canonical in
+    developer-meta-files/consumer-templates/.github/workflows/.
+
+    User-facing `name:` fields unchanged. cron slots converge on
+    the org-wide singleton (`0 6 * * 0` for Scorecard) per spec
+    "Scheduling in byte-identical templates" - GitHub queue
+    serializes; Scorecard's low value-to-noise ratio makes that
+    contention acceptable.
+
+    Spec:
+    https://github.com/org-ai-assisted/developer-meta-files/blob/master/agents/github-actions-consumer-templates.md
+
+commit d090a0ab47568f43497657a40769325977ad89dc
+Merge: 133f4cf4a 9fd646a22
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Tue May 12 12:31:40 2026 -0400
+
+    Merge pull request #27 from org-ai-assisted/claude/review-github-actions-IQwcy
+
+    workflows: rename to local- prefix (dry-run, lint, run_automated_builder)
+
+commit 9fd646a22e597b2aab3f650cc1d89f1b73b51d7c
+Author: Claude <noreply@anthropic.com>
+Date:   Tue May 12 16:24:29 2026 +0000
+
+    local-test-build: fix cross-ref to renamed local-build-dry-run
+
+    The earlier rename commit (e81ad06) renamed three workflow
+    files but missed re-staging the in-content cross-ref update.
+    local-test-build.yml referenced `uses: ./.github/workflows/dry-run.yml`
+    which no longer exists at that path. The PR's CI then failed
+    with: "error parsing called workflow ... -> ./.github/workflows/
+    dry-run.yml: failed to fetch workflow: workflow was not found".
+
+    Re-point to the renamed file.
+
+commit e81ad0645482d3de61413332526246feadb061df
+Author: Claude <noreply@anthropic.com>
+Date:   Tue May 12 16:19:17 2026 +0000
+
+    workflows: rename to local- prefix; cross-ref updated
+
+    Per consumer-template architecture: workflows that live only
+    in one repo (never propagated by pkg_update_consumer_workflows)
+    carry the `local-` prefix. Three renames:
+
+    - dry-run.yml -> local-build-dry-run.yml
+    - lint.yml -> local-lint.yml
+    - run_automated_builder.yml -> local-test-build.yml
+
+    run_automated_builder.yml (now local-test-build.yml) calls
+    dry-run.yml as a reusable via `uses: ./.github/workflows/...`;
+    that path updated to `./.github/workflows/local-build-dry-run.yml`
+    to match the rename.
+
+    User-facing workflow `name:` fields unchanged. The Actions UI
+    sort hack `name: 00 Run automated builder` is preserved (sorts
+    this canonical pipeline to the top of the sidebar regardless
+    of the filename change).
+
+    Per the spec: "we do not create release builds on CI. only test
+    builds". The wrapper name `local-test-build` reflects that.
+
+    Spec:
+    https://github.com/org-ai-assisted/developer-meta-files/blob/master/agents/github-actions-consumer-templates.md
+
+commit 133f4cf4a262cfbb6f71df606afa58bfed9f1c06
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue May 12 08:54:52 2026 -0400
+
+    .
+
+commit f65a6f9f513e60777ed356d7de9032de652e6b91
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue May 12 08:53:43 2026 -0400
+
+    .
+
+commit b415a3fc69bf539ee962bc5618474205924872db
+Merge: 1aec71993 5c9bc96b9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue May 12 08:53:13 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit 1aec7199370b2225e122f140aadb8a6f9cf80375
+Merge: e91097563 78932b814
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue May 12 08:15:34 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit 78932b8146c2114fb95a00b0751a63412dd5f677
+Merge: 83e4db5f8 8a2778312
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Tue May 12 04:19:30 2026 -0400
+
+    Merge pull request #26 from org-ai-assisted/claude/codeql-actions-scan
+
+    codeql-actions: enable 'actions' language CodeQL scan
+
+commit 8a277831297c716304d012b879e99176acd784fa
+Author: Claude <noreply@anthropic.com>
+Date:   Tue May 12 08:13:13 2026 +0000
+
+    codeql-actions.yml: enable 'actions' language CodeQL scan
+
+    Byte-identical to dev-meta-files's canonical wrapper (merged in
+    developer-meta-files#57). Triggers: push to master, pull_request,
+    workflow_dispatch - no cron (the propagatable wrapper is cronless
+    on purpose, see comment in the file itself).
+
+    This is a manual install ahead of running
+    pkg_install_codeql_actions_scan (helper landed in
+    developer-meta-files#58), so derivative-maker's coverage gets in
+    sooner. The helper run will subsequently no-op on this repo via
+    its "already carries the file" idempotency branch.
+
+    Why derivative-maker specifically warrants the scan: ships its own
+    workflows (claude-code, codex-review, dry-run, lint,
+    run_automated_builder, scorecard) that don't live in dmf and so
+    aren't covered by dmf's self-scan. CodeQL 'actions' queries
+    (missing-permissions, script-injection, unversioned-immutable-
+    action, etc.) get to look at this repo's own YAML for the first
+    time.
+
+commit 5c9bc96b909184ddabaa972a2240ee7d3edc4e76
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Mon May 11 19:12:52 2026 -0400
+
+    comments
+
+commit e9109756398975c98d07d70957a6109e7beda5b2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 11 17:24:46 2026 -0400
+
+    .
+
+commit e386aa5c744e9b9e9512489f78409bac81cdf909
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 11 17:22:53 2026 -0400
+
+    .
+
+commit 5b585c4e95b9a7c39e123587788d40f0af0f2be8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 11 17:12:13 2026 -0400
+
+    .
+
+commit 83e4db5f83e41ce30178e156ca259bd7a725ac03
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Mon May 11 16:56:16 2026 -0400
+
+    workflows: workflow_dispatch + PR-keyed concurrency + scorecard.yml push trigger (#25)
+
+    ## Changes
+
+    1. **`workflow_dispatch:` added** to `claude-code.yml`, `lint.yml`,
+    `run_automated_builder.yml`.
+    2. **PR-number-keyed concurrency group** in `claude-code.yml`
+    (`pull_request.number || issue.number || ref`) and `codex-review.yml`
+    (`pull_request.number || ref`).
+    3. **`scorecard.yml`: `push: branches: [master]` added.** Was the only
+    `scorecard.yml` in the org missing the push trigger; previously only
+    `schedule:`, `workflow_dispatch:`, and `branch_protection_rule:` fired.
+
+    ## Why
+
+    - `workflow_dispatch:` consistency: lets admins manually re-run any
+    workflow without an empty commit.
+    - Concurrency fix is the CI-time lever (matches dmf #54): correctly
+    cancels older comment-triggered runs when a newer push arrives.
+    - `scorecard.yml` push trigger: aligns with every other scorecard.yml in
+    the org. Was an oversight.
+
+    ## Mandatory Checklist
+
+    - [x] Legal agreements accepted. [Terms of
+    Service](https://www.kicksecure.com/wiki/Terms_of_Service), [Privacy
+    Policy](https://www.kicksecure.com/wiki/Privacy_Policy), [Cookie
+    Policy](https://www.kicksecure.com/wiki/Cookie_Policy), [E-Sign
+    Consent](https://www.kicksecure.com/wiki/E-Sign_Consent),
+    [DMCA](https://www.kicksecure.com/wiki/DMCA),
+    [Imprint](https://www.kicksecure.com/wiki/Imprint)
+
+    ## Optional Checklist
+
+    - [x] I have tested it locally (YAML parses, trigger shapes intact).
+
+    Fixes #
+
+    https://claude.ai/code/session_018rti4CCm2SQ3PWKa7jRt7p
+
+    ---
+    _Generated by [Claude
+    Code](https://claude.ai/code/session_018rti4CCm2SQ3PWKa7jRt7p)_
+
+    Co-authored-by: Claude <noreply@anthropic.com>
+
+commit 5d303ee00e8579f608244f01df8b3656d6e3c70b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 11 16:17:57 2026 -0400
+
+    .
+
+commit 0dacfa58e6056bf69b7e0b2f350fe2d319d6a493
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 11 16:16:28 2026 -0400
+
+    .
+
+commit d45d024b664a05fc91450cca1d47e8c7b2fd552d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 11 16:09:52 2026 -0400
+
+    .
+
+commit fbbea1e52766f892ed3b110d7dd05ad7bfbb5d96
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 11 15:32:57 2026 -0400
+
+    .
+
+commit bd8c9f465d2cedca097f3b4ab3e6afe3972668e9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 11 15:32:53 2026 -0400
+
+    .
+
+commit a05583e0f70491c58c313ed7a50b34d77bf792aa
+Merge: 1cf3f0318 d06e87877
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 11 15:32:06 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit d06e878774f26a4c352f73ee4031e984f300fb61
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sun May 10 21:51:06 2026 -0400
+
+    lint.yml: drop redundant 'shell: bash' override (#23)
+
+    shellcheck reads each shebang and selects bash mode automatically.
+
+commit 10c72f4983964eb06d2bccec27fc30cb1ba0fd86
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sun May 10 21:20:46 2026 -0400
+
+    codex-review: explicit OPENAI_API_KEY; lint.yml: restore pre-composite scope (#22)
+
+    Two fixes:
+      1. codex-review.yml: secrets: inherit -> explicit OPENAI_API_KEY (W-003 missed earlier).
+      2. lint.yml: restore pre-composite shellcheck scope (help-steps build-steps.d automated_builder ci + 2 root files) and shell: bash force-mode. Avoids POSIX-strict checks on live-build-owned scripts.
+
+commit f270a183daaeba678cde84e59ff374c6481047f7
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sun May 10 20:19:11 2026 -0400
+
+    lint.yml: use shellcheck composite; drop ci/lint-shellcheck (#21)
+
+    Composite migration with rationale comments preserved inline.
+
+commit c8de6678e1f890bf941b3c8bc14cb277f9408661
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sun May 10 20:18:50 2026 -0400
+
+    workflows: add concurrency blocks + dm builder differentiated grouping (#20)
+
+    3 cancellable + run_automated_builder.yml group differentiated by event type so PR and tag pushes do not cross-cancel.
+
+commit b8307e1fd3982bdacc53bc58bc8f0ae19567278d
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sun May 10 19:41:23 2026 -0400
+
+    run_automated_builder.yml: add build job timeout-minutes: 240 (#19)
+
+    Hang protection for the long-running automated builder.
+
+commit 1cf3f031810933a917650e29fab1e1382f0f1687
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 10 15:50:16 2026 -0400
+
+    .
+
+commit 6a5bc781a62a7e7d7165d8d0d7b8e4ef7b508d9d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 10 15:50:13 2026 -0400
+
+    .
+
+commit b618a564ff3fae9b531886f92a1ba251247a66d6
+Merge: c4a82b566 3482c8509
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 10 15:21:22 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit c4a82b566cbf4a2b492ae3ff3f9464fb38a851fd
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 10 15:17:47 2026 -0400
+
+    .
+
+commit 3482c8509969ae126cf171fdc52b760b4f8a8f9d
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sun May 10 14:11:48 2026 -0400
+
+    restore: re-apply session work (rebased away) (#18)
+
+    Re-applies session work lost during rebase: explicit ANTHROPIC_API_KEY
+    secret in .github/workflows/claude-code.yml (replacing secrets:
+    inherit). Larger derivative-maker session work (signing-key-create,
+    sign-and-tag, dry-run apt-cache) is intentionally out of scope for this
+    batch.
+
+    Co-authored-by: claude-code <claude-code@anthropic.com>
+
+commit 7965c492f5b7e5d493bec4f3d40ac558d7844d7d
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sun May 10 14:09:54 2026 -0400
+
+    help-steps: signing-key-create policy fix + sign-and-tag submodules-first (#17)
+
+    Re-apply of session PRs #15 and #16 (lost in upstream rebase).
+
+    1. **signing-key-create**: openpgp_policy_setup no longer returns early
+    when the project-level policy is already present.
+    2. **sign-and-tag**: signs submodules FIRST, stages gitlink updates,
+    then signs parent.
+
+commit 17d2d51d95e53946f3cd7ae34b36f3da65cfec00
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 10 14:03:27 2026 -0400
+
+    .
+
+commit f7f7607ca86a0a023f4f551fe6f93a835b335b9f
+Merge: a6e0f1b98 3a025707a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 10 13:10:57 2026 -0400
+
+    Merge remote-tracking branch 'ArrayBolt3/arraybolt3/trixie'
+
+commit a6e0f1b9812308445860e5a2a434ddcf1b1f728a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 10 13:08:35 2026 -0400
+
+    .
+
+commit 3a025707a95aab52b8de9a9262a3e94b17c3981e
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun May 10 12:11:26 2026 -0400
+
+    Minor fixes
+
+commit dc353f3f0f5f5e8590175d610124673599c9c936
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 10 11:49:08 2026 -0400
+
+    .
+
+commit 4dd7f5752fa34a0babd0e83195aece3845becf70
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 10 11:45:40 2026 -0400
+
+    todo
+
+commit 77b52b292b63c9f176f086b49ad54ea95e817e1a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 9 16:59:25 2026 -0400
+
+    .
+
+commit 6b617ef17ef90dd51e739704a42386243709515a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 9 16:15:48 2026 -0400
+
+    fix
+
+commit 7a1f04b17ebc23bc702eaf4db539e7953b4383ab
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 9 16:11:02 2026 -0400
+
+    .
+
+commit b0043eabff646eade6d79b4c17da89b5cb5719bf
+Merge: 93383c84c 403f6546c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 9 16:09:47 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit 403f6546c6ea5da4567ef1807b93a4d77b7f3622
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 20:06:32 2026 +0000
+
+    help-steps: PYTHONPATH if/else; signing-key-create policy idempotence
+
+    git_sanity_test: replace the ${PYTHONPATH:+:${PYTHONPATH}}
+    one-liner with the equivalent if/else form. Easier to read for
+    the next person who isn't already fluent in alternate-value
+    expansion. Behavior identical (empty / unset PYTHONPATH ->
+    no leading colon; non-empty -> colon-prefixed).
+
+    signing-key-create: openpgp_policy_setup was idempotent on the
+    cert side (tests ${openpgp_cert_file_resolved}, the helper-steps/
+    variables-resolved 'any existing cert across the precedence
+    chain' value) but NOT on the policy side - it tested
+    ${openpgp_policy_file_user} (the highest-precedence-dir slot
+    only). If a policy file lived in a lower-precedence dir, the
+    script would re-copy + re-authorize on every run.
+
+    Switch the policy check to ${openpgp_policy_file_resolved} to
+    match the cert semantics, and promote _user -> _resolved on the
+    write path so downstream lines (sq-git policy authorize) operate
+    on the just-written file by the same name they would use for an
+    existing one.
+
+commit 93383c84c2a7fe747ec2784d7b1c610e8024641e
+Merge: 7068c240d f8e962d27
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 9 15:51:16 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit f8e962d27c004a68e7b316fd3eda5c2230bc9269
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 19:14:36 2026 +0000
+
+    Revert packages/kicksecure/helper-scripts submodule pointer
+
+    Reset the submodule pin from 3d128ff (org-ai-assisted/helper-scripts
+    master with the '-Bsu' shebang change) back to e0f92c63a, the SHA
+    this branch shipped before this session.
+
+    Per maintainer request: do not modify packages/kicksecure/helper-scripts.
+
+commit 7068c240d640c919b493ef774ac6198e3bc1ddc1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 9 12:45:50 2026 -0400
+
+    .
+
+commit 2150b76170e3cb1aac73b0795141538ceb824fa6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 9 12:45:47 2026 -0400
+
+    .
+
+commit 8387d2d0635b0e96171cc368fa29a7f843f4a2a1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 9 11:44:21 2026 -0400
+
+    .
+
+commit f2fc333714fc81aa4f75afd367eabb858da767c4
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 14:18:14 2026 +0000
+
+    help-steps/pre: revert PYTHONDONTWRITEBYTECODE=1; helper-scripts shebangs handle it
+
+    Bump packages/kicksecure/helper-scripts to 3d128ff (PR #10), which
+    standardizes all 73 python3-shebang files to '#!/usr/bin/python3 -Bsu'.
+    The '-B' in the shebang itself prevents .pyc creation, so the
+    PYTHONDONTWRITEBYTECODE=1 env-var workaround in help-steps/pre is
+    redundant once the submodule rolls forward. Drop it.
+
+    Cleaner than env-var-side-channel: the policy lives next to the
+    script that needs it, every Python invocation across the codebase
+    benefits, and AppArmor profiles can drop the rule that allowed
+    .pyc writes (see find_wl_compositor's pre-existing comment for
+    that rationale).
+
+commit c68cfeac7cb32967883823ae658cdf0774bb4859
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 14:14:08 2026 +0000
+
+    help-steps/pre: export PYTHONDONTWRITEBYTECODE=1
+
+    helper-scripts ships Python entry-points (sanitize-string,
+    strip-markup, ...) under packages/kicksecure/helper-scripts/usr/bin/;
+    running any of them populates the submodule with __pycache__/*.pyc.
+    build-steps.d/1200_prepare-build-machine then runs
+    dm-check-unicode against the source tree, which flags the .pyc
+    files as "missing newline at end of file" (binaries don't end in
+    0x0A) under the umbrella "Unicode found!" diagnostic.
+
+    Suppress .pyc creation at the help-steps/pre source point so every
+    entry point (build-steps, ci/dry-run.d, sign-and-tag, etc.)
+    inherits the env-var without having to know about the trap.
+
+    Surfaced by run 25603095592 dry-run, where git_sanity_test in
+    1100_sanity-tests passed cleanly (so the sign-and-tag /
+    buildconfig.d/ refactor itself is fine), but 1200's unicode
+    sanity check then tripped on freshly-created .pyc files.
+
+commit dfeaef944d443126b1c927d71d81f3905dc10645
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 14:07:43 2026 +0000
+
+    ci/dry-run.d/300: drop --policy-file; rely on variables.bsh resolve
+
+    The hardcoded /home/builder/derivative-binary/openpgp-policy.toml
+    predates the dist_build_config_dirs_list-based resolve. After
+    today's refactor:
+      - 150_signing-key-create writes the user-side authorized
+        policy to \${HOMEVAR}/buildconfig.d/openpgp-policy.toml
+      - help-steps/variables walks dist_build_config_dirs_list and
+        surfaces it via openpgp_policy_file_resolved -> sq_git_policy_file
+      - sign-and-tag verifies against that same resolved policy
+
+    Passing the stale --policy-file overrode that resolution and
+    pointed at a path that no longer exists, breaking git_sanity_test.
+    Drop the override; let variables resolve. Removes the unused
+    'target_home' / getent assignment as well.
+
+commit 7cf2082455682d751e43d3e68e8141556d780834
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 14:04:22 2026 +0000
+
+    git_sanity_test: also prepend submodule python dist-packages to PYTHONPATH
+
+    sanitize-string is a Python entry-point script that imports
+    sanitize_string.sanitize_string from /usr/lib/python3/dist-packages/.
+    Prepending the submodule's equivalent to PYTHONPATH lets the
+    import resolve when helper-scripts is not installed system-wide
+    (CI dry-run, fresh dev checkouts).
+
+    Pairs with the previous PATH commit (d4b7e70e3): PATH lets
+    'has sanitize-string' find the script, PYTHONPATH lets the
+    script's import resolve.
+
+commit d4b7e70e3a2eb294aea5baa625467120d241b44b
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 14:00:07 2026 +0000
+
+    git_sanity_test: prepend HELPER_SCRIPTS_PATH/usr/bin to PATH
+
+    log_run_die.sh enforces that stecho + sanitize-string are on PATH;
+    in CI dry-run (and any fresh checkout where helper-scripts is not
+    yet installed system-wide), the binaries live only inside the
+    submodule at packages/kicksecure/helper-scripts/usr/bin/. Prepend
+    that to PATH before sourcing log_run_die.sh so the bootstrap check
+    locates them via the submodule.
+
+    Surfaced by today's dry-run (workflow run 25602832343):
+      log_run_die.sh: ERROR: required command(s) not on PATH:
+        stecho sanitize-string
+      sourced by: /work/help-steps/git_sanity_test
+
+commit a4afa5be551a2d500825f9428481ccb1c789b9ed
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:50:35 2026 +0000
+
+    buildconfig.d: replace ../buildconfig.d with \${HOMEVAR}/buildconfig.d
+
+    The relative form was PWD-dependent: from a script that cd's to
+    help-steps (e.g. signing-key-create) it resolved to
+    \${source_code_folder_dist}/buildconfig.d - same dir as the shipped
+    in-tree entry, defeating the user/wrapper override semantics. The
+    existence check inside signing-key-create's openpgp_policy_setup
+    would see the shipped policy and short-circuit "preserving",
+    never authorizing the local maintainer cert into the policy.
+
+    \${HOMEVAR} is set early in variables.bsh as /home/\$user_name (always
+    absolute), and for the canonical maintainer setup where the source
+    sits under \${HOMEVAR} the new path coincides with what
+    ../buildconfig.d resolved to before, so existing setups are
+    unchanged. CI dry-run with source under /work and HOMEVAR=/home/builder
+    now writes to a dir that's reliably distinct from the shipped one.
+
+    Updated:
+      help-steps/variables               default + precedence comment
+      buildconfig.d/30_signing_key.conf  priorities table
+      buildconfig.d/30_custom_configs_help.conf  user-facing example
+
+commit 5368d4f7ecac15018648f6f79b30d9dd6b820564
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:42:15 2026 +0000
+
+    help-steps: resolve openpgp_cert_file the same way as the policy
+
+    Walk dist_build_config_dirs_list once for both, building
+    openpgp_cert_file_resolved + openpgp_cert_search_paths alongside
+    the existing policy ones. Single pass over the dir list - no
+    extra IO.
+
+    signing-key-create: existence check now consults
+    openpgp_cert_file_resolved (covers admin-pre-provisioned cert at
+    /etc/buildconfig-dist.d/openpgp-cert.pem the same way the policy
+    file already does); when no cert exists at any precedence, write
+    to openpgp_cert_file_user (still the highest-precedence write
+    target) and set openpgp_cert_file_resolved to the just-written
+    path. 'sq-git policy authorize' is now passed
+    \${openpgp_cert_file_resolved} so the same admin-provisioned cert
+    gets authorized into the user-side policy.
+
+commit b40b6171b444e9b4cbf825855f4c64c7e6a69832
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:38:03 2026 +0000
+
+    parse-cmd: add --cert-file as parallel to --policy-file
+
+    If the policy file is settable via command-line override, the
+    maintainer cert should be too. Same shape as --policy-file: empty-
+    arg validation + 'export openpgp_cert_file_user' + true-marker.
+
+    buildconfig.d/30_signing_key.conf: document both overrides side by
+    side with their CLI equivalents.
+
+commit 83182d3c6eb8d5a4d88e4c7d6294d829522560c2
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:35:52 2026 +0000
+
+    help-steps/variables: openpgp_policy_search_paths as array
+
+    Replace the newline-separated string + trailing-newline strip with
+    a bash array. sign-and-tag prints via "\${arr[@]}" - each element
+    becomes a separate printf arg, no \$'\n' embedding, no manual trim.
+
+commit 3977eff5939823b41e1e0b0431df29ba1f0948db
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:31:49 2026 +0000
+
+    help-steps: drop unneeded exports + correct "ephemeral key" wording
+
+    variables: dist_build_redistributable + CI defaults don't need
+    to be exported - every consumer sources variables.bsh fresh.
+    dm-build-official-one already exports dist_build_redistributable=true
+    when it sets it for the redistributable path; CI is exported by
+    GitHub Actions / runners when set.
+
+    sign-and-tag: signing-key-create's 'sq key generate' persists into
+    the sq keystore - the CI key is fresh-per-VM but not ephemeral.
+    Drop "against ephemeral key" + the matching docblock phrasing.
+
+commit 5bb83478e0c5218a656feb13d4dda8f00b2bb8ae
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:29:37 2026 +0000
+
+    sign-and-tag: nest CI exemption inside redistributable check
+
+    Restructure so the redistributable detection always notifies (one
+    true-marker line in xtrace) regardless of outcome. CI=true allows
+    the run with a confirmation marker; otherwise exit 1 with the
+    existing error message.
+
+    signing-key-create: drop the sponge/moreutils explanatory comment
+    in sanity_tests - sits next to four other 'command -v <tool>'
+    checks, the pattern is self-explanatory.
+
+commit 64b3baf419f735e06f41d8e65b4a3f9c035d2ffe
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:28:02 2026 +0000
+
+    help-steps/variables: default dist_build_redistributable + CI to "false"
+
+    With the values guaranteed to be exactly "true" or "false" after
+    sourcing, callers can use either of these equivalently:
+
+      if [ "\${dist_build_redistributable}" = 'true' ] \\
+         && [ "\${CI}" != 'true' ]; then ... refuse
+
+      if [ "\${dist_build_redistributable}" = 'false' ] \\
+         || [ "\${CI}" = 'true' ]; then ... proceed
+
+    Without the init, the two forms diverge on the unset case
+    (=true && !=true is false, but =false || =true is also false -
+    opposite polarity from the inverted body).
+
+    dm-build-official-one writes dist_build_redistributable=true for
+    redistributable builds; GitHub Actions and most CI runners set CI=true
+    in the environment - the defaults only kick in for local non-CI runs.
+
+commit 0fc3075ce06deeb883c9f11c556da8276b5938e5
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:14:08 2026 +0000
+
+    help-steps: drop unneeded exports + verify resolved policy in signing-key-test
+
+    variables: openpgp_policy_file_resolved + openpgp_policy_search_paths
+    were exported but only ever consumed by sign-and-tag, which sources
+    variables and gets them via the source. Drop both exports.
+    sq_git_policy_file keeps its export - git_sanity_test reads it from
+    env when invoked as a child of an already-sourced parent (see its
+    "Standalone bootstrap" guard).
+
+    signing-key-test: 'sq-git policy describe' was running without an
+    explicit policy file. Switch to '--policy-file "\${sq_git_policy_file}"'
+    so the actually-resolved policy (chosen by variables) is what the
+    test validates. Stdout to /dev/null; stderr surfaces validation
+    errors as before.
+
+commit d9899efe80ed00337705a2356caf8d05f304ec87
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:11:19 2026 +0000
+
+    help-steps/variables: pre-compute openpgp_policy_search_paths
+
+    Move the candidate-path enumeration out of help-steps/sign-and-tag's
+    error path. The search list is intrinsic to the variables block
+    (driven by dist_build_config_dirs_list + openpgp_policy_filename);
+    sign-and-tag was duplicating the same iteration just to format its
+    error message. Build the newline-separated list inside the existing
+    resolve loop in variables and export it; sign-and-tag now just
+    prints \${openpgp_policy_search_paths}.
+
+commit 10ce241cdf6294940c4c7f1973274cdd027533b4
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:09:07 2026 +0000
+
+    sign-and-tag: exempt CI=true from dist_build_redistributable refusal
+
+commit 8605d060eb43aa32a9f21729aef1747c239aea3c
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 13:07:45 2026 +0000
+
+    review commentary; fix dist_build_config_dirs_list double-suffix bug
+
+    Trim over-explained / state-the-obvious comments across the files
+    this session touched:
+      - functions.bash: drop the ANSIBLE_CONFIG comment (export is
+        self-explanatory); reduce automated_builder_logs_dir comment
+        to just the workflow-yaml duplication caveat.
+      - ansible.cfg: trim header docblock + per-setting blocks.
+      - handle_artifacts.sh: tighten the mkdir rationale to the
+        actual constraints (fetch + upload-artifacts behaviour).
+      - build_vms_from_tag.sh: tighten the on_exit docblock.
+      - gather_build_logs.yml: drop the per-task aside.
+      - help-steps/{variables, signing-key-create, sign-and-tag}:
+        cut redundant docblock framings.
+
+    Bug fix in help-steps/variables: the previous
+    'dist_build_config_dirs -> dist_build_config_dirs_list' rename
+    used Edit replace_all on the bare token after some lines already
+    had the suffix applied, producing 'dist_build_config_dirs_list_list'
+    (and one '_list_list_list'). All collapsed back to single suffix.
+
+    Stale-variable fix in help-steps/sign-and-tag: the not-found
+    error message referenced the now-removed openpgp_policy_file_system.
+    Replaced with an enumeration of dist_build_config_dirs_list entries
+    so the message stays accurate as the search list changes.
+
+commit ec4dcdd461e21fb297ae341cc1ae1fbd98a48f96
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 12:51:37 2026 +0000
+
+    sign-tag-head: simplify context_label assertion + true-log no-tag case
+
+commit 735ae60943f0bea2607d6298d9a4c229fabfbbf8
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 12:51:13 2026 +0000
+
+    automated_builder: centralize ANSIBLE_CONFIG + logs dir
+
+    functions.bash (sourced by every entrypoint) now:
+      - exports ANSIBLE_CONFIG once, replacing the duplicated exports
+        in run_automated_builder.sh and handle_artifacts.sh
+      - defines automated_builder_logs_dir, the single source of truth
+        for the build-logs path
+
+    handle_artifacts.sh consumes the variable for mkdir AND passes it
+    to gather_build_logs.yml as -e logs_dir=...; the playbook's two
+    fetch tasks reference {{ logs_dir }}.
+
+    The .github/workflows/run_automated_builder.yml upload-artifacts
+    step still references the literal path - workflow YAML can't see
+    bash variables. functions.bash comment notes the duplication so a
+    later move keeps both in sync.
+
+commit 5347ff4cdc8d75a47beb323b6440080abf7e8e7b
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 12:45:17 2026 +0000
+
+    help-steps/variables: rename dist_build_config_dir{,s} -> _item / _list
+
+      dist_build_config_dirs -> dist_build_config_dirs_list  (the list)
+      dist_build_config_dir  -> dist_build_config_dir_item   (loop var)
+
+    Loop-variable name now self-describes its single-item-of-list role,
+    list-variable name self-describes the multi-element shape. Three
+    files only (grep-confirmed): help-steps/variables (definition + two
+    uses), help-steps/signing-key-create (one doc ref),
+    buildconfig.d/30_signing_key.conf (one doc ref).
+
+    Add 'unset dist_build_config_dir_item' after the .conf-sourcing
+    loop - the variable is loop-local in semantics but bash's for-loop
+    leaves it set in the caller's scope, and nothing downstream
+    references it.
+
+commit 72567c094a18a400bcd04822fa92b70f979cefc0
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 12:43:16 2026 +0000
+
+    help-steps: derive openpgp policy paths from dist_build_config_dirs
+
+    Stop hardcoding /etc/buildconfig.d/ and \$HOMEVAR/buildconfig.d/ as
+    the system / user policy locations. Instead walk the existing
+    dist_build_config_dirs list (\${source_code_folder_dist}/buildconfig.d,
+    /etc/buildconfig-dist.d, ../buildconfig.d) the same way buildconfig.d/*.conf
+    files are sourced - last existing entry wins. signing-key-create
+    writes to the highest-precedence entry (= last word of the list,
+    extracted via pure-bash '\${var##* }').
+
+    Effective canonical paths shift to:
+      shipped (lowest):  \${source_code_folder_dist}/buildconfig.d/openpgp-policy.toml
+      system  (higher):  /etc/buildconfig-dist.d/openpgp-policy.toml
+      user    (highest): ../buildconfig.d/openpgp-policy.toml
+
+    git-mv the shipped policy from the source-tree root into buildconfig.d/
+    so it lives where the resolver looks. variables.bsh's .conf source
+    loop globs '*.conf', so the .toml coexists without being sourced.
+
+    buildconfig.d/30_signing_key.conf: replace the "Future development
+    idea" priorities table with the now-implemented one.
+
+commit d1e7f8944f10a4f0b44e0624877c91ca6697d8f0
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 12:34:30 2026 +0000
+
+    help-steps: hoist project-policy + user-policy-dir paths into variables
+
+    - variables: define openpgp_policy_file_project (shipped in-tree
+      policy) and openpgp_policy_dir_user (parent dir of the user-side
+      policy file, computed via pure-bash '${var%/*}' instead of
+      shelling out to dirname). Update precedence-comment + sq_git_policy_file
+      default to reference openpgp_policy_file_project by name.
+    - signing-key-create: drop the local 'project_policy' / 'user_policy_dir'
+      computations; consume openpgp_policy_file_project /
+      openpgp_policy_dir_user from variables.
+
+    automated_builder/scripts/run_wats.sh: drop historical "Apt-only -
+    dogtail in Debian as python3-dogtail. Previous pip3 install..." block.
+
+commit 02748372db21bddf5e0b3c0132e1d2c26bfe73b9
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 12:24:10 2026 +0000
+
+    automated_builder: drop unnecessary comments
+
+commit 26cfc01619123dc586e8e44a365908cec11a8d52
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 12:15:30 2026 +0000
+
+    automated_builder + signing-key-create: comment cleanup; sponge hard-dep
+
+    automated_builder:
+      - Drop historical "previously" framings from gather_build_logs.yml
+        and the two build_vms_from_*.sh templates.
+      - build_vms_from_tag.sh: fix R-030 violations - move printf data
+        out of the format string ('::group::%s\n' rc, '::endgroup::\n').
+      - run_automated_builder.sh: trim verbose ANSIBLE_CONFIG comment;
+        drop now-stale "deprecation silence" reference.
+      - ansible.cfg: brief note that deprecation_warnings is left at
+        default (True); do not silence.
+
+    signing-key-create:
+      - Drop the 'command -v sponge' availability check around the cert
+        export. moreutils is already a hard build-dep
+        (buildconfig.d/30_dependencies.conf:218), other build steps use
+        sponge unconditionally.
+      - Assert sponge presence in sanity_tests for fail-fast.
+
+commit a176e19e915ee15a01f0f862150319cde5c91bbf
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 12:03:51 2026 +0000
+
+    ansible.cfg: drop deprecation_warnings=False
+
+    The setting suppresses all deprecation warnings, not just the
+    trailing advisory footer as the prior comment claimed. Static check
+    via 'ansible-playbook --syntax-check' surfaces zero deprecations
+    today, so removing it is risk-free now and ensures future
+    deprecations from ansible-core / modules are visible at runtime
+    instead of silenced.
+
+commit f0f00d065db8a0c7a55dc11f9d22f48875b120b7
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:55:48 2026 +0000
+
+    sign-and-tag: separate setup from sign+tag; trim comments
+
+    sign-and-tag is now a pure build-time signing step:
+    - drop the inline ./help-steps/signing-key-create bootstrap;
+      key + policy + cert generation is the responsibility of
+      build-steps.d/1200_prepare-build-machine (real builds) and
+      the new ci/dry-run.d/150_signing-key-create (CI dry-run).
+    - add ./help-steps/signing-key-test to fail fast on a
+      misconfigured keystore before walking submodules.
+    - replace openpgp_policy_resolve() function with the captured
+      ${openpgp_policy_file_resolved} variable in help-steps/variables;
+      matches the file's existing [ -n "${var:-}" ] || var=... idiom and
+      removes a forked source of truth between variables and sign-and-tag.
+    - variables now defaults sq_git_policy_file via openpgp_policy_file_resolved
+      (user, then system, then shipped fallback); other consumers
+      (git_sanity_test, verify-ref) auto-pick the maintainer-authorized
+      policy without per-script overrides.
+
+    Comment cleanup pass across all five files: drop historical
+    sqop-vs-sq comparison, /tmp-vs-buildconfig.d framing, redundant
+    "preserve existing files" repetitions, the stale "precondition
+    would fail anyway" framing in the redistributable-refusal block,
+    and the obsolete "caller must have exported sq_git_policy_file"
+    note in sign-tag-head.
+
+commit 37c93f44c46e52c117d0e74c9eb717d8f13f6ae0
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:30:41 2026 +0000
+
+    sign-and-tag: error msg - both paths support pre-provisioning
+
+    The 'no policy file' error implied the user-side path was
+    'signing-key-create only' and the system path was
+    'pre-provisioning only'. Both paths actually support
+    pre-provisioning (admin can drop a pre-built openpgp-policy.toml
+    in either location; signing-key-create's idempotent-don't-
+    overwrite behavior leaves user-side pre-provisioned files
+    alone).
+
+    Reword: 'Either run help-steps/signing-key-create (writes the
+    user-side path) or pre-provision either path manually.'
+
+commit d08892f5e31237fbf7224b8c5047758a6d86d717
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:30:09 2026 +0000
+
+    signing scripts: refresh stale comments + drop historical framing
+
+    Comment audit + cleanup. Behavior unchanged.
+
+    signing-key-create:
+      - openpgp_policy_setup() docblock claimed re-running 'refreshes
+        the user-side copy' to pick up upstream maintainer-key
+        rotation. Wrong since the 'don't overwrite existing files'
+        commit: re-running is a no-op once both files exist; refresh
+        requires explicit delete + re-run. Updated.
+      - Same docblock said the cert is the output of 'sq cert export
+        --all'; actually --cert-email "${DEBEMAIL}" since the
+        split-gpg-2 scoping commit. Updated.
+      - Dropped 'Replaces the per-build ephemeral-policy churn that
+        lived in help-steps/sign-and-tag' opener (historical context).
+
+    sign-and-tag:
+      - 'Idempotent setup. Re-running picks up upstream maintainer-key
+        rotation if project_policy changed' was wrong on the rotation
+        claim post-don't-overwrite. Now reads: 'no-op once both files
+        are in place; force-refresh by deleting'.
+      - Submodule-foreach comment dropped 'Auto-detection from inside
+        sign-tag-head was removed in favour of this explicit
+        argument' (historical).
+      - Redistributable-guard docblock dropped 'sign-and-tag's only
+        legitimate caller is ... the CI dry-run pipeline.
+        Production / redistributable builds must not' (restated the
+        same point twice; once is enough).
+
+    sign-tag-head:
+      - Args docblock dropped 'the previous "${displaypath:-main
+        repo}" auto-detection silently relabelled the parent repo's
+        output if displaypath leaked in from a parent shell'
+        (historical context). Replaced with the current-state
+        statement: 'Required - no fallback, a missing arg fails the
+        script at the parameter expansion below'.
+
+commit d83fc12eb4649b784aae6feb96f634ad1d0adb82
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:26:06 2026 +0000
+
+    sign-and-tag: refuse if dist_build_redistributable=true
+
+    sign-and-tag is for personal builds + the CI dry-run pipeline
+    (ci/dry-run.d/200_sign-and-tag is its only auto-caller).
+    Production / redistributable builds must NOT run it: redistributable
+    builds rely on offline-signed upstream tags exclusively, and the
+    maintainer's redistributable-build signing key lives offline (not
+    on the build host's sq cert store).
+
+    Add an explicit guard so the script fails closed if it lands on a
+    redistributable-build host (e.g. via env / buildconfig.d
+    inheritance leakage). The error message names the var and points
+    the operator at the inheritance vectors to check.
+
+    Companion to the earlier 'The caller is responsible for guarding
+    against running this on a developer machine' comment - that one is
+    for the operator-confusion case ('ran sign-and-tag on the wrong
+    machine'), this is the env-inheritance case (script run on the
+    right machine but with redistributable-build env leaked in).
+
+commit f25d79cf224739d4913cbe55060f2064150ea3b7
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:24:02 2026 +0000
+
+    sign-tag-head: take context label as required positional arg
+
+    Replace 'context_label="${displaypath:-main repo}"' auto-detection
+    with 'context_label="${1:?...}"' required arg. Two reasons:
+
+    1. Auto-detection silently mis-labels the parent-repo run when
+       $displaypath leaks in from an outer shell. The fallback string
+       ('main repo') only kicks in when displaypath is empty AND
+       unset.
+    2. Explicit args document the call shape at the call site. A
+       reader of sign-and-tag now sees 'main repo' and '"$displaypath"'
+       directly instead of inferring the labeling from a downstream
+       variable lookup.
+
+    sign-and-tag updated for both invocation sites:
+      ./help-steps/sign-tag-head 'main repo'
+      git submodule foreach --recursive
+        '"$toplevel/help-steps/sign-tag-head" "$displaypath"'
+
+    The $displaypath inside the foreach single-quotes is expanded by
+    foreach's child shell, where git sets it to the submodule's
+    relative path. Same expansion model as the existing $toplevel
+    reference; SC2016 already disabled there.
+
+commit 1e2bbbe4de9efdf9de036e6fb64f24bb09739a63
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:21:48 2026 +0000
+
+    sign-tag-head: log no-tag fall-through + pre-tag intent
+
+    The case-0 ('no tag at HEAD') branch was silent - the only visible
+    output was the post-creation 'tagged ... as ...' line, by which
+    point the operator already had to infer that the no-tag branch
+    ran. Add a 'no tag at HEAD; will create a signed tag below' line
+    before the fall-through, matching the case-1 'already has signed
+    tag' / case-1-unsigned / case-many output that ALL the other
+    branches emit.
+
+    Also add a pre-action intent line before the actual git tag call
+    ('creating signed annotated tag for ...  (commit
+    ...)'), so the operator sees the planned tag name + commit SHA
+    before the signing tool runs, not after.
+
+commit 102df2755f4c86fe80d9d561f79edef7bf55251c
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:19:39 2026 +0000
+
+    signing-key-create: log paths/args before each openpgp-policy-setup step
+
+    Each mutating step in openpgp_policy_setup() now emits a
+    'true "INFO: ..."' line before it runs. Three new sites:
+
+      - 'INFO: exporting local maintainer cert (DEBEMAIL=...) -> ...'
+        before sq cert export | sponge|tee
+      - 'INFO: copying shipped project policy ... -> ...'
+        before cp project_policy
+      - 'INFO: authorizing local maintainer cert as project-maintainer
+        in ...' + per-arg breakdown ('--policy-file ...',
+        '--project-maintainer DEBFULLNAME', 'cert ...')
+        before sq-git policy authorize
+
+    Operator now sees the planned action BEFORE the tool runs (vs.
+    guessing from xtrace ordering), and the per-arg breakdown
+    documents the call shape inline so a future debugger doesn't
+    need to remember which positional arg is which.
+
+    Matches the 'true "INFO: ..."' pattern already in
+    gpg_key_create / gpg_key_debugging / signify_key_create.
+
+commit 993076e153060325f536ea56b59a84e3865a61c0
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:19:03 2026 +0000
+
+    signing-key-create: use sponge or tee instead of '>' for cert export
+
+    Bare '>' has two issues for this site:
+      1. Crash-unsafe: an interrupted write leaves a partial cert file
+         in place. Next run sees the (corrupt) file via the existence
+         check and skips re-export, leaving the operator with a broken
+         setup that openpgp_policy_setup() will not auto-recover.
+      2. xtrace-invisible: 'set -x' shows the sq command but not the
+         redirection target. The target path is the more interesting
+         half from a debugging POV.
+
+    Use sponge when available (moreutils), tee as the fallback:
+
+      sponge   buffers stdin in memory then atomic-renames into place.
+               Crash-safe; if sq fails or the script is killed
+               mid-write, the destination is untouched. Restores the
+               idempotence property the existence-check assumes.
+      tee      non-atomic byte-stream write, but the target path
+               appears in 'set -x' output. Always available
+               (coreutils).
+
+    Both accept '--' end-of-options per R-062.
+
+    The sq cert export | tee | redirect-to-/dev/null form discards the
+    duplicate stdout that tee would otherwise emit; the file path is
+    the only side effect we want.
+
+commit f6d480d5f523cf40cc722f076c3609e120949abb
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:14:00 2026 +0000
+
+    signing-key-create: don't overwrite existing policy / cert files
+
+    Two changes in openpgp_policy_setup() to support provisioning and
+    match the script's prevailing idempotent pattern:
+
+      - if ${openpgp_cert_file_user} exists: log it, leave alone
+      - if ${openpgp_policy_file_user} exists: log it, leave alone,
+        skip the sq-git policy authorize step
+
+    Both files are created only when absent. To force a refresh (e.g.
+    after upstream rotates a maintainer key in project_policy, or
+    after rotating the local cert), the operator deletes the file
+    and re-runs signing-key-create. Same explicit-action pattern as
+    gpg_key_create's 'skip if cert exists for ${DEBEMAIL}'.
+
+    Use cases supported:
+      - Admin provisioning: drop pre-built openpgp_cert_file_user
+        and openpgp_policy_file_user ahead of time;
+        signing-key-create leaves them alone.
+      - Re-running signing-key-create: no-op on the second and
+        subsequent runs once both files exist.
+
+commit 5d53d7e52eca5d190491059520d0b01a806f17a4
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:07:25 2026 +0000
+
+    signing-key-create: scope cert export to DEBEMAIL (split-gpg-2 safety)
+
+    The previous commit's openpgp_policy_setup() used 'sq cert
+    export --all' which dumps every cert in the local store. Two
+    problems:
+
+    1. Authorizes test certs / rotated old certs / unrelated-project
+       certs as project-maintainer in the policy file. Overly broad.
+
+    2. Inconsistent with the rest of signing-key-create. gpg_key_create
+       and gpg_key_debugging select by --cert-email "${DEBEMAIL}"; the
+       policy-setup step now matches.
+
+    Email selection is the right primitive for redistributable builds
+    in Qubes split-gpg-2: the build VM's local public-cert store is
+    queryable, but the private key lives in the dedicated split-gpg-2
+    VM and is never read by the build-side script. 'sq cert export
+    --cert-email' touches only the public store - no private-key
+    access needed, no cross-VM dependency.
+
+commit 3d04216457d0b47d1bb449ae348d356ec594feac
+Author: Claude <noreply@anthropic.com>
+Date:   Sat May 9 11:04:05 2026 +0000
+
+    help-steps: persist openpgp policy + cert (signing-key-create)
+
+    The previous design re-derived an ephemeral policy file in the
+    build folder on every sign-and-tag run, conflating two concerns:
+    'authorize the local maintainer cert in the policy' (one-time
+    setup, idempotent) and 'use authorized policy to sign' (per-build).
+    Plus the cert went to mktemp(/tmp), an unpredictable path with a
+    race window between create and read.
+
+    Move both to persistent locations under ${HOMEVAR}/buildconfig.d/
+    (read-fallback to /etc/buildconfig.d/ for admin-pre-provisioned
+    deployments; write only to the user override). Path locations live
+    in help-steps/variables as openpgp_policy_file_user /
+    openpgp_policy_file_system / openpgp_cert_file_user.
+
+    help-steps/variables:
+      + openpgp_policy_file_user='${HOMEVAR}/buildconfig.d/openpgp-policy.toml'
+      + openpgp_policy_file_system='/etc/buildconfig.d/openpgp-policy.toml'
+      + openpgp_cert_file_user='${HOMEVAR}/buildconfig.d/openpgp-cert.pem'
+      + openpgp_policy_resolve()  helper, user-then-system precedence
+
+    help-steps/signing-key-create:
+      + sanity_tests now also requires sq-git
+      + openpgp_policy_setup() in main() chain:
+          mkdir parent dir (chmod 0700)
+          cp project_policy -> openpgp_policy_file_user (chmod 0600)
+          sq cert export --all > openpgp_cert_file_user (chmod 0600)
+          sq-git policy authorize --policy-file=openpgp_policy_file_user
+            --project-maintainer DEBFULLNAME openpgp_cert_file_user
+        Idempotent at the result level: re-run after upstream rotates
+        a maintainer key in project_policy; output is identical for
+        same inputs.
+
+    help-steps/sign-and-tag:
+      - sq cert export --all > "$(mktemp)"            (DELETED)
+      - cp project_policy -> binary_build_folder_dist/  (DELETED)
+      - sq-git policy authorize ...                     (DELETED)
+      - safe-rm "${ephemeral_cert_pem}"               (DELETED)
+      + policy_file="$(openpgp_policy_resolve)"      (NEW; bail if empty)
+      + export sq_git_policy_file="${policy_file}"
+
+    Net: sign-and-tag becomes a leaf (read policy + sign + recurse
+    submodules); signing-key-create owns the full setup chain.
+
+    Misleading 'ephemeral_cert_pem' / 'ephemeral_policy' naming gone
+    along with the variables; the cert was never ephemeral (created
+    once by signing-key-create and persists in sq cert store) and
+    neither should the policy be.
+
+    NB: the cert file holds the PUBLIC cert ('sq cert export', not
+    'sq key export'). 0600 file mode is defense-in-depth, not a
+    confidentiality requirement; 0700 on the parent dir keeps prying
+    local users out of the policy file too.
+
+commit dab9a1090f09e89af976fdb4d8f81b6b20132fc1
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 8 15:49:03 2026 +0000
+
+    claude-code: restore id-token: write
+
+    Reverts the earlier 'drop id-token' commit. Verified against a live
+    workflow log that the action DOES use OIDC federation:
+
+      Requesting OIDC token...
+      OIDC token successfully obtained
+      Exchanging OIDC token for app token...
+      Using GITHUB_TOKEN from OIDC
+
+    The action federates the runner's id-token to an Anthropic-controlled
+    GitHub App which mints a higher-privilege GITHUB_TOKEN used to post
+    review comments. Without id-token: write the next run would have
+    failed with 'Could not fetch an OIDC token'.
+
+commit e06247b5f3c764ed8a30abf3fc7e4656973b5524
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 8 15:21:18 2026 +0000
+
+    claude-code: drop id-token: write
+
+    The reusable workflow no longer needs id-token: write (the action
+    authenticates to api.anthropic.com via a static ANTHROPIC_API_KEY;
+    OIDC federation is unused). Drop the permission to honor
+    least-privilege - an OIDC token, if forged or leaked, can
+    authenticate to cloud-provider integrations.
+
+commit 699a119222e6162489446e7c3a7d36ea99f1d88e
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 8 14:51:24 2026 +0000
+
+    ci: add Claude Code Review and OpenAI Codex Review
+
+    Thin consumer wrappers around the reusables in
+    org-ai-assisted/developer-meta-files. Brings derivative-maker in line
+    with the helper-scripts / kloak / security-misc baseline (scorecard
+    was already wired up).
+
+commit 384e8d418e29a29a010937e226c9f9b61ce8bc24
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 8 13:34:21 2026 +0000
+
+    ci: switch scorecard reusable ref to 'reusable-scorecard.yml'
+
+    Single 'uses:' line repointed at the renamed reusable file in
+    developer-meta-files. Mirror of the parallel updates in
+    helper-scripts / kloak / security-misc.
+
+commit 12e0766562834be05b9a80c52afdbce805fe0578
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 8 13:05:47 2026 +0000
+
+    supply-chain: pin debian:trixie-slim digest; replace pip with apt
+
+    Three Scorecard PinnedDependenciesID alerts addressed:
+
+    1. docker/Dockerfile:4 - FROM debian:trixie-slim now pinned by
+       manifest digest (sha256:cedb1ef40439...) resolved via the Docker
+       Hub registry API. Rotation procedure documented in the
+       Dockerfile comment header so the next bumper does not have to
+       reinvent the curl invocation.
+
+    2. .github/workflows/run_automated_builder.yml lines 78-79 -
+       replaced 'python -m pip install --upgrade pip; pip install
+       ansible' with 'apt-get install ansible'. Drops the
+       actions/setup-python step entirely (nothing else here pins
+       Python 3.13). The Debian/Ubuntu archive is itself a signed
+       trust root, so per-package hash pinning is not needed at this
+       layer.
+
+    3. automated_builder/scripts/run_wats.sh:20 - replaced 'pip3
+       install dogtail' with 'apt-get install python3-dogtail'.
+       Same archive-trust-root rationale.
+
+    NOTE: Scorecard's PinnedDependenciesID at line 17 of the
+    Dockerfile (FROM baseimage) is not addressed because that is a
+    multi-stage local stage reference, not a registry pull. The pin
+    is on the AS-line (line 4) above. Scorecard's heuristic does
+    not parse multi-stage builds; documented as a known false
+    positive in developer-meta-files/docs/scorecard-known-false-
+    positives.md.
+
+commit 17d651c5bb643aacd54053557c8ae81b99ca49a6
+Merge: d1b3cc9a5 011cef124
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Fri May 8 08:01:46 2026 -0400
+
+    Merge pull request #10 from org-ai-assisted/claude/test-github-token-access-HVDXY
+
+    automated_builder: readable inline log + working artifact upload
+
+commit 011cef12408b4ae3c3832591e0cd8f6a0b00a0d4
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 8 10:32:36 2026 +0000
+
+    automated_builder: readable inline log + working artifact upload
+
+    Two related fixes for the run_automated_builder pipeline.
+
+    1. Inline log readability
+       ----------------------
+
+       Ansible's default stdout_callback dumps a failed task's result as
+       a single JSON line; embedded newlines in 'stderr' are JSON-encoded
+       ('\\n' as text), so the GitHub Actions log viewer collapses the
+       remote shell's xtrace output into one unreadable line.
+
+       Add automated_builder/ansible.cfg with:
+         stdout_callback = yaml          (multi-line, real newlines)
+         display_failed_stderr = True    (stderr surfaces in own block)
+         bin_ansible_callbacks = True
+         deprecation_warnings = False    (silences the recurring footer
+                                          noise; deprecation messages
+                                          themselves still print)
+
+       Wire it via ANSIBLE_CONFIG export in both ansible-playbook
+       callers (run_automated_builder.sh, handle_artifacts.sh).
+
+       Wrap the on-failure tail dump in build_vms_from_tag.sh with
+       GitHub Actions '::group::'/'::endgroup::' workflow commands; the
+       tokens propagate through ansible's stdout to the runner log,
+       making the 200-line tail collapsible.
+
+    2. Artifact upload path mismatch
+       -----------------------------
+
+       gather_build_logs.yml fetched logs to './logs/<file>' (path
+       relative to ansible-playbook cwd = repo root, so the actual
+       write was '<repo_root>/logs/'), but the workflow's
+       actions/upload-artifact step reads from
+       './automated_builder/logs/'. The artifact was effectively
+       empty.
+
+       Re-target the playbook's two fetch tasks to
+       './automated_builder/logs/' so the path matches the upload
+       step. Add an mkdir -p in handle_artifacts.sh so the dest tree
+       exists even on the 'remote VPS unreachable' failure path
+       (otherwise upload-artifact fails the step on a missing dir).
+
+    Inline log alone is enough for "why did the build fail" once the
+    yaml callback is in place; the artifact upload is kept because
+    GitHub truncates very long step outputs.
+
+commit d1b3cc9a5d863490d42cb17baa517d465e86dd76
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 17:59:32 2026 -0400
+
+    .
+
+commit 6853081514a4fb5798d8a870077702f2beadb726
+Merge: 8a250a849 ef6ea0cd4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 17:30:17 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit 8a250a849a7dad71a44ed9bb1357a9799e2eef44
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 17:30:13 2026 -0400
+
+    .
+
+commit cb3fd8e8a3dfb326e3dd6ba89fce923d6b442444
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 17:27:20 2026 -0400
+
+    deprecate derivative-maker org and use Kicksecure org instead
+
+commit 13d9d17a1d074abde99fc3fb25c8858e5b9064eb
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 17:27:03 2026 -0400
+
+    .
+
+commit ef6ea0cd4949562c40f87f400e2f7eb4d291691c
+Merge: 56ad10529 20833a3c6
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Thu May 7 17:24:04 2026 -0400
+
+    Merge pull request #6 from org-ai-assisted/claude/drop-apple-merge-into-docker
+
+    Drop apple/ folder; document multi-arch via buildx in docker/README.md
+
+commit 56ad105298ff6372c75733f3bef9ee5f9b0942bc
+Merge: 5f15d5614 e9c70fb04
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Thu May 7 16:54:36 2026 -0400
+
+    Merge pull request #9 from org-ai-assisted/claude/agents-pointer-to-dev-meta
+
+    agents/github-actions-security.md: add pointer to developer-meta-files
+
+commit 5f15d5614ee37404213b69c69dcc961a147989a0
+Merge: 8426317dd 06d5d5abc
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Thu May 7 16:54:30 2026 -0400
+
+    Merge pull request #8 from org-ai-assisted/claude/dependabot-group-actions
+
+    dependabot: bundle action / docker bumps into one grouped PR per cycle
+
+commit 8426317dd5a70757111bf345be7c8efce551a9ea
+Merge: 5d0e8bd53 a6766009d
+Author: assisted-by-ai (Bot Account) <server@kicksecure.com>
+Date:   Thu May 7 16:54:24 2026 -0400
+
+    Merge pull request #7 from org-ai-assisted/claude/scorecard-use-reusable
+
+    scorecard: consume reusable workflow from developer-meta-files
+
+commit a6766009d47670b1b3000dbdb5db181c763ca8d5
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 20:52:43 2026 +0000
+
+    scorecard: trim wrapper to thin pointer (commentary lives upstream)
+
+    Caller-side rationale moves to the reusable workflow header in
+    developer-meta-files (PR org-ai-assisted/developer-meta-files#6).
+    This wrapper now carries only trigger config + permissions + uses:
+    line + a one-line pointer.
+
+commit e9c70fb048720e4bc4160df9c8b12bac07dabc4b
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 20:41:53 2026 +0000
+
+    agents/github-actions-security.md: add pointer to developer-meta-files
+
+    Cross-repo GitHub Actions conventions (reusable workflows, the
+    github.* context constraint in jobs.<id>.uses, schedule-at-caller
+    rule, cross-repo uses: pinning) live in developer-meta-files now.
+    Adds a pointer at the top of this file so a reader of derivative-
+    maker's repo-specific doc immediately knows where the org-wide
+    guidance is. The body of this file stays focused on derivative-
+    maker-specific patterns (gating literals, persist-credentials,
+    fork-PR guards, etc.).
+
+commit 06d5d5abc918f495d2741b27bbff58605580f802
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 20:39:48 2026 +0000
+
+    dependabot: bundle action / docker bumps into one PR per cycle
+
+    Adds 'groups: { <ecosystem>: { patterns: ["*"] } }' to both the
+    github-actions and docker ecosystems. Without grouping, dependabot
+    finds N updates per cycle, opens one PR per update, and the
+    'open-pull-requests-limit: 1' silently drops everything past the
+    first - so we miss bumps and don't notice. With grouping, a single
+    PR per ecosystem carries every update at once, no drops, and the
+    PR is reviewable as one consolidated diff.
+
+    Same change being applied to helper-scripts and kloak in parallel
+    PRs. Once reusable workflows in developer-meta-files cover more of
+    the action-pin surface (codeql, builds, etc.), the per-repo update
+    volume drops further: dependabot only bumps the reusable, consumers
+    inherit.
+
+commit c5417c9977a9bd60035218e11e223722312232dc
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 20:38:58 2026 +0000
+
+    scorecard: TESTING owner = org-ai-assisted to match helper-scripts
+
+    Mirrors the change just landed on helper-scripts master (run #13 ran
+    green in 34s). Will switch to canonical Kicksecure once upstream sync
+    brings the reusable to Kicksecure/developer-meta-files master.
+
+commit d581f1f830fbf2db84732f23dda6b5449fd950e6
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 20:29:16 2026 +0000
+
+    scorecard: hardcode Kicksecure (github.* not allowed in uses:)
+
+    GitHub Actions only permits inputs/vars/needs/matrix contexts in
+    jobs.<id>.uses. The previous ${{ github.repository_owner }} expression
+    fails workflow load with 'Unrecognized named-value: github'. Verified
+    on helper-scripts master (and now fixed-forward there in
+    helper-scripts#4).
+
+commit 4b7ee4d107b887995acb858d8153154fcef02121
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 20:16:25 2026 +0000
+
+    scorecard: simplify uses-ref to plain ${{ github.repository_owner }}
+
+    derivative-maker canonical is Kicksecure (not Whonix - Whonix is
+    a downstream mirror). Same org pattern as helper-scripts and
+    developer-meta-files: Kicksecure on canonical, org-ai-assisted on
+    fork. Plain ${{ github.repository_owner }} resolves cleanly on
+    both realms; the previous conditional expression was unnecessary.
+
+commit f99224107764df65327cc738df65d6a1fc1fd839
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 20:12:30 2026 +0000
+
+    scorecard: conditional uses-ref so all three realms resolve cleanly
+
+    derivative-maker's canonical home is Whonix/ but developer-meta-files
+    canonically lives in Kicksecure/. A plain Kicksecure hardcode breaks
+    the org-ai-assisted fork's CI until upstream sync; a plain
+    ${{ github.repository_owner }} breaks Whonix canonical because
+    Whonix/developer-meta-files does not exist.
+
+    Use a small expression that resolves to:
+      - org-ai-assisted/developer-meta-files when running on the fork
+      - Kicksecure/developer-meta-files when running on canonical Whonix
+      - Kicksecure/developer-meta-files when running on canonical Kicksecure
+        (the fallback, also correct).
+
+    GitHub Actions allows '${{ }}' expressions in jobs.<id>.uses with
+    github / inputs / vars / needs / strategy contexts.
+
+commit 27925454047e1f9b3a2d5e15ac255bcc8436d084
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 20:04:18 2026 +0000
+
+    scorecard: consume reusable workflow from developer-meta-files
+
+    Replace the 68-line per-repo scorecard.yml body with a 33-line
+    wrapper that delegates to the reusable workflow at
+    Kicksecure/developer-meta-files/.github/workflows/scorecard.yml.
+
+    Trigger schedule and cron slot stay at the caller level (GitHub
+    Actions does not allow schedule: under workflow_call). The wrapper
+    keeps the existing cron slot ('0 4 * * 0') and the documented
+    omission of the push trigger (tag-bearing commits would otherwise
+    fire this alongside Dry-run / Lint / builder).
+
+    Eliminates the duplicate maintenance burden across derivative-maker
+    and helper-scripts. Future repos that adopt Scorecard get a
+    ~10-line wrapper instead of a ~70-line copy.
+
+commit 85e3843b11e03d72063aad93a4400cc7eeabd1a6
+Merge: 5d0e8bd53 20833a3c6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 15:35:55 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/drop-apple-merge-into-docker'
+
+commit 5d0e8bd53477d211c44d3e1edaaa6a62b52f1c14
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 7 19:32:27 2026 +0000
+
+    bumped changelog version
+
+commit 20833a3c67f3cb1cf91da329001f364affd9e4bd
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 7 19:32:26 2026 +0000
+
+    Drop apple/ folder; document multi-arch in docker/README.md
+
+    apple/ was a broken stub:
+    * Dockerfile line 1: 'TODO: This is broken because of the approx
+      proxy change.'
+    * Hardcodes '--arch arm64' in entrypoint, hardcodes ARM64 GRUB
+      packages in the image.
+    * Clones from a non-existent 'derivative-maker/derivative-maker.git'
+      fork, hardcoded branch 'containerized-arm-builds' (also gone).
+
+    Its only differentiating intent was 'build derivative-maker for
+    arm64'. docker/Dockerfile already uses 'FROM debian:trixie-slim',
+    which is a multi-arch manifest list, so arm64 / amd64 / future
+    archs are addressable directly via 'docker buildx build
+    --platform linux/arm64'.
+
+    The arch-specific package deltas apple/'s Dockerfile installed
+    (grub-efi-arm64 etc.) belong in derivative-maker's own
+    build-steps.d/1100_sanity-tests check_required_packages_installed,
+    not in the image. derivative-maker-docker-setup's existing TODO
+    already advocates exactly this stance ('any missing packages
+    should be installed using build-steps.d/1100_sanity-tests not
+    using docker'). Keeping the base image purely arch-agnostic
+    avoids any Dockerfile branching for arch handling.
+
+    Adds a 'Multi-arch builds' subsection to docker/README.md
+    documenting the buildx --platform usage and the design choice.
+
 commit 32ebbfe24a42d2fd036b465610a2aec02f30ba48
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Thu May 7 15:24:59 2026 -0400
