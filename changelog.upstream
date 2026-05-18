@@ -1,3 +1,82 @@
+commit 401bd49068626596eff50a23039ee5beff6f16a7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 17:53:13 2026 -0400
+
+    .
+
+commit 99a08c9ebf1a6e8f2e2b5b8c14ad96a5ac41db4b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 17:50:08 2026 -0400
+
+    .
+
+commit e217a77ed9ecf0d11815ac1a28bab10a60ba76a0
+Merge: 113ea616e 75bd43776
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 17:49:45 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit 113ea616ee7c17a1649540cd40013e487a287b33
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 17:37:15 2026 -0400
+
+    .
+
+commit 05174a8670bb8764ce8e092821788ec8fb1c0f89
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 17:34:13 2026 -0400
+
+    .
+
+commit 7f037db1ad9a7e523a9f3e3a4d093982ddd9c0eb
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 17:33:00 2026 -0400
+
+    .
+
+commit 75bd437767810f2d09f4bd18ef3cb2e127233199
+Merge: 6f2c61af4 785c9d430
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Mon May 18 10:08:17 2026 -0400
+
+    Merge pull request #38 from org-ai-assisted/claude/document-special-repos-9nUfg
+
+    debian/make-helper-overrides.bsh: set make_git_tag_sign_appendix
+
+commit 785c9d4306a0393976820c52e72ee9eade264fc5
+Author: Claude <noreply@anthropic.com>
+Date:   Mon May 18 13:54:28 2026 +0000
+
+    debian/make-helper-overrides.bsh: set make_git_tag_sign_appendix
+
+    genmkfile's make_git_tag_shared (called by every tag-touching
+    target) dies for derivative-maker if make_git_tag_sign_appendix is
+    unset. dm-bump-derivative-maker-version sets it explicitly to
+    "-developers-only" before its tag-creation calls, but push-time
+    verification (developer-meta-files' pkg_git_push_remotes,
+    dm-git-push-all) and any other genmkfile invocation on this repo
+    inherits no such setting and bombs out:
+
+      ERROR: (FUNCNAME: 'make_git_tag_shared') package is
+      'derivative-maker' but variable make_git_tag_sign_appendix is
+      empty.
+
+    The override file is sourced by make-helper-one.bsh at every
+    genmkfile invocation, so setting it here makes it ambient for the
+    whole repo. dm-bump-derivative-maker-version's explicit
+    `export make_git_tag_sign_appendix="-developers-only"` continues to
+    work (same value, idempotent).
+
+    The `[ -n ... ] || ...` guard lets callers still override - e.g. if
+    a future release type wants a different appendix.
+
+commit 6f2c61af469d15dd27a3c15df3fb0b1d61961f25
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 10:44:36 2026 +0000
+
+    bumped changelog version
+
 commit 43eb53e791def97df3f4940a2a109b0cc7ec35a9
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Mon May 18 06:41:13 2026 -0400
