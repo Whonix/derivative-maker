@@ -72,6 +72,19 @@ if [ "${CI:-}" = "true" ]; then
    [ -n "${rsync_cmd:-}" ] || rsync_cmd="echo simulate-only rsync"
 fi
 
+## Inside command substitution ($(...)), or when stdout is piped /
+## redirected, the interactive menu's prompt cannot reach the user -
+## stdout is captured, so 'read -p' would block on the TTY with an
+## invisible prompt. Force non-interactive in that case. A caller
+## that legitimately wants interactive behavior with a non-TTY stdout
+## (e.g. a wrapper that mirrors the menu elsewhere) can opt in by
+## exporting 'dist_build_non_interactive=false' before sourcing pre;
+## the '-z' guard preserves that override.
+if [ -z "${dist_build_non_interactive:-}" ] && [ ! -t 1 ]; then
+   true "${BASH_SOURCE[0]} INFO: stdout is not a TTY; assuming non-interactive."
+   export dist_build_non_interactive=true
+fi
+
 ## The error-handler trap functions below pass "${args[@]}" to the cleanup
 ## scripts. 'args' is normally set by parse-cmd (args=("$@") in
 ## dist_build_one_parse_cmd), but the trap can fire before parse-cmd has
@@ -274,8 +287,8 @@ ${cyan}${bold}############################################################${rese
          $output_cmd "INFO: using non-interactive error handler."
          break
       else
-         if [ -t "0" ]; then
-            $output_cmd "INFO: stdin connected to terminal, using interactive error handler."
+         if [ -t "0" ] && [ -t "1" ]; then
+            $output_cmd "INFO: stdin and stdout connected to terminal, using interactive error handler."
             $output_cmd "\
 ${red}${bold}ERROR: An issue in ${under}$0${eunder} has been detected!${reset}
 
@@ -302,7 +315,7 @@ ${blue}${bold}#####${reset}"
 
             read -r -p "Answer? " answer
          else
-            $output_cmd "INFO: stdin not connected to terminal, using non-interactive error handler."
+            $output_cmd "INFO: stdin or stdout not connected to terminal, using non-interactive error handler."
             break
          fi
       fi
