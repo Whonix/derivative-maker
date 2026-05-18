@@ -1,3 +1,153 @@
+commit 43eb53e791def97df3f4940a2a109b0cc7ec35a9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 06:41:13 2026 -0400
+
+    .
+
+commit c76618ceab2a735dddd74291b05228ca979a899b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 06:38:52 2026 -0400
+
+    .
+
+commit 884bde6e56626c1b634ca683b9f3740618666d9f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 06:20:16 2026 -0400
+
+    .
+
+commit f15f1f77368080fbc00d283ac175d50084aa361e
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 06:13:20 2026 -0400
+
+    .
+
+commit 577c44b7f283911d2512605c0fb41fb65696e06a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 06:07:15 2026 -0400
+
+    .
+
+commit fdbf66ec0dba00d1e5011a4b50e70d8ecedfc8ca
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 06:01:57 2026 -0400
+
+    .
+
+commit cbee646fc460bb744d7b9a9d6f5e7b995edba97c
+Merge: ccf8a28f1 da5fecd50
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 05:44:57 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit da5fecd50b067f702b4ef43e3f24c6cc499af194
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun May 17 23:12:06 2026 -0400
+
+    minor
+
+commit ccf8a28f1045dee3e8f8c46c0d4e3aaec68aeadc
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 17 17:10:12 2026 -0400
+
+    .
+
+commit 18fc6691730967c30fdc2c5030b403899d6358c2
+Merge: 8927b2d12 c007c0027
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 17 16:23:46 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit c007c0027f9104f773e2998866deecf76f12679c
+Merge: 8927b2d12 28eb94355
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sun May 17 14:03:01 2026 -0400
+
+    Merge pull request #37 from org-ai-assisted/claude/fix-dependabot-action-UnL7w
+
+    dependabot.yml: hand-maintain with correct docker directory
+
+commit 28eb9435539c75889bd7db1a903335415eb1ad32
+Author: Claude <noreply@anthropic.com>
+Date:   Sun May 17 17:59:47 2026 +0000
+
+    trim file commentary
+
+commit 70486b2eeb458bcd6d12bca96760219bc2e2d71d
+Author: Claude <noreply@anthropic.com>
+Date:   Sun May 17 17:45:19 2026 +0000
+
+    dependabot.yml: hand-maintain with correct docker directory
+
+    This repo's Dockerfile lives at docker/Dockerfile, not at /. The
+    old canonical at
+    developer-meta-files/consumer-templates/.github/dependabot.yml
+    carried a `package-ecosystem: docker` block with `directory: "/"`,
+    which was wrong for this repo: dependabot scanned `/Dockerfile`,
+    didn't find one, and aborted the job with
+    `dependency_file_not_found` - killing the github-actions
+    ecosystem run that shared it too.
+
+    Opt this repo out of byte-identical propagation via the
+    "## propagation: manual" header marker (recognized by
+    dependabot_yml_is_manual in dm-packaging-helper-script). The
+    docker block is now scoped to `directory: "docker"` so dependabot
+    finds docker/Dockerfile and can bump its FROM pins.
+
+    The github-actions block is kept byte-identical to
+    developer-meta-files/consumer-templates/.github/dependabot.yml
+    so org-wide action-bump uniformity is preserved; only the docker
+    block and the marker line diverge.
+
+    See org-ai-assisted/developer-meta-files PR #105 for the
+    canonical change, the marker mechanism, and the architecture
+    doc updates (agents/github-actions-consumer-templates.md
+    "Per-repo manual dependabot.yml").
+
+commit 8927b2d122fa7df9c131d005c37b91333cc8ebcf
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 17 12:47:21 2026 -0400
+
+    .
+
+commit 26ebf423460c0c88bba7be3bb62433dd0831be71
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 16 06:12:14 2026 -0400
+
+    .
+
+commit 611c4cff370611cbf9007343fd8871058ea5b5e8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 16 06:05:03 2026 -0400
+
+    .
+
+commit bb7eee7a9441b1fd9078e36915a06a643562cd0b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 16 05:58:07 2026 -0400
+
+    CI
+
+commit d8adb895b8cd9f6dd99350ec662a1036f3b1a838
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 16 05:28:11 2026 -0400
+
+    .
+
+commit dc79d588b4366c23a82aee12a1d4f0c43078ace2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 16 05:22:27 2026 -0400
+
+    .
+
+commit f5e97230da7c9cf8ef24550cae4d4599db7fd6f6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri May 15 22:59:49 2026 +0000
+
+    bumped changelog version
+
 commit d8f8c987977b2977e7d33f4b9d1bfe9c601248c6
 Merge: fcf21b066 a5fa10074
 Author: Patrick Schleizer <adrelanos@whonix.org>
