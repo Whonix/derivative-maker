@@ -27,6 +27,16 @@ export ANSIBLE_HOST_KEY_CHECKING=False
 ## "remote VPS unreachable" failure path.
 mkdir -p -- "${automated_builder_logs_dir}"
 
+## ansible.builtin.fetch resolves a relative 'dest' via
+## DataLoader.path_dwim, which joins against the playbook's basedir
+## (here automated_builder/) not ansible-playbook's cwd. A relative
+## "./automated_builder/logs/install_source.log" therefore lands at
+## "<repo>/automated_builder/automated_builder/logs/install_source.log"
+## (the segment is doubled), while the workflow's mkdir + upload-artifact
+## look at "<repo>/automated_builder/logs/" and find nothing. Resolve to
+## an absolute path so fetch writes where every other consumer expects.
+logs_dir_absolute="$(realpath -- "${automated_builder_logs_dir}")"
+
 main() {
   decrypt_vault
   gather_logs
@@ -35,7 +45,7 @@ main() {
 
 gather_logs() {
   ansible-playbook -i automated_builder/inventory \
-    -e "logs_dir=${automated_builder_logs_dir}" \
+    -e "logs_dir=${logs_dir_absolute}" \
     automated_builder/gather_build_logs.yml
 }
 
