@@ -14,3 +14,9 @@ export make_skip_git_describe_output_check
 
 make_pkg_use_pkg_version_without_revision_for_git_version=true
 export make_pkg_use_pkg_version_without_revision_for_git_version
+
+## genmkfile's make_git_tag_shared requires this for derivative-maker.
+## Set here so every genmkfile invocation sees it (not just
+## dm-bump-derivative-maker-version which used to set it explicitly).
+[ -n "${make_git_tag_sign_appendix:-}" ] || make_git_tag_sign_appendix="-developers-only"
+export make_git_tag_sign_appendix
