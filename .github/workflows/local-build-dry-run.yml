@@ -69,8 +69,10 @@ jobs:
       - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
         ## Must run BEFORE 'submodule update --init' so the rewrites
         ## are visible to the recursive clone.
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
-        run: ./ci/configure-fork-mirror "${{ github.repository_owner }}" "${{ github.repository_owner }}"
+        run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
 
       - name: Initialize submodules
         run: git submodule update --init --recursive
