@@ -427,12 +427,12 @@ install_required_packages() {
 
    $SUDO_TO_ROOT \
       apt-get \
-         "${APTGETOPT_WITHOUT_APT_CACHE[@]}" \
+         "${DIST_APTGETOPT_WITHOUT_APT_CACHE[@]}" \
          update
 
    $SUDO_TO_ROOT \
       apt-get \
-         "${APTGETOPT_WITHOUT_APT_CACHE[@]}" \
+         "${DIST_APTGETOPT_WITHOUT_APT_CACHE[@]}" \
          $apt_unattended_opts \
          --no-install-recommends \
          --yes \

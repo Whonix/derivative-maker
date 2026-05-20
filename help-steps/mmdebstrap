@@ -170,11 +170,11 @@ export PATH="$new_path"
 ### }}}
 
 ## Sanity test.
-[ -v APTGETOPT_SERIALIZED ] || error "APTGETOPT_SERIALIZED is unset!"
+[ -n "${DIST_APTGETOPT_SERIALIZED:-}" ] || error "DIST_APTGETOPT_SERIALIZED is unset!"
 
 ## Debugging.
-mapfile -t APTGETOPT <<< "$APTGETOPT_SERIALIZED"
-printf "%s\n" "APTGETOPT: ${APTGETOPT[*]}"
+mapfile -t DIST_APTGETOPT <<< "$DIST_APTGETOPT_SERIALIZED"
+printf "%s\n" "DIST_APTGETOPT: ${DIST_APTGETOPT[*]}"
 
 ## Debugging.
 true "BUILDPLACE: ${BUILDPLACE:-}"
@@ -248,7 +248,7 @@ fi
 [ -n "${dist_build_apt_stable_release:-}" ] || error "dist_build_apt_stable_release is unset!"
 [ -n "${BUILDPLACE:-}" ] || error "BUILDPLACE is unset!"
 [ -n "${dist_build_sources_list_primary:-}" ] || error "dist_build_sources_list_primary is unset!"
-[ -n "${APTGETOPT:-}" ] || error "APTGETOPT is unset!"
+[ -n "${DIST_APTGETOPT:-}" ] || error "DIST_APTGETOPT is unset!"
 
 ## '--variant=required' is only supported by 'mmdebstrap'. It might not be supported by 'debootstrap'.
 

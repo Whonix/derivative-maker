@@ -32,11 +32,11 @@ source "/home/$user_name/pbuilder_config_file"
 true "---------------"
 true "INFO: HOMEVAR_VBOX_TEMP: $HOMEVAR_VBOX_TEMP"
 true "INFO: BUILDPLACE: $BUILDPLACE"
-true "INFO: APTGETOPT_SERIALIZED: $APTGETOPT_SERIALIZED"
+true "INFO: DIST_APTGETOPT_SERIALIZED: $DIST_APTGETOPT_SERIALIZED"
 true "---------------"
 
-mapfile -t APTGETOPT <<< "$APTGETOPT_SERIALIZED"
-printf "%s\n" "APTGETOPT: ${APTGETOPT[*]}"
+mapfile -t DIST_APTGETOPT <<< "$DIST_APTGETOPT_SERIALIZED"
+printf "%s\n" "DIST_APTGETOPT: ${DIST_APTGETOPT[*]}"
 
 test -f "${if_no_pbuilder_base_folder}/var/cache/derivative-maker/temporary-repository/newer.sources"
 
@@ -77,7 +77,7 @@ for dist_build_multiarch_package_item in $make_cross_build_platform_list ; do
 done
 
 apt-get \
-   "${APTGETOPT[@]}" \
+   "${DIST_APTGETOPT[@]}" \
    $apt_unattended_opts \
    $target_release_option \
    -o Dir::Etc::sourcelist="${if_no_pbuilder_base_folder}/var/cache/derivative-maker/temporary-repository/newer.sources" \
@@ -86,7 +86,7 @@ apt-get \
    update
 
 # apt-cache \
-#    "${APTGETOPT[@]}" \
+#    "${DIST_APTGETOPT[@]}" \
 #    $apt_unattended_opts \
 #    $target_release_option \
 #    -o Dir::Etc::sourcelist="${if_no_pbuilder_base_folder}/var/cache/derivative-maker/temporary-repository/newer.sources" \
@@ -97,7 +97,7 @@ apt-get \
 #    || true
 
 # apt-config \
-#    "${APTGETOPT[@]}" \
+#    "${DIST_APTGETOPT[@]}" \
 #    $apt_unattended_opts \
 #    $target_release_option \
 #    -o Dir::Etc::sourcelist="${if_no_pbuilder_base_folder}/var/cache/derivative-maker/temporary-repository/newer.sources" \
@@ -108,7 +108,7 @@ apt-get \
 #ls -- /var/lib/apt/lists/
 
 apt-get \
-   "${APTGETOPT[@]}" \
+   "${DIST_APTGETOPT[@]}" \
    $apt_unattended_opts \
    $target_release_option \
    -o Dir::Etc::sourcelist="${if_no_pbuilder_base_folder}/var/cache/derivative-maker/temporary-repository/newer.sources" \
@@ -119,7 +119,7 @@ apt-get \
 
 if [ "${download_source_package:-}" = "true" ]; then
    apt-get \
-      "${APTGETOPT[@]}" \
+      "${DIST_APTGETOPT[@]}" \
       $apt_unattended_opts \
       $target_release_option \
       --yes \
