@@ -226,6 +226,9 @@ if [ ! "${dist_build_one_parsed:-}" = "true" ]; then
    export dist_build_one_parsed
 fi
 
+[ -n "${dist_build_target_arch:-}" ] || dist_build_target_arch="$(dpkg --print-architecture)"
+export dist_build_target_arch
+
 ## Architecture-derived defaults. Kept here (not in parse-cmd) so internal
 ## helper scripts that pre-set 'dist_build_one_parsed=true' to skip parse-cmd
 ## (e.g. dm-tor-update-repository, dm-reprepro-wrapper) still get sensible
@@ -1332,8 +1335,6 @@ set_dist_build_reprepro_folder_options() {
 [ -n "${host_architecture:-}" ] || host_architecture="$(dpkg --print-architecture)"
 export host_architecture
 
-[ -n "${dist_build_target_arch:-}" ] || dist_build_target_arch="$(dpkg --print-architecture)"
-
 [ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="$dist_build_target_arch"
 #[ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="i386 amd64"
 export make_cross_build_platform_list
@@ -1533,12 +1534,26 @@ true "INFO: Environment variables that will be passed..."
 if [ ! "${variables_sudo_to_root_finalized:-}" = "true" ]; then
    sudo_preserve_env_list=""
    for env_vars_var_keep_item in $env_vars_keep_list ; do
+      if [ -z "${env_vars_var_keep_item:-}" ]; then
+        error "env_vars_var_keep_item $env_vars_var_keep_item is empty!"
+      fi
       if [ "${sudo_preserve_env_list:-}" = "" ]; then
          sudo_preserve_env_list="$env_vars_var_keep_item"
       else
          sudo_preserve_env_list+=",$env_vars_var_keep_item"
       fi
+      if [ "$env_vars_var_keep_item" = "APTGETOPT_SERIALIZED" ]; then
+         found=true
+      fi
    done
+
+   if ! [ "${found:-}" = "true" ]; then
+      error "env_vars_var_keep_item variable APTGETOPT_SERIALIZED not found!"
+   fi
+   unset found
+   if [ -z "$env_vars_var_keep_item" ]; then
+      error "env_vars_var_keep_item variable APTGETOPT_SERIALIZED is empty!"
+   fi
 
    SUDO_TO_ROOT+=" "
    SUDO_TO_ROOT+="--preserve-env=$sudo_preserve_env_list"

@@ -448,7 +448,7 @@ dist_build_one_parse_cmd() {
                   printf '%s\n' "${red}${bold}ERROR: --arch must not be empty.${reset}"
                   exit 1
                else
-                  export dist_build_target_arch="${2:-}"
+                  dist_build_target_arch="${2:-}"
                   true "${cyan}dist_build_target_arch set to $dist_build_target_arch.${reset}"
                fi
                shift 2
@@ -861,8 +861,6 @@ ${reset}"
    fi
 
    export BUILD_INITRAMFS_PKGS
-   ## Using export, so it can be read by chroot-post.d scripts.
-   export dist_build_target_arch
 
    true "${cyan}INFO: dist_build_target_arch    (--arch): ${dist_build_target_arch:-}${reset}"
    true "${cyan}INFO: BUILD_KERNEL_PKGS       (--kernel): ${BUILD_KERNEL_PKGS:-}${reset}"

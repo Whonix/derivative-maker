@@ -24,6 +24,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 ## This wrapper is invoked through PATH by grml-debootstrap, so it does
 ## use plain (uncolored) log messages.
@@ -168,7 +170,7 @@ export PATH="$new_path"
 ### }}}
 
 ## Sanity test.
-[ -n "${APTGETOPT_SERIALIZED:-}" ] || error "APTGETOPT_SERIALIZED is unset!"
+[ -v APTGETOPT_SERIALIZED ] || error "APTGETOPT_SERIALIZED is unset!"
 
 ## Debugging.
 mapfile -t APTGETOPT <<< "$APTGETOPT_SERIALIZED"
