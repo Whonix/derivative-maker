@@ -88,7 +88,7 @@ This may take a while...${reset}"
    local apt_get_exit_code="0"
    chroot_run \
          apt-get-noninteractive \
-            "${APTGETOPT[@]}" \
+            "${DIST_APTGETOPT[@]}" \
             $apt_sourcelist_empty \
             $apt_sourceparts \
             $apt_unattended_opts \
@@ -117,7 +117,7 @@ variable for debugging. This may take a while...${reset}"
          $( \
             chroot_run \
                   apt-get-noninteractive \
-                     "${APTGETOPT[@]}" \
+                     "${DIST_APTGETOPT[@]}" \
                      $apt_sourcelist_empty \
                      $apt_sourceparts \
                      $apt_unattended_opts \
@@ -235,7 +235,7 @@ install-packages() {
    dist_chroot_mount_resolv_conf="0" "$dist_source_help_steps_folder/chroot-raw" "$@"
    "$dist_source_help_steps_folder/create-local-temp-apt-repo" "$@"
 
-   chroot_run apt-get-noninteractive "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts update
+   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts update
 
 #    if [ "${dist_build_target_arch:-}" = "arm64" ]; then
 #       ## Install package helper-scripts first so pre.bsh and initramfs-debug-enable is available.
@@ -291,23 +291,23 @@ install-packages() {
    "$dist_source_help_steps_folder/create-local-temp-apt-repo" "$@"
 
    ## Reading Debian apt repository and local repository containing derivative packages.
-   chroot_run apt-get-noninteractive "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts update
+   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts update
 
    ## Debugging.
-   chroot_run apt-get-noninteractive "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts clean
-   chroot_run apt-get-noninteractive "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts autoclean
-   chroot_run apt-get-noninteractive "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-broken --yes install
-   chroot_run apt-get-noninteractive "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-missing --yes install
-   chroot_run apt-get-noninteractive "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-broken --fix-missing --yes install
+   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts clean
+   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts autoclean
+   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-broken --yes install
+   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-missing --yes install
+   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-broken --fix-missing --yes install
    chroot_run dpkg --configure -a
    chroot_run dpkg --audit
 
    ## XXX: once installed a newer kernel, which then messed up /boot/grub/grub.cfg to then include root=/dev/mapper which will fail to boot.
-   chroot_run apt-get-noninteractive "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --yes dist-upgrade
+   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --yes dist-upgrade
 
    ## Debugging.
-   chroot_run apt-cache "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts show nano || true
-   chroot_run apt-cache "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts show helper-scripts || true
+   chroot_run apt-cache "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts show nano || true
+   chroot_run apt-cache "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts show helper-scripts || true
 
    if [ "${dist_build_script_skip_package_install:-}" = "" ]; then
       true "${bold}${cyan}INFO ${BASH_SOURCE[0]}: Variable dist_build_script_skip_package_install is empty. \
@@ -423,7 +423,7 @@ $dist_build_script_skip_package_install${reset}"
 
    for iso_weak_recommended_packages_item in $efi_weak_recommended_packages_list ; do
       ## Test if available. Might be unavailable (and unneeded) on some architectures.
-      if chroot_run apt-get-noninteractive "${APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --yes --dry-run install "$iso_weak_recommended_packages_item" &>/dev/null ; then
+      if chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --yes --dry-run install "$iso_weak_recommended_packages_item" &>/dev/null ; then
          true "INFO: Yes, adding weak recommended package to the installation list: $iso_weak_recommended_packages_item"
          pkg-add-to-install-list "$iso_weak_recommended_packages_item"
       else

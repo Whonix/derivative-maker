@@ -88,7 +88,7 @@ build_machine_setup() {
 
    $SUDO_TO_ROOT \
       apt-get \
-         "${APTGETOPT[@]}" \
+         "${DIST_APTGETOPT[@]}" \
          -o Dir::Etc::sourcelist="$dist_build_sources_list_primary" \
          -o Dir::Etc::sourceparts="-" \
          update
@@ -98,7 +98,7 @@ build_machine_setup() {
       ## Update package lists and upgrade.
       $SUDO_TO_ROOT \
          apt-get \
-            "${APTGETOPT[@]}" \
+            "${DIST_APTGETOPT[@]}" \
             -o Dir::Etc::sourcelist="$dist_build_sources_list_primary" \
             -o Dir::Etc::sourceparts="-" \
             $apt_unattended_opts \
@@ -182,7 +182,7 @@ build_machine_setup() {
 
    $SUDO_TO_ROOT \
       apt-get \
-         "${APTGETOPT[@]}" \
+         "${DIST_APTGETOPT[@]}" \
          -o Dir::Etc::sourcelist="$dist_build_sources_list_primary" \
          -o Dir::Etc::sourceparts="-" \
          $apt_unattended_opts \
@@ -384,14 +384,14 @@ packages_installation_from_backports_repository() {
 
    $SUDO_TO_ROOT \
       apt-get \
-         "${APTGETOPT[@]}" \
+         "${DIST_APTGETOPT[@]}" \
          -o Dir::Etc::sourcelist="$dist_build_sources_list_debian_forky_backports" \
          -o Dir::Etc::sourceparts="-" \
          update
 
    $SUDO_TO_ROOT \
       apt-get \
-         "${APTGETOPT[@]}" \
+         "${DIST_APTGETOPT[@]}" \
          -o Dir::Etc::sourcelist="$dist_build_sources_list_debian_forky_backports" \
          -o Dir::Etc::sourceparts="-" \
          $apt_unattended_opts \

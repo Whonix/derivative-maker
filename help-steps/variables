@@ -156,28 +156,31 @@ cd -- "$source_code_folder_dist"
 export dist_aptgetopt_file
 $SUDO_TO_ROOT rm --force -- "$dist_aptgetopt_file"
 
+## DIST_ prefix avoids a name collision with pbuilder/cowbuilder, which use
+## their own array variable 'APTGETOPT' (see pbuilderrc) that gets sourced
+## inside the cowbuilder chroot scripts (help-steps/pbuilder-chroot-script-*).
 ## Cannot export bash array.
-#APTGETOPT=()
-#export APTGETOPT
-export APTGETOPT_SERIALIZED
+#DIST_APTGETOPT=()
+#export DIST_APTGETOPT
+export DIST_APTGETOPT_SERIALIZED
 
 ## Debugging.
-#declare -p APTGETOPT
-#printf "%s\n" "$APTGETOPT_SERIALIZED"
+#declare -p DIST_APTGETOPT
+#printf "%s\n" "$DIST_APTGETOPT_SERIALIZED"
 
 aptgetopt_add() {
    local opt
    opt="$1"
 
-   APTGETOPT+=("-o")
-   APTGETOPT+=("$opt")
-   APTGETOPT_SERIALIZED="$(printf '%s\n' "${APTGETOPT[@]}")"
+   DIST_APTGETOPT+=("-o")
+   DIST_APTGETOPT+=("$opt")
+   DIST_APTGETOPT_SERIALIZED="$(printf '%s\n' "${DIST_APTGETOPT[@]}")"
 
    if [[ "${opt:-}" =~ [Pp]roxy ]]; then
       return 0
    fi
-   APTGETOPT_WITHOUT_APT_CACHE+=("-o")
-   APTGETOPT_WITHOUT_APT_CACHE+=("$opt")
+   DIST_APTGETOPT_WITHOUT_APT_CACHE+=("-o")
+   DIST_APTGETOPT_WITHOUT_APT_CACHE+=("$opt")
 }
 
 aptgetopt_conf_add () {
@@ -872,7 +875,7 @@ if [ "${build_dry_run:-}" = "true" ]; then
 fi
 
 ## TODO: auto retry function error handler trap lacks variables
-## such as variable APTGETOPT.
+## such as variable DIST_APTGETOPT.
 ## Would miss out on security related APT configuration options:
 ## apt-get --error-on=any / -o APT::Update::Error-Mode=any
 [ -n "${dist_build_auto_retry:-}" ] || dist_build_auto_retry="0"
@@ -1374,7 +1377,7 @@ printf "%s\n" "\
 
 ## dist_build_pbuilder_config_file is passed to cowbuilder. example:
 ## '--configfile /home/user/derivative-binary/pbuilder.conf'
-## NOTE: Cowbuilder ignores arbitrary environment variables such as 'APTGETOPT_SERIALIZED'.
+## NOTE: Cowbuilder ignores arbitrary environment variables such as 'DIST_APTGETOPT_SERIALIZED'.
 ##       Therefore, cowbuilder chroot scripts must run:
 ##       'source /home/$user_name/pbuilder_config_file'
 ##       Maybe false. Just requires correct 'export'.
@@ -1448,7 +1451,7 @@ unset skip_script matched_word
 true "INFO: LD_PRELOAD: ${LD_PRELOAD:-}"
 
 env_vars_keep_list="
-   APTGETOPT_SERIALIZED
+   DIST_APTGETOPT_SERIALIZED
    tbb_version
    tb_onion
    tpo_downloader_debug

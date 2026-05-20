@@ -75,7 +75,7 @@ create-debian-raw-image() {
    [ -n "${REPORT_TRAP_ERR:-}" ] || export REPORT_TRAP_ERR="yes"
    [ -n "${FAIL_TRAP_ERR:-}" ] || export FAIL_TRAP_ERR="yes"
 
-   [ -n "${DPKG_OPTIONS:-}" ] || export DPKG_OPTIONS="${APTGETOPT[*]}"
+   [ -n "${DPKG_OPTIONS:-}" ] || export DPKG_OPTIONS="${DIST_APTGETOPT[*]}"
 
    ## Do not install non-Free software.
    [ -n "${COMPONENTS:-}" ] || export COMPONENTS='main'

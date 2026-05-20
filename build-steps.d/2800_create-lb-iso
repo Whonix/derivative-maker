@@ -140,7 +140,7 @@ Components: main
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
       | sponge "${live_build_parent_bootstrap_mirror_security_file}"
 
-   ## TODO: Should quote...? ${APTGETOPT[*]}
+   ## TODO: Should quote...? ${DIST_APTGETOPT[*]}
 
    ## NOTE: If changing '--bootappend-live' parameter 'rd.live.overlay.overlayfs=1'
    ##       also update at the same time grub-live:
@@ -154,7 +154,7 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
 lb config noauto \\
    --apt apt-get \\
    --apt-indices false \\
-   --apt-options '${APTGETOPT[*]} --yes --allow-remove-essential' \\
+   --apt-options '${DIST_APTGETOPT[*]} --yes --allow-remove-essential' \\
    --apt-recommends false \\
    --apt-source-archives false \\
    --architecture '${dist_build_target_arch}' \\
@@ -450,8 +450,8 @@ Pin-Priority: 900"
    ## Get rid of the temp bootloader, we don't need it anymore and it will
    ## cause installation issues
    ## Disabled, we're going to keep grub-efi while d-i is disabled.
-   # chroot_run apt-get "${APTGETOPT[@]}" --yes purge grub-efi*
-   # chroot_run apt-get "${APTGETOPT[@]}" --yes autopurge
+   # chroot_run apt-get "${DIST_APTGETOPT[@]}" --yes purge grub-efi*
+   # chroot_run apt-get "${DIST_APTGETOPT[@]}" --yes autopurge
 
    ## Enable fallback bootloader installation
    chroot_run debconf-set-selections <<< 'grub-efi-amd64 grub2/force_efi_extra_removable boolean true'

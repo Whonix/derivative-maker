@@ -73,14 +73,14 @@ sudo --non-interactive test -d /usr
 sudo --non-interactive -u "dm-vbox-temp" -- test -x /usr/bin/dist-installer-cli-standalone
 sudo --non-interactive -u "dm-vbox-temp" -- ls -la /usr/bin/dist-installer-cli-standalone
 
-printf '%s\n' "APTGETOPT_SERIALIZED:"
+printf '%s\n' "DIST_APTGETOPT_SERIALIZED:"
 printf '%s\n' "--------------------"
-printf '%s\n' "$APTGETOPT_SERIALIZED"
+printf '%s\n' "$DIST_APTGETOPT_SERIALIZED"
 printf '%s\n' "--------------------"
 
 ## Not yet needed but useful as a sanity test.
-mapfile -t APTGETOPT <<< "$APTGETOPT_SERIALIZED"
-printf "%s\n" "APTGETOPT: ${APTGETOPT[*]}"
+mapfile -t DIST_APTGETOPT <<< "$DIST_APTGETOPT_SERIALIZED"
+printf "%s\n" "DIST_APTGETOPT: ${DIST_APTGETOPT[*]}"
 
 ## NOTE: Code duplication in build-step prepare-build-machine
 ## NOTE: Code duplication in help-step pbuilder-chroot-script-virtualbox
@@ -108,7 +108,7 @@ dist_installer_cli_arguments+=("--no-import")
 
 success="true"
 ## virtualbox-installer / dist-installer-cli
-if ! sudo --non-interactive -u "dm-vbox-temp" APTGETOPT_SERIALIZED="$APTGETOPT_SERIALIZED" bash -x /usr/bin/dist-installer-cli-standalone "${dist_installer_cli_arguments[@]}" ; then
+if ! sudo --non-interactive -u "dm-vbox-temp" DIST_APTGETOPT_SERIALIZED="$DIST_APTGETOPT_SERIALIZED" bash -x /usr/bin/dist-installer-cli-standalone "${dist_installer_cli_arguments[@]}" ; then
   success=false
 fi
 
