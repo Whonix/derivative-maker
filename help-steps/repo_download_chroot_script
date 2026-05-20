@@ -72,8 +72,8 @@ fi
 pushd "$temp_newer_packages"
 
 ## Use dpkg multiarch so we can download other architectures than the build host's one using apt-get.
-for architecture in $architecture_list ; do
-   dpkg --add-architecture "$architecture"
+for dist_build_multiarch_package_item in $make_cross_build_platform_list ; do
+   dpkg --add-architecture "$dist_build_multiarch_package_item"
 done
 
 apt-get \
