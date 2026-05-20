@@ -1,3 +1,249 @@
+commit d292a2313c09fb1c29238246f9b431124a35d0ea
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 16:53:22 2026 -0400
+
+    .
+
+commit 93e26082f5b17bbde2bf4fbd00492d64c84b08f1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 15:34:52 2026 -0400
+
+    fix
+
+commit e5ce4833b30fd3fa78c3f5a5782a433237a21469
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 15:29:10 2026 -0400
+
+    fix
+
+commit a344c84232a7fa05eb519639744270ba96289901
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 15:10:39 2026 -0400
+
+    .
+
+commit a22f31eb2c798117212ff8f4b62c76a62fbd091a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 15:10:12 2026 -0400
+
+    .
+
+commit 00862d55c91200fb86024f34b4ae219ddaa9da12
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 15:08:37 2026 -0400
+
+    fix
+
+commit 214204c4f6f64a358b5d2458eeb62658fa37ce2c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 15:07:39 2026 -0400
+
+    .
+
+commit f66e18a59043b1d13ba3e25bfb481fcb79373025
+Merge: 2c5a1f856 bf2cfd70d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 18:57:44 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit bf2cfd70d83996b13710317e96dd74e740bc5b18
+Merge: e7e328356 5f9ac8a8b
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Mon May 18 18:53:22 2026 -0400
+
+    Merge pull request #40 from org-ai-assisted/claude/fix-genmkfile-exit-codes-Xi0NP
+
+    help-steps/pre: autodetect non-interactive when stdout is not a TTY
+
+commit 2c5a1f856c399b16f2a6d93edd2f3e3e330e6b41
+Merge: af91c8fba e7e328356
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 18:52:51 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit e7e32835664bfaa64d4aa6fdce9e29345eda08d1
+Merge: af91c8fba 5a81878c2
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Mon May 18 18:50:00 2026 -0400
+
+    Merge pull request #39 from org-ai-assisted/claude/fix-ansible-fetch-relative-path
+
+    automated_builder: fix artifact upload path + correct ansible.cfg INI key
+
+commit af91c8fbaf4af4ecff99255b4bf4586bee05145d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 18:48:48 2026 -0400
+
+    .
+
+commit aee691ccf6ac0e28d61eb40ef78c68472f5910b9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 18:46:43 2026 -0400
+
+    .
+
+commit 5a81878c22562139b49c67a7e3b18d8e4a66b837
+Author: Claude <noreply@anthropic.com>
+Date:   Mon May 18 22:46:18 2026 +0000
+
+    ansible.cfg: correct INI key from result_format to callback_result_format
+
+    PR #35 migrated from the removed `community.general.yaml` stdout
+    callback to `ansible.builtin.default` and set:
+
+        result_format = yaml
+
+    That key was taken verbatim from ansible's own deprecation message
+    ("superseded by the option `result_format=yaml`"). The message gives
+    the option name; the corresponding INI key is
+    `callback_result_format` (see ansible-core
+    `lib/ansible/plugins/doc_fragments/result_format_callback.py`):
+
+        set_via:
+          env:
+            - name: ANSIBLE_CALLBACK_RESULT_FORMAT
+          ini:
+            - key: callback_result_format
+              section: defaults
+        choices: [json, yaml]
+        default: json
+
+    Ansible silently drops unknown INI keys. So `result_format = yaml`
+    did nothing -- the format fell back to the default `json`, and every
+    failed task in CI rendered as a single-line JSON blob with literal
+    "\n" escapes (the "Notice: -debug\n++ test -o xtrace\n..." mess in
+    the runner log).
+
+    Reproduced and fixed locally with ansible-core 2.19.10 against this
+    exact ansible.cfg + a contrived task that writes multi-line stderr:
+
+      Before (result_format = yaml, silently ignored):
+        fatal: [localhost]: FAILED! => {"...", "stderr":
+          "+ printf %s\\n line one\nline one\n+ printf %s\\n ++ next
+          line\n++ next line\n+ printf %s\\n ::group::block\n
+          ::group::block\n...", ...}
+
+      After (callback_result_format = yaml):
+        stderr: |-
+            + printf %s\n line one
+            line one
+            + printf %s\n ++ next line
+            ++ next line
+            + printf %s\n ::group::block
+            ::group::block
+            ...
+
+    Side benefit: `::group::` / `::endgroup::` tokens emitted by
+    build_vms_from_tag.sh's on_exit tail dump now land on their own
+    lines, so GitHub Actions log folding for the 200-line tail finally
+    works.
+
+    Comment block rewritten to record the option-name-vs-INI-key
+    distinction so the next person looking at this file doesn't trip
+    over the same conflation.
+
+commit 5f9ac8a8b8826f4dcc1456aef921afc5341f2654
+Author: Claude <noreply@anthropic.com>
+Date:   Mon May 18 22:34:42 2026 +0000
+
+    help-steps/pre: autodetect non-interactive when stdout is not a TTY
+
+    When a script that sources pre is invoked via command substitution
+    ('result="$(./script)"'), stdout becomes a pipe but stdin remains the
+    caller's TTY. The previous interactive/non-interactive test in
+    exception_handler_process_shared only checked '[ -t 0 ]', so the menu
+    loop would print its 'Answer? ' prompt to the captured-and-invisible
+    stdout and then block on 'read' against the TTY - a silent hang.
+
+    Two changes:
+
+    1. Near the existing CI=true autodetect, force
+       dist_build_non_interactive=true whenever '[ ! -t 1 ]'. Guarded by
+       '[ -z "${dist_build_non_interactive:-}" ]' so a caller that
+       intentionally wants interactive behavior with non-TTY stdout
+       (e.g. a TUI wrapper mirroring the menu elsewhere) can opt in by
+       pre-setting the variable.
+
+    2. Tighten the inner menu-loop check from '[ -t 0 ]' to
+       '[ -t 0 ] && [ -t 1 ]' (and update the informational messages
+       accordingly) so any path that bypasses the global flag still
+       refuses to prompt when stdout cannot reach the user.
+
+    https://claude.ai/code/session_01UHGcz5FWwHPD8FZLD5eDhK
+
+commit ec067c6cf4e2d6c8d8da47aed96e4e2772d4c774
+Author: Claude <noreply@anthropic.com>
+Date:   Mon May 18 22:33:51 2026 +0000
+
+    handle_artifacts.sh: resolve logs_dir to absolute path before fetch
+
+    `actions/upload-artifact` has been silently warning "No files were found
+    with the provided path: ./automated_builder/logs/" on every CI run that
+    reaches the artifact step. `handle_artifacts.sh` reported
+    `changed=2` for both fetch tasks and exited 0 -- the files just weren't
+    where the upload step looks for them.
+
+    Root cause: `ansible.builtin.fetch` resolves a relative `dest` via
+    `DataLoader.path_dwim`, which joins against the playbook's basedir, not
+    ansible-playbook's cwd. The fetch action plugin does this verbatim:
+
+        if flat:
+            ...
+            if not dest.startswith("/"):
+                dest = self._loader.path_dwim(dest)
+
+    and `path_dwim` joins `os.path.join(self._basedir, given)`. For
+    `automated_builder/gather_build_logs.yml`, basedir is
+    `<repo>/automated_builder/`. So our
+    `dest: "{{ logs_dir }}/install_source.log"` with
+    `logs_dir="./automated_builder/logs"` resolved to
+    `<repo>/automated_builder/automated_builder/logs/install_source.log`
+    (the `automated_builder` segment is doubled) -- not what `mkdir -p` in
+    this script and `actions/upload-artifact` in the workflow YAML look at.
+
+    The earlier `011cef1` fix corrected `./logs/` -> `./automated_builder/logs/`,
+    which was right for the cwd-relative interpretation but wrong for the
+    basedir-relative one fetch actually uses. With segments that don't
+    collide with the basedir, the bug doesn't surface; with
+    `automated_builder` colliding, the path doubles.
+
+    Reproduced locally with ansible-core 2.21 against the same layout
+    (playbook in `automated_builder/`, cwd at repo root, relative
+    `-e logs_dir=...`): file lands at the doubled path. After this change,
+    file lands at `automated_builder/logs/install_source.log` where
+    upload-artifact finds it.
+
+    Fix: `realpath` after `mkdir -p` and hand fetch the absolute path. The
+    on-disk variable name stays `automated_builder_logs_dir` (relative, so
+    it still matches the workflow YAML upload-artifact path); only the
+    ansible-side `logs_dir` extra-var becomes absolute.
+
+commit 451f6db7e665b1e389b66a17e149f49be7c1a06f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 18:17:03 2026 -0400
+
+    .
+
+commit 2b9afc91cd49a1fa1e0c8b81cb061842af67fe5d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 18:10:40 2026 -0400
+
+    .
+
+commit 4ae25da78a284da7eab47bca85519f5eb13b8c13
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 18:08:30 2026 -0400
+
+    .
+
+commit c91fa02019e2ba86846e45ef46ed0197c3acb522
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 18 21:58:36 2026 +0000
+
+    bumped changelog version
+
 commit 401bd49068626596eff50a23039ee5beff6f16a7
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Mon May 18 17:53:13 2026 -0400
@@ -16685,7 +16931,7 @@ Date:   Thu Jul 3 10:51:44 2025 -0400
 
     Merge pull request #13 from ArrayBolt3/arraybolt3/docker
 
-    Refactor derivative-maker-docker, break out update code into derivati…
+    Refactor derivative-maker-docker, break out update code into derivati_
 
 commit 40d7539265bbcca7220a0c5815b37ed3a1f04b95
 Author: Aaron Rainbolt <arraybolt3@ubuntu.com>
@@ -63204,7 +63450,7 @@ Date:   Sun Mar 8 09:13:51 2020 -0400
 
     again set VirtualBox Graphics Controller to VMSVGA
 
-    "VirtualBox → click a VM → Settings → Display → Graphics Controller → VMSVGA → OK"
+    "VirtualBox _ click a VM _ Settings _ Display _ Graphics Controller _ VMSVGA _ OK"
 
     Quote https://www.virtualbox.org/manual/ch03.html
 
