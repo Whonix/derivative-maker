@@ -29,9 +29,8 @@ cat -- "/home/$user_name/pbuilder_config_file"
 
 source "/home/$user_name/pbuilder_config_file"
 
-## TODO: Environment apt_unattended_opts expected to be passed but missing?
 ## Debugging.
-true "apt_unattended_opts: ${apt_unattended_opts:-}"
+true "apt_unattended_opts: $apt_unattended_opts"
 
 mapfile -t DIST_APTGETOPT <<< "$DIST_APTGETOPT_SERIALIZED"
 printf "%s\n" "DIST_APTGETOPT: ${DIST_APTGETOPT[*]}"
@@ -85,10 +84,10 @@ fi
 ## Required for usrmerge systemd unit files folder /usr/lib/system/system.
 #debhelper_version="$(dpkg-query --show --showformat='${Version}' "debhelper")"
 #if ! dpkg --compare-versions "$debhelper_version" ge "13.11.8~bpo12+1"; then
-#  apt-get "${DIST_APTGETOPT[@]}" ${apt_unattended_opts:-} --yes --target-release=bookworm-backports install debhelper
+#  apt-get "${DIST_APTGETOPT[@]}" $apt_unattended_opts --yes --target-release=bookworm-backports install debhelper
 #fi
 
-apt-get "${DIST_APTGETOPT[@]}" ${apt_unattended_opts:-} --yes dist-upgrade
+apt-get "${DIST_APTGETOPT[@]}" $apt_unattended_opts --yes dist-upgrade
 
 adduser --quiet --group --system --home "/home/$user_name" "$user_name"
 
