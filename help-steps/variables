@@ -1545,17 +1545,17 @@ if [ ! "${variables_sudo_to_root_finalized:-}" = "true" ]; then
       else
          sudo_preserve_env_list+=",$env_vars_var_keep_item"
       fi
-      if [ "$env_vars_var_keep_item" = "APTGETOPT_SERIALIZED" ]; then
+      if [ "$env_vars_var_keep_item" = "DIST_APTGETOPT_SERIALIZED" ]; then
          found=true
       fi
    done
 
    if ! [ "${found:-}" = "true" ]; then
-      error "env_vars_var_keep_item variable APTGETOPT_SERIALIZED not found!"
+      error "env_vars_var_keep_item variable DIST_APTGETOPT_SERIALIZED not found!"
    fi
    unset found
    if [ -z "$env_vars_var_keep_item" ]; then
-      error "env_vars_var_keep_item variable APTGETOPT_SERIALIZED is empty!"
+      error "env_vars_var_keep_item variable DIST_APTGETOPT_SERIALIZED is empty!"
    fi
 
    SUDO_TO_ROOT+=" "
