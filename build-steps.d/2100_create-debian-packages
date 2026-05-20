@@ -242,14 +242,15 @@ is not included in available_architectures_for_download_only_list: $available_ar
 
          $SUDO_TO_ROOT test -d "${base_folder}"
          $SUDO_TO_ROOT "$dist_source_help_steps_folder/umount_kill.sh" "${base_folder}"
+         if_no_pbuilder_base_folder=""
       else
          base_folder="$binary_build_folder_dist/no-pbuilder/base"
          ## Not needed. For completeness sake. Just in case.
          cow_folder="$binary_build_folder_dist/no-pbuilder/cow"
-
          if_no_pbuilder_base_folder="${base_folder}"
-         export if_no_pbuilder_base_folder
       fi
+      ## TODO: if_no_pbuilder_base_folder still useful?
+      export if_no_pbuilder_base_folder
 
       $SUDO_TO_ROOT mkdir --parents -- "${base_folder}/var/cache/derivative-maker/temporary-repository"
 

@@ -55,6 +55,8 @@ local_dependencies() {
    fi
 
    if [ "${make_use_cowbuilder:-}" = "true" ]; then
+      ## TODO: not using set_cowbuilder_folders because...
+      ##       ${host_architecture} versus ${dist_build_multiarch_package_item}
       cow_folder="/var/cache/pbuilder/cow.cow_${host_architecture}"
       base_folder="/var/cache/pbuilder/base.cow_${host_architecture}"
       if ! test -d "$cow_folder" ; then
