@@ -9,7 +9,7 @@ set -o errtrace
 ## Source help-steps/pre for xtrace_off / xtrace_restore and error-handler
 ## plumbing. Opt into fail-fast mode so pre keeps errexit on.
 export dist_build_auto_retry=0
-export dist_build_non_interactive=true
+export dist_build_interactive=false
 source ./help-steps/pre
 source ./automated_builder/scripts/functions.bash
 

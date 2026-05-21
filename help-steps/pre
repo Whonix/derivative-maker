@@ -66,23 +66,51 @@ ${BASH_SOURCE[0]} INFO: Disabling verbose/debug output (xtrace) (set +x). For mo
    fi
 fi
 
+## Resolve build interactivity once, with precedence:
+##   0. retry-max 0:   fail-fast, always non-interactive (the continue/retry
+##                     menu cannot resume under errexit anyway).
+##   1. command line:  --interactive true|false
+##   2. environment:   dist_build_interactive (export before sourcing pre)
+##   3. auto-detect:   interactive only with a TTY on both stdin and stdout
+##                     and not under CI; otherwise non-interactive.
+## help-steps/parse-cmd is the authoritative validator of the --interactive
+## value; this early scan (mirroring the --debug handling above) makes the
+## value available before parse-cmd runs, e.g. for the error-handler menu.
+## Sub-steps that source pre without the flag inherit the exported value.
+dist_build_interactive_cli=""
+dist_build_interactive_prev=""
+for dist_build_interactive_arg in "${@}"; do
+   if [ "${dist_build_interactive_prev}" = "--interactive" ]; then
+      dist_build_interactive_cli="${dist_build_interactive_arg}"
+   fi
+   dist_build_interactive_prev="${dist_build_interactive_arg}"
+done
+unset dist_build_interactive_prev dist_build_interactive_arg
+
+if [ "${dist_build_auto_retry:-}" = "0" ]; then
+   dist_build_interactive=false
+   true "${BASH_SOURCE[0]} INFO: retry-max 0 (fail-fast); dist_build_interactive=false (non-interactive)."
+elif [ -n "${dist_build_interactive_cli}" ]; then
+   dist_build_interactive="${dist_build_interactive_cli}"
+   true "${BASH_SOURCE[0]} INFO: dist_build_interactive from command line: ${dist_build_interactive}"
+elif [ -n "${dist_build_interactive:-}" ]; then
+   true "${BASH_SOURCE[0]} INFO: dist_build_interactive from environment: ${dist_build_interactive}"
+elif [ "${CI:-}" = "true" ]; then
+   dist_build_interactive=false
+   true "${BASH_SOURCE[0]} INFO: CI detected; dist_build_interactive=false (non-interactive)."
+elif [ ! -t 0 ] || [ ! -t 1 ]; then
+   dist_build_interactive=false
+   true "${BASH_SOURCE[0]} INFO: stdin or stdout is not a TTY; dist_build_interactive=false (non-interactive)."
+else
+   dist_build_interactive=true
+   true "${BASH_SOURCE[0]} INFO: TTY on stdin and stdout and not CI; dist_build_interactive=true (interactive)."
+fi
+unset dist_build_interactive_cli
+export dist_build_interactive
+
 if [ "${CI:-}" = "true" ]; then
    true "${BASH_SOURCE[0]} INFO: CI detected."
-   export dist_build_non_interactive=true
    [ -n "${rsync_cmd:-}" ] || rsync_cmd="echo simulate-only rsync"
-fi
-
-## Inside command substitution ($(...)), or when stdout is piped /
-## redirected, the interactive menu's prompt cannot reach the user -
-## stdout is captured, so 'read -p' would block on the TTY with an
-## invisible prompt. Force non-interactive in that case. A caller
-## that legitimately wants interactive behavior with a non-TTY stdout
-## (e.g. a wrapper that mirrors the menu elsewhere) can opt in by
-## exporting 'dist_build_non_interactive=false' before sourcing pre;
-## the '-z' guard preserves that override.
-if [ -z "${dist_build_non_interactive:-}" ] && [ ! -t 1 ]; then
-   true "${BASH_SOURCE[0]} INFO: stdout is not a TTY; assuming non-interactive."
-   export dist_build_non_interactive=true
 fi
 
 ## The error-handler trap functions below pass "${args[@]}" to the cleanup
@@ -283,7 +311,7 @@ ${cyan}${bold}############################################################${rese
       answer=""
       ## Only ERR-family signal types reach this function (see note above),
       ## so no separate "non ERR signal" branch is needed here.
-      if [ "${dist_build_non_interactive:-}" = "true" ]; then
+      if [ "${dist_build_interactive}" = "false" ]; then
          $output_cmd "INFO: using non-interactive error handler."
          break
       else
@@ -358,8 +386,8 @@ exception_handler_maybe_exit() {
       rm --force "/run/package_manager_lock"
    fi
    if [ "${ignore_error:-}" = "true" ]; then
-      $output_cmd "INFO: dist_build_non_interactive: $dist_build_non_interactive"
-      if [ "${dist_build_non_interactive:-}" = "true" ]; then
+      $output_cmd "INFO: dist_build_interactive: ${dist_build_interactive}"
+      if [ "${dist_build_interactive}" = "false" ]; then
          $output_cmd "INFO: using non-interactive error handler."
       else
          $output_cmd "${red}${bold}You have chosen to ignore this error. Your build may be unstable!
@@ -489,21 +517,12 @@ output_cmd_set
 exception_handler_setup "exception_handler_general" ERR INT TERM
 
 ## 'set +e' is only needed when the ERR trap wants to RESUME execution
-## after a failure - i.e. the retry or the interactive "continue/retry"
-## paths in exception_handler_process_shared. Under 'set -o errexit',
-## bash still runs the ERR trap, but exits the script after the trap
-## regardless of what the trap does, so retry cannot put the script
-## back on its feet.
-##
-## In fail-fast mode (auto_retry=0, non_interactive=true), the trap
-## always ends with an explicit 'exit 1' - errexit is redundant but
-## harmless. Keeping errexit ON in that mode lets callers (such as
-## the automated_builder CI scripts) source this file without losing
-## their own fail-on-error behavior. Callers opt in by exporting both
-## flags before sourcing pre.
-if [ "${dist_build_auto_retry:-}" = "0" ] \
-   && [ "${dist_build_non_interactive:-}" = "true" ]; then
-   true "${BASH_SOURCE[0]} INFO: fail-fast mode; keeping errexit on."
+## after a failure - i.e. the auto-retry or the interactive "continue/retry"
+## paths in exception_handler_process_shared. Under 'set -o errexit', bash
+## still runs the ERR trap but exits the script afterwards regardless, so
+## neither path can put the script back on its feet.
+if [ "${dist_build_auto_retry:-}" = "0" ]; then
+   true "${BASH_SOURCE[0]} INFO: fail-fast mode (retry-max 0); keeping errexit on."
 else
    set +o errexit
 fi
