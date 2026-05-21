@@ -202,6 +202,7 @@ Configuration Files:
 
 Miscellaneous:
   --unsafe-io [true|false]        : Toggle unsafe IO options (default: false).
+  --interactive [true|false]      : Force interactive (continue/retry menus) or non-interactive mode. Default: auto-detect (TTY on stdin and stdout, and not CI).
   --freedom [true|false]          : Choose between pure or impure builds (required for host builds).
   --tb [none|closed|open]         : Configure Tor Browser installation options (default: open).
   none: Do not install Tor Browser.
@@ -664,6 +665,21 @@ dist_build_one_parse_cmd() {
                   true "${cyan}INFO: Using unsafe io.${reset}"
                else
                   printf '%s\n' "${red}${bold}ERROR: supported options for --unsafe-io are 'true' or 'false'.${reset}"
+                  exit 1
+               fi
+               shift 2
+               ;;
+           --interactive)
+               if [ "${2:-}" = "true" ]; then
+                  dist_build_interactive="true"
+                  export dist_build_interactive
+                  true "${cyan}INFO: Interactive mode enabled.${reset}"
+               elif [ "${2:-}" = "false" ]; then
+                  dist_build_interactive="false"
+                  export dist_build_interactive
+                  true "${cyan}INFO: Interactive mode disabled.${reset}"
+               else
+                  printf '%s\n' "${red}${bold}ERROR: supported options for --interactive are 'true' or 'false'.${reset}"
                   exit 1
                fi
                shift 2
