@@ -1,3 +1,134 @@
+commit 64a922868530aaf12c73c9f4a7def3e3e9cd4bc1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 21 18:45:11 2026 -0400
+
+    .
+
+commit bd1944959dcfa07bf4d792a371c752458f1ed8b3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 21 18:43:06 2026 -0400
+
+    .
+
+commit f12ddd123e0a8f787697859e9a0558b19843b0d7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 21 18:11:24 2026 -0400
+
+    .
+
+commit 7357d3c31002806bb7ead7619d24ac4f775a76f8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 21 13:26:57 2026 -0400
+
+    .
+
+commit 91318c66026da283e78ab7e8884d947d8aab49ba
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 21 12:50:08 2026 -0400
+
+    .
+
+commit 25f705598e550bea0f5bb426b4a9f8f55f1ab7e2
+Merge: d6a547a3a 989d38867
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 21 12:10:50 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit 989d38867c056590c73c18e5c0f0a2d1c637abcf
+Merge: d6a547a3a afb0c4424
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Thu May 21 10:26:27 2026 -0400
+
+    Merge pull request #43 from org-ai-assisted/claude/refactor-apt-variables-MPyww
+
+    apt_unattended_opts: export so it reaches cowbuilder chroot scripts
+
+commit afb0c442419bf8d4a40c2dd9c11f8fbc4819134c
+Author: Claude <noreply@anthropic.com>
+Date:   Thu May 21 00:21:11 2026 +0000
+
+    Add --interactive true|false; replace dist_build_non_interactive with dist_build_interactive
+
+    Introduce a single positive source of truth for build interactivity,
+    dist_build_interactive, resolved once in help-steps/pre with precedence:
+    command line (--interactive true|false) > environment > auto-detect
+    (interactive only with a TTY on both stdin and stdout and not under CI).
+
+    - help-steps/parse-cmd: new --interactive true|false option (authoritative
+      validator) plus a --help entry.
+    - help-steps/pre: early CLI scan + environment + auto-detect resolver; flip the
+      three menu consumers from 'non_interactive = true' to 'interactive = false'.
+    - automated_builder/scripts/*: export dist_build_interactive=false.
+
+    Scope is the build script's own continue/retry menus only; the apt/debconf
+    knobs (dist_build_unattended_pkg_install, DEBIAN_FRONTEND) are unchanged.
+
+    https://claude.ai/code/session_015NXhWb2m9F7wnHKtkedtKS
+
+commit 93a8443c4bb3710e01a525be654252e739539ad5
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 20 23:23:51 2026 +0000
+
+    apt_unattended_opts: export so it reaches cowbuilder chroot scripts
+
+    apt_unattended_opts was set but never exported in
+    buildconfig.d/30_upgrade_build_machine.conf, so 'sudo --preserve-env' and
+    cowbuilder could not forward it into the chroot. help-steps/repo_download_chroot_script
+    (set -o nounset) references bare $apt_unattended_opts and crashed with
+    "unbound variable" whenever that path ran (special-package download in
+    2100_create-debian-packages).
+
+    Export the variable so it propagates like DIST_APTGETOPT_SERIALIZED. Remove the
+    ${apt_unattended_opts:-} guards and the stale TODO in pbuilder-chroot-script-main;
+    references stay bare on purpose so 'set -o nounset' fails loudly if the export
+    ever regresses.
+
+    https://claude.ai/code/session_015NXhWb2m9F7wnHKtkedtKS
+
+commit d6a547a3a22178fb00e19c76679867da7da48b86
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 18:38:37 2026 -0400
+
+    .
+
+commit 86d24f59abea35d0c45c1590df361e130675e210
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 17:52:41 2026 -0400
+
+    fix
+
+commit 3812ca99a3127bc51b5b4db707d6837497bb998f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 17:49:04 2026 -0400
+
+    .
+
+commit ad3060e468f586722304a450ad1b695ced8562e4
+Merge: bf373dc6c 959c36645
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 17:16:09 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/refactor-apt-variables-MPyww'
+
+commit bf373dc6cfd95adeca5c07dd87cb609c7eb87f88
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 17:09:42 2026 -0400
+
+    .
+
+commit a584d155c3301a2a78ada8fee5fc4481079b9af3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 16:58:58 2026 -0400
+
+    .
+
+commit 59253fbed1c2736710b6d459923c3e548b9af0eb
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 20 16:57:45 2026 -0400
+
+    genmkfile uch
+
 commit 7350419d0a054a130690ee458350f5528fe871e7
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Wed May 20 16:56:21 2026 -0400
@@ -9,6 +140,30 @@ Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Wed May 20 16:53:22 2026 -0400
 
     .
+
+commit 959c36645740bb95597e9d8cab8053fef9a2bb2f
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 20 20:27:54 2026 +0000
+
+    Rename APTGETOPT variables to DIST_APTGETOPT to avoid pbuilder collision
+
+    pbuilder/cowbuilder define their own array variable APTGETOPT (see
+    pbuilderrc), which is sourced inside the cowbuilder chroot scripts
+    (help-steps/pbuilder-chroot-script-*) and collides with derivative-maker's
+    identically named variable. Rename the whole family (APTGETOPT,
+    APTGETOPT_SERIALIZED, APTGETOPT_WITHOUT_APT_CACHE, APTGETOPT_OLD) to
+    DIST_APTGETOPT* throughout.
+
+    DIST_APTGETOPT_SERIALIZED is an environment-variable contract shared with
+    the genmkfile, usability-misc and developer-meta-files packages, which are
+    renamed in lockstep.
+
+    The string variables apt_sourcelist_empty / apt_sourceparts /
+    apt_unattended_opts are intentionally left as-is: they are context-specific
+    apt option overrides (and a conditional toggle) that cannot be folded into
+    the global DIST_APTGETOPT array.
+
+    https://claude.ai/code/session_015NXhWb2m9F7wnHKtkedtKS
 
 commit 93e26082f5b17bbde2bf4fbd00492d64c84b08f1
 Author: Patrick Schleizer <adrelanos@whonix.org>
