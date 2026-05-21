@@ -11,12 +11,12 @@ pwd
 
 ## Source help-steps/pre for xtrace_off / xtrace_restore and error-handler
 ## plumbing. Opt into fail-fast mode so pre keeps errexit on:
-##   - dist_build_auto_retry=0        no automatic retry on failure
-##   - dist_build_non_interactive=true  no interactive "continue/retry" menu
+##   - dist_build_auto_retry=0          no automatic retry on failure
+##   - dist_build_interactive=false     no interactive "continue/retry" menu
 ## Under those flags, pre's ERR trap always ends with an explicit 'exit 1',
 ## so the caller's 'set -o errexit' above is preserved.
 export dist_build_auto_retry=0
-export dist_build_non_interactive=true
+export dist_build_interactive=false
 
 source ./help-steps/pre
 source ./automated_builder/scripts/functions.bash
