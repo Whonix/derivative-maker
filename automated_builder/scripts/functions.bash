@@ -11,8 +11,8 @@ set -o errtrace
 
 export ANSIBLE_CONFIG="${PWD}/automated_builder/ansible.cfg"
 
-## Duplicated in .github/workflows/run_automated_builder.yml
-## (actions/upload-artifact path:); keep the two in sync.
+## Duplicated in .github/workflows/local-test-build.yml
+## (actions/upload-artifact 'path:'); keep the two in sync.
 automated_builder_logs_dir="./automated_builder/logs"
 
 decrypt_vault() {
