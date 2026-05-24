@@ -670,6 +670,7 @@ dist_build_one_parse_cmd() {
                shift 2
                ;;
            --interactive)
+               ## Also implemented in help-steps/pre, as this code runs too late.
                if [ "${2:-}" = "true" ]; then
                   dist_build_interactive="true"
                   export dist_build_interactive
