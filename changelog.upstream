@@ -1,3 +1,86 @@
+commit f6185b2916278c61a3785d4ad14a2d7ac47953aa
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 24 15:13:03 2026 -0400
+
+    .
+
+commit 843c5592f5b1c00e647b2f3bf956e021c2ecb3fd
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 24 15:06:01 2026 -0400
+
+    .
+
+commit 378c79f82caa355ca036aa939e603327fa2a379d
+Merge: 3904d8cac 03c199557
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 24 15:05:36 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit 3904d8cac1fc52c1d1214b26ea5e20a9302cd5cd
+Merge: 08e1344bb 3adcb49a9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 24 14:33:02 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit 03c1995578325583a6cdd4b04f4a3b86b211c24a
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun May 24 12:26:38 2026 -0400
+
+    comment
+
+commit 08e1344bba82f464d56719ec2898c0996a3859b9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat May 23 16:26:31 2026 -0400
+
+    .
+
+commit 3adcb49a90727e93275c43a28a246ead48136f5e
+Merge: 0b2408e55 1f962d514
+Author: assisted-by-ai (Bot Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Sat May 23 04:00:08 2026 -0400
+
+    Merge pull request #44 from org-ai-assisted/claude/practical-cerf-aDPXd
+
+    automated_builder: readable, reliable build-failure logs in CI
+
+commit 1f962d5141f57ccf5aa403a39deb9e413562abc6
+Author: Claude <noreply@anthropic.com>
+Date:   Fri May 22 21:21:48 2026 +0000
+
+    automated_builder: readable, reliable build-failure logs in CI
+
+    Surface a failed build's logs readably in the GitHub Actions web log and
+    guarantee the logs artifact is produced - without touching the build, the
+    security gate, or the canonical-repo guard.
+
+    callback_result_format=yaml alone does NOT fix "all logs on one line":
+    real build output (git/apt/dpkg progress) contains lone carriage returns,
+    which PyYAML cannot place in a YAML block scalar, so a failed task's stdout
+    collapses to one double-quoted line with \r/\n escapes. Reproduced on
+    ansible-core 2.16.3 (CI's apt version) and 2.19.10.
+
+    - build_vms_from_commit.yml / build_vms_from_tag.yml: run the build with
+      register + ignore_errors + no_log so ansible does not print the raw,
+      CR-laden copy; a debug task then prints a cleaned tail
+      (stdout_lines[-200:] | map regex_replace '\r' | join) as a multi-line
+      block scalar - a single copy, no duplication - and a fail task
+      propagates the failure.
+    - gather_build_logs.yml: fetch with fail_on_missing:false so a partially
+      failed build still uploads whatever logs exist.
+    - handle_artifacts.sh: always write run-info.txt so the logs dir is never
+      empty and actions/upload-artifact always produces a downloadable artifact.
+    - functions.bash: fix a stale workflow filename in a comment.
+
+    git_sanity_test (missing-tag) failures are expected and unchanged.
+
+commit 0b2408e559e400bd6b1419a0c7f997948303ee7b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 21 22:54:07 2026 +0000
+
+    bumped changelog version
+
 commit 64a922868530aaf12c73c9f4a7def3e3e9cd4bc1
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Thu May 21 18:45:11 2026 -0400
