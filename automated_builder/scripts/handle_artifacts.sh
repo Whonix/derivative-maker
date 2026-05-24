@@ -27,6 +27,21 @@ export ANSIBLE_HOST_KEY_CHECKING=False
 ## "remote VPS unreachable" failure path.
 mkdir -p -- "${automated_builder_logs_dir}"
 
+## Guarantee the logs dir holds at least one file so upload-artifact
+## always produces a downloadable artifact - even when the VPS log
+## fetch below gathers nothing (build/log-fetch failed, or the droplet
+## is already gone). The run metadata is itself useful when triaging a
+## failed build. GIT_REPO / REF_* / GITHUB_EVENT_NAME come from the
+## workflow's job-level env.
+{
+  printf '%s\n'        "automated_builder run info"
+  printf 'date_utc=%s\n' "$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'repo=%s\n'     "${GIT_REPO:-unknown}"
+  printf 'ref_name=%s\n' "${REF_NAME:-unknown}"
+  printf 'ref_type=%s\n' "${REF_TYPE:-unknown}"
+  printf 'event=%s\n'    "${GITHUB_EVENT_NAME:-unknown}"
+} > "${automated_builder_logs_dir}/run-info.txt"
+
 ## ansible.builtin.fetch resolves a relative 'dest' via
 ## DataLoader.path_dwim, which joins against the playbook's basedir
 ## (here automated_builder/) not ansible-playbook's cwd. A relative
