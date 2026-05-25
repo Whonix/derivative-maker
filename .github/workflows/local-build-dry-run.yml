@@ -52,10 +52,13 @@ jobs:
 
     timeout-minutes: 25
 
-    ## Steps run inside a privileged debian:trixie with systemd as
-    ## PID 1 so 'systemctl start approx' (the build's apt cache)
-    ## works. The host (ubuntu-latest) only hosts docker; a plain
-    ## 'container:' block does not boot systemd inside.
+    ## Subsequent steps run inside a privileged debian:trixie with
+    ## systemd as PID 1 so 'systemctl start approx' (the build's apt
+    ## cache) works. The host (ubuntu-latest) only hosts docker; a
+    ## plain 'container:' block does not boot systemd inside. The
+    ## launch-systemd-container composite action bakes the image and
+    ## waits for systemd to become ready; subsequent steps
+    ## docker-exec into the container with --workdir /workspace.
     steps:
       - name: Checkout repository (no submodules yet)
         ## submodules: false so the next steps can re-target each
@@ -86,10 +89,20 @@ jobs:
         run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
 
       - name: Start systemd-enabled Debian container
-        run: ./docker/dry-run-start-container dryrun "${DEBIAN_IMAGE}"
+        ## Composite action pinned to the introducing commit on the
+        ## developer-meta-files PR branch; re-pin to a master SHA + tag
+        ## once that PR merges (the action itself does not change here).
+        uses: org-ai-assisted/developer-meta-files/.github/actions/launch-systemd-container@3564650adf3b650b1b6582178ef9f1e8281f998d
+        with:
+          name: dryrun
+          image: ${{ env.DEBIAN_IMAGE }}
+          wait-seconds: '90'
 
       - name: Run dry-run inside container
-        run: docker exec --env CI=true dryrun ./ci/dry-run
+        ## --workdir /workspace: the action mounts ${{ github.workspace }}
+        ## at /workspace inside the container; the dry-run script is
+        ## referenced via './ci/dry-run' and needs PWD to match.
+        run: docker exec --env CI=true --workdir /workspace dryrun ./ci/dry-run
 
       - name: Tear down container
         if: always()
