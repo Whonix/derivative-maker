@@ -18,4 +18,4 @@ target_user=builder
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/../.."
 
-./help-steps/run-as-user --chown /work -- "${target_user}" ./help-steps/sign-and-tag
+./help-steps/run-as-user --chown /workspace -- "${target_user}" ./help-steps/sign-and-tag
