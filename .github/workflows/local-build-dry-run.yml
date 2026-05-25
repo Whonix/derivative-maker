@@ -89,10 +89,7 @@ jobs:
         run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
 
       - name: Start systemd-enabled Debian container
-        ## Composite action pinned to the introducing commit on the
-        ## developer-meta-files PR branch; re-pin to a master SHA + tag
-        ## once that PR merges (the action itself does not change here).
-        uses: org-ai-assisted/developer-meta-files/.github/actions/launch-systemd-container@3564650adf3b650b1b6582178ef9f1e8281f998d
+        uses: org-ai-assisted/developer-meta-files/.github/actions/launch-systemd-container@master
         with:
           name: dryrun
           image: ${{ env.DEBIAN_IMAGE }}
