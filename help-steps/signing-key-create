@@ -90,80 +90,68 @@ signify_key_create() {
    true "INFO: END of ${FUNCNAME[0]}"
 }
 
-## OpenPGP policy persistent setup. Writes to
-## ${openpgp_policy_dir_user} (highest-precedence entry of
-## ${dist_build_config_dirs_list}); lower-precedence entries can be
-## admin-provisioned outside this script. Idempotent.
-##
-## Same flow used by both end-user developer machines and CI:
-## the local maintainer's persistent OpenPGP cert (the one minted
-## above by gpg_key_create against ${DEBEMAIL}) is always
-## authorized as project-maintainer in the user-level policy file.
+## OpenPGP policy persistent setup. Derives an authorized policy from
+## the shipped project policy plus the local maintainer's cert in
+## ${binary_build_folder_dist}/sq-git-temp, then writes
+## ${openpgp_policy_file_user} only when the derivation produced a
+## real change AND no user-provided policy already exists (no
+## clobber). The scratch cert / policy under sq-git-temp are
+## reproducible on every run; persisting them under ~/buildconfig.d
+## would duplicate data that already lives inline in the policy's
+## keyring.
 openpgp_policy_setup() {
+   local sq_git_temp_dir cert_for_authorize cert_temp_file policy_temp_file
+
    if [ ! -r "${openpgp_policy_file_project}" ]; then
       true "INFO: ${openpgp_policy_file_project} not present; skipping openpgp-policy setup"
       return 0
    fi
 
-   ## 0700: defense-in-depth; both files are public/non-secret.
-   mkdir --parents -- "${openpgp_policy_dir_user}"
-   chmod -- 0700 "${openpgp_policy_dir_user}"
+   sq_git_temp_dir="${binary_build_folder_dist}/sq-git-temp"
+   mkdir --parents -- "${sq_git_temp_dir}"
+   chmod -- 0700 "${sq_git_temp_dir}"
 
-   ## Cert export. Email-scoped: --all would authorize every cert
-   ## in the local store (test, rotated, unrelated) as
-   ## project-maintainer; in Qubes split-gpg-2 the cert store is
-   ## shared and not curated.
+   ## Email-scoped (vs --all): --all would authorize every cert in
+   ## the local store (test, rotated, unrelated) as project-
+   ## maintainer; in Qubes split-gpg-2 the cert store is shared and
+   ## not curated.
    if [ -n "${openpgp_cert_file_resolved}" ]; then
-      true "INFO: ${openpgp_cert_file_resolved} already exists; preserving. Delete to force re-export."
+      true "INFO: using pre-provisioned cert ${openpgp_cert_file_resolved}"
+      cert_for_authorize="${openpgp_cert_file_resolved}"
    else
-      true "INFO: exporting local maintainer cert (DEBEMAIL=${DEBEMAIL}) -> ${openpgp_cert_file_user}"
-      if test -f "${openpgp_cert_file_user}"; then
-         error "BUG: Refusing to overwrite already existing openpgp_cert_file_user '${openpgp_cert_file_user}'!"
-         ## Make sure we really exit.
-         exit 1
-      fi
-      sq cert export --cert-email "${DEBEMAIL}" | sponge -- "${openpgp_cert_file_user}"
-      chmod -- 0600 "${openpgp_cert_file_user}"
-      openpgp_cert_file_resolved="${openpgp_cert_file_user}"
+      cert_temp_file="${sq_git_temp_dir}/openpgp-cert-public-temp.pem"
+      true "INFO: exporting local maintainer cert (DEBEMAIL=${DEBEMAIL}) -> ${cert_temp_file}"
+      sq cert export --cert-email "${DEBEMAIL}" | sponge -- "${cert_temp_file}"
+      chmod -- 0600 "${cert_temp_file}"
+      cert_for_authorize="${cert_temp_file}"
    fi
 
-   ## Ensure the USER-LEVEL policy file (highest-priority entry
-   ## in the search path) exists and has the local maintainer cert
-   ## authorized.
-   ##
-   ## The previous logic returned early when ANY policy was
-   ## resolved (project / etc / user) - the project policy always
-   ## exists, so the user-level override was never written and the
-   ## local cert was never authorized in any policy. The downstream
-   ## sq-git verification then failed because the resolved policy did
-   ## not include the just-generated key.
-   ##
-   ## Now: idempotently derive the user-level policy from the
-   ## project policy (only when missing) and run 'sq-git policy
-   ## authorize' for the local cert (sq-git's authorize is itself
-   ## idempotent on already-authorized certs - safe to re-run on
-   ## developer machines that already have a customized user-level
-   ## policy). The local cert is the same persistent key the user
-   ## generated above; not an ephemeral CI-only cert.
-   if [ ! -f "${openpgp_policy_file_user}" ]; then
-      true "INFO: copying shipped project policy ${openpgp_policy_file_project} -> ${openpgp_policy_file_user}"
-      cp -- "${openpgp_policy_file_project}" "${openpgp_policy_file_user}"
-      chmod -- 0600 "${openpgp_policy_file_user}"
-   else
-      true "INFO: ${openpgp_policy_file_user} already exists; refreshing local-cert authorization."
-   fi
-   openpgp_policy_file_resolved="${openpgp_policy_file_user}"
+   policy_temp_file="${sq_git_temp_dir}/openpgp-policy-public-temp.toml"
+   cp -- "${openpgp_policy_file_project}" "${policy_temp_file}"
+   chmod -- 0600 "${policy_temp_file}"
 
-   true "INFO: authorizing local maintainer cert as project-maintainer in ${openpgp_policy_file_resolved}"
-   true "INFO:   --policy-file        ${openpgp_policy_file_resolved}"
+   true "INFO: authorizing local maintainer cert as project-maintainer in scratch ${policy_temp_file}"
+   true "INFO:   --policy-file        ${policy_temp_file}"
    true "INFO:   --project-maintainer ${DEBFULLNAME} <${DEBEMAIL}>"
-   true "INFO:   cert                 ${openpgp_cert_file_resolved}"
+   true "INFO:   cert                 ${cert_for_authorize}"
 
    sq-git policy authorize \
-      --policy-file "${openpgp_policy_file_resolved}" \
+      --policy-file "${policy_temp_file}" \
       --project-maintainer \
       "${DEBFULLNAME} <${DEBEMAIL}>" \
-      "${openpgp_cert_file_resolved}"
+      "${cert_for_authorize}"
+
+   if cmp --silent -- "${policy_temp_file}" "${openpgp_policy_file_project}"; then
+      true "INFO: 'sq-git policy authorize' was a no-op; '${DEBFULLNAME} <${DEBEMAIL}>' is already covered by ${openpgp_policy_file_project}; not writing ${openpgp_policy_file_user}"
+   elif [ -f "${openpgp_policy_file_user}" ]; then
+      true "INFO: ${openpgp_policy_file_user} already exists; refusing to clobber. Delete to re-derive from scratch ${policy_temp_file}."
+   else
+      true "INFO: committing scratch policy -> ${openpgp_policy_file_user}"
+      mkdir --parents -- "${openpgp_policy_dir_user}"
+      chmod -- 0700 "${openpgp_policy_dir_user}"
+      cp -- "${policy_temp_file}" "${openpgp_policy_file_user}"
+      chmod -- 0600 "${openpgp_policy_file_user}"
+   fi
 
    true "INFO: END of ${FUNCNAME[0]}"
 }
