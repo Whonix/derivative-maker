@@ -156,13 +156,13 @@ openpgp_policy_setup() {
 
    true "INFO: authorizing local maintainer cert as project-maintainer in ${openpgp_policy_file_resolved}"
    true "INFO:   --policy-file        ${openpgp_policy_file_resolved}"
-   true "INFO:   --project-maintainer ${DEBFULLNAME}"
+   true "INFO:   --project-maintainer ${DEBFULLNAME} <${DEBEMAIL}>"
    true "INFO:   cert                 ${openpgp_cert_file_resolved}"
 
    sq-git policy authorize \
       --policy-file "${openpgp_policy_file_resolved}" \
       --project-maintainer \
-      "${DEBFULLNAME}" \
+      "${DEBFULLNAME} <${DEBEMAIL}>" \
       "${openpgp_cert_file_resolved}"
 
    true "INFO: END of ${FUNCNAME[0]}"
