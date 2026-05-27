@@ -133,8 +133,11 @@ export dist_source_parentdir
 [ -n "${dist_source_help_steps_folder:-}" ] || dist_source_help_steps_folder="${source_code_folder_dist}/help-steps"
 export dist_source_help_steps_folder
 
-[ -n "${str_replace_tool:-}" ] || str_replace_tool="${source_code_folder_dist}/packages/kicksecure/helper-scripts/usr/bin/str_replace"
-[ -n "${str_replace_many_tool:-}" ] || str_replace_many_tool="${source_code_folder_dist}/packages/kicksecure/helper-scripts/usr/bin/str-replace-many"
+[ -n "${HELPER_SCRIPTS_PATH:-}" ] || HELPER_SCRIPTS_PATH="${source_code_folder_dist}/packages/kicksecure/helper-scripts"
+export HELPER_SCRIPTS_PATH
+
+[ -n "${str_replace_tool:-}" ] || str_replace_tool="${HELPER_SCRIPTS_PATH}/usr/bin/str_replace"
+[ -n "${str_replace_many_tool:-}" ] || str_replace_many_tool="${HELPER_SCRIPTS_PATH}/usr/bin/str-replace-many"
 
 ## All Debian architectures plus the literal 'source'. 'source' is a
 ## valid Debian "architecture" value referring to source packages (see
