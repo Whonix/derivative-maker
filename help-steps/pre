@@ -42,6 +42,7 @@ true "${BASH_SOURCE[0]} INFO: begin"
 HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
 export HELPER_SCRIPTS_PATH
 
+test -d "$HELPER_SCRIPTS_PATH"
 if ! test -e "${HELPER_SCRIPTS_PATH}/.git"; then
    error "Folder '${HELPER_SCRIPTS_PATH}/.git' does not exist! Need to run...?
 
