@@ -1,3 +1,291 @@
+commit adfb36219026a6cb310cc6454ccb618fb58a90ce
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Jun 1 18:03:26 2026 -0400
+
+    .
+
+commit c99d8d1dc1d6f29745c7f8b155577309a6dde977
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Jun 1 18:00:18 2026 -0400
+
+    .
+
+commit da35685cd145e8ac3f57f84b94af486ffe1a8ef1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Jun 1 14:18:49 2026 -0400
+
+    .
+
+commit 5410a3f6b28aa35025532dbbcbfbb5dec4dce7c8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Jun 1 14:15:47 2026 -0400
+
+    .
+
+commit 1eacfc9c7d3761d301efee09972acde37053788f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Jun 1 13:56:40 2026 -0400
+
+    .
+
+commit 05f9b0daa69f74326905b70de86a8b58c0cf5d63
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 31 16:27:58 2026 -0400
+
+    .
+
+commit 2621579fba66351b2137f23d594a3c2b1f6e99b8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 28 15:32:57 2026 -0400
+
+    .
+
+commit c270853072379262ca4cc23b7ff53a45e8ec93b9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 28 15:28:40 2026 -0400
+
+    .
+
+commit 9e4918574554ef5a415a60e12c8667626cf5728d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 28 12:18:16 2026 -0400
+
+    .
+
+commit decfb8d277b678bf8a324a1cfa0f950e4677cf0c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 28 12:18:12 2026 -0400
+
+    .
+
+commit b81f6ac34a170cf5f7e9e38e19ff31add267d1f9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu May 28 12:08:39 2026 -0400
+
+    .
+
+commit 203ec1f58bbd5d26ba1d34f39816d92ce97e37d9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 27 18:57:11 2026 -0400
+
+    .
+
+commit 7aa5d696628e174df7f7fc835d06b1d537ef8cdf
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 27 18:47:59 2026 -0400
+
+    .
+
+commit fadd5397f7dcbdc98d6d5fd12259bd9d1ccd9fe8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 27 18:35:16 2026 -0400
+
+    .
+
+commit ac5e8736d2e2d5b2d44a6e2e84eedfe578e837d7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 27 18:28:46 2026 -0400
+
+    .
+
+commit 9f9fe93c1550060a2953777f959e489c8db7aa9d
+Merge: 325be279a 1ba0f63e0
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 27 16:49:20 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/kind-fermi-od4IG'
+
+commit 1ba0f63e08361bff600c31c13a6424b41f9f74f1
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 27 19:45:56 2026 +0000
+
+    signing-key-create: avoid duplicate openpgp policy / cert in ~/buildconfig.d
+
+    Two cleanups inside 'openpgp_policy_setup'. Both files generated here
+    were redundant copies of data that already lived elsewhere:
+
+      - openpgp-cert.pem in ~/buildconfig.d: only existed to feed 'sq-git
+        policy authorize', which embeds the cert inline in the keyring of
+        the generated policy. Standalone copy was dead weight after.
+      - openpgp-policy.toml in ~/buildconfig.d: for builds where DEBFULLNAME
+        + DEBEMAIL already match an authorization in the shipped project
+        policy (typical for official-maintainer builds), 'sq-git policy
+        authorize' was a no-op, so the home copy was byte-identical to the
+        shipped one.
+
+    Rework: stage the cert export and the post-authorize policy in
+    ${binary_build_folder_dist}/sq-git-temp/ (re-derived on every run,
+    no clobber concerns). Commit the scratch policy to
+    ${openpgp_policy_file_user} only when (a) authorize produced a real
+    diff vs the shipped project policy AND (b) no user-provided policy
+    already exists there. Pre-provisioned cert in ~/buildconfig.d still
+    takes precedence via openpgp_cert_file_resolved.
+
+    Net effect on the two complaint scenarios:
+      - Official build with matching maintainer: no ~/buildconfig.d files
+        written; sign-and-tag falls back to the shipped project policy
+        via existing variables.bsh resolution.
+      - CI / user build with default DEBFULLNAME+DEBEMAIL: scratch policy
+        differs (new auth block); committed to ~/buildconfig.d as before,
+        no standalone cert file.
+
+commit a74a817fa96291e9940b022942347e2c71a9b67a
+Merge: 434ecd9f8 325be279a
+Author: Claude <noreply@anthropic.com>
+Date:   Wed May 27 19:40:14 2026 +0000
+
+    Merge branch 'master' of http://127.0.0.1:43901/git/org-ai-assisted/derivative-maker into claude/kind-fermi-od4IG
+
+commit 325be279ab5bf3d9c7bdbad3690ab54545b11dfb
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 27 06:45:42 2026 -0400
+
+    .
+
+commit 2dce7eac40d79533df9b8307f7f767859eeb5f7b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 27 06:34:48 2026 -0400
+
+    fix
+
+    match `buildconfig.d/openpgp-policy.toml` `--project-maintainer` format (`Full Name <e-mail>`)
+
+commit 6a82e233afb3ca99c19b0870c4ee3f48be8efe9f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 27 06:34:41 2026 -0400
+
+    .
+
+commit 85b1479e3d24d5e2c2a2de2c1299c3cdcdcd6ed0
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed May 27 06:27:25 2026 -0400
+
+    refactoring
+
+commit cc6b299d520fbdf7d82fee07db82b0f57bba600c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue May 26 18:20:46 2026 -0400
+
+    .
+
+commit 3953499b0db7c0931d6e98bc8d50dfdda5d20c7b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue May 26 08:03:18 2026 -0400
+
+    .
+
+commit 623caa7a391d2f78d10fabad29ef6b2e6fac54c2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue May 26 07:05:14 2026 -0400
+
+    .
+
+commit afb49a91113d0d01d573e2ec1628a01032793f8c
+Merge: 63a54cca1 ad2784b6b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 25 16:56:07 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit ad2784b6b8010ddc986312efae804dea52480291
+Author: Claude <noreply@anthropic.com>
+Date:   Mon May 25 19:31:36 2026 +0000
+
+    local-build-dry-run: track developer-meta-files@master for launch-systemd-container
+
+    developer-meta-files PR #116 merged, putting the launch-systemd-container
+    composite action on master. Switch from the pre-merge PR-branch SHA pin
+    (3564650a, since force-pushed past on claude/loving-fermat-ZeNGB) to
+    @master branch-tracking, matching every other org-ai-assisted/developer-
+    meta-files reference in this repo's workflows (local-lint.yml,
+    consumer-{claude-code,scorecard,codex-review,codeql-actions}.yml).
+
+    Single source of truth: action improvements (e.g. the loving-fermat
+    branch's pending CI/ALLOW_LOCAL guard + style sweep) reach this caller
+    the moment they land on master, without a per-consumer sha-bump PR.
+
+commit 434ecd9f87af1f2da3099bae5627fff217b4e541
+Author: Claude <noreply@anthropic.com>
+Date:   Mon May 25 19:31:36 2026 +0000
+
+    local-build-dry-run: track developer-meta-files@master for launch-systemd-container
+
+    developer-meta-files PR #116 merged, putting the launch-systemd-container
+    composite action on master. Switch from the pre-merge PR-branch SHA pin
+    (3564650a, since force-pushed past on claude/loving-fermat-ZeNGB) to
+    @master branch-tracking, matching every other org-ai-assisted/developer-
+    meta-files reference in this repo's workflows (local-lint.yml,
+    consumer-{claude-code,scorecard,codex-review,codeql-actions}.yml).
+
+    Single source of truth: action improvements (e.g. the loving-fermat
+    branch's pending CI/ALLOW_LOCAL guard + style sweep) reach this caller
+    the moment they land on master, without a per-consumer sha-bump PR.
+
+commit 63a54cca159116e404c249a10bc08a372aa13a19
+Merge: 5f343650f 179cd4d00
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 25 15:19:20 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit 179cd4d00f0485850b685645b77c9115924705f1
+Author: Claude <noreply@anthropic.com>
+Date:   Mon May 25 17:52:05 2026 +0000
+
+    local-build-dry-run: use developer-meta-files launch-systemd-container action
+
+    Replace docker/dry-run-start-container + docker/dry-run-entrypoint with
+    org-ai-assisted/developer-meta-files's new launch-systemd-container
+    composite action. Same end state: privileged debian:trixie container
+    with systemd as PID 1; host runner does 'docker exec' into it. ~110
+    lines of local docker-bootstrap code retired.
+
+    The action improves on the local helper:
+    - Masks noisy systemd units (systemd-firstboot, systemd-udevd,
+      systemd-modules-load) so 'systemctl is-system-running' reports a
+      less noisy 'degraded'.
+    - STOPSIGNAL=SIGRTMIN+3 (systemd's documented shutdown signal) so an
+      external 'docker stop' does the right thing.
+    - Accepts 'maintenance' as a boot-ready state in addition to
+      running/degraded.
+    - Bakes systemd packages into the image at build time rather than
+      apt-installing at PID-1 startup; cleaner separation between image
+      prep and runtime.
+
+    The action was written for dist-encrypted's full-server-reproduction
+    work; derivative-maker is the second consumer.
+
+    Migration delta:
+    - Workspace bind-mount path moves from /work to /workspace (the
+      action's default). 'docker exec' steps get '--workdir /workspace'
+      so './ci/dry-run' still resolves; ci/dry-run itself is workdir-
+      agnostic (resolves its own path via BASH_SOURCE).
+    - ci/dry-run.d/150_signing-key-create and ci/dry-run.d/200_sign-and-
+      tag passed '--chown /work' to help-steps/run-as-user; both updated
+      to '--chown /workspace' to match the new mount.
+    - wait-seconds: '90' passed explicitly to preserve current behaviour
+      (action default is 60).
+    - apt-bootstrap-packages left at the action default (ca-certificates
+      sudo git). The dry-run's 100_install re-installs ca-certificates
+      and adds the rest; idempotent.
+
+    Pinned to commit 3564650adf3b650b1b6582178ef9f1e8281f998d on the
+    developer-meta-files PR branch that introduces the action. Re-pin
+    to a master-reachable form (release tag + SHA) once that upstream
+    PR merges; the SHA itself does not change in the swap.
+
+commit 5f343650f3ca1b8a71936c5da228346cd8105ebc
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon May 25 13:55:32 2026 -0400
+
+    .
+
+commit f6e28cac16fb823ef7500d3d0e8aaa12a9160423
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 24 20:51:41 2026 +0000
+
+    bumped changelog version
+
 commit f6185b2916278c61a3785d4ad14a2d7ac47953aa
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Sun May 24 15:13:03 2026 -0400
