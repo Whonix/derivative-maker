@@ -26,16 +26,27 @@ shopt -s inherit_errexit
 
 true "${BASH_SOURCE[0]} INFO: begin"
 
-## Source helper-scripts libraries that pre depends on. xtrace.bsh
-## must be loaded first because the colors source below is wrapped in
-## xtrace_off / xtrace_restore (and the trap functions further down
-## reach for benchmark_format / function_trace / process_backtrace).
-## HELPER_SCRIPTS_PATH lets helper-scripts resolve their internal
+## Source libraries from package 'helper-scripts' that this 'pre' script
+## depends on.
+##
+## 'xtrace.bsh'  must be loaded first because the colors source below is
+## wrapped in functions 'xtrace_off' and 'xtrace_restore' (and the 'trap'
+## functions further down reach for 'benchmark_format', 'function_trace',
+## 'process_backtrace').
+##
+## Environment variable 'HELPER_SCRIPTS_PATH' lets 'helper-scripts' resolve
+## their internal
 ## 'source "${HELPER_SCRIPTS_PATH:-}/usr/libexec/helper-scripts/..."'
 ## references against the in-tree submodule rather than the not-yet-
 ## installed system path '/usr/libexec/helper-scripts'.
 HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
 export HELPER_SCRIPTS_PATH
+
+if ! test -e "${HELPER_SCRIPTS_PATH}/.git"; then
+   error "Folder '${HELPER_SCRIPTS_PATH}/.git' does not exist! Need to run...?
+
+git submodule update --init --recursive --progress --jobs=4"
+fi
 
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/xtrace.bsh
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/xtrace.bsh"
