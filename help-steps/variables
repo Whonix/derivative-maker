@@ -297,7 +297,9 @@ if [ "${dist_build_redistributable:-}" = "true" ]; then
       ## Using the git commit ID where derivative-maker 'openpgp-policy.toml' file
       ## was first introduced.
       ## See also: 'buildconfig.d/30_signing_key.conf'
-      [[ -v sq_git_trust_root ]] || sq_git_trust_root="93d79d25ad28539a0fea503fcf9ea9f12b683d72"
+      ## Older. Broken due to lack of using "git merge" without "--no-ff".
+      #[[ -v sq_git_trust_root ]] || sq_git_trust_root="93d79d25ad28539a0fea503fcf9ea9f12b683d72"
+      [[ -v sq_git_trust_root ]] || sq_git_trust_root="ac5e8736d2e2d5b2d44a6e2e84eedfe578e837d7"
    fi
 
    ## Enable binary derivative repository by default for official builds.
