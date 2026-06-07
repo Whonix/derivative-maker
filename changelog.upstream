@@ -1,3 +1,123 @@
+commit 102439c462b99146364a2c390f105d6754598c49
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jun 7 12:04:34 2026 -0400
+
+    .
+
+commit 3aeb858b2d6297a22cd98f61dfab39cae2bd6796
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jun 7 12:02:24 2026 -0400
+
+    .
+
+commit 0dca50c4fd7d81d895416a1697099bfd246bcda8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Jun 6 14:13:57 2026 -0400
+
+    fix
+
+commit 5f5ee259e9ca5beaa9b462ecce42ecbf9421aade
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Jun 6 14:04:37 2026 -0400
+
+    .
+
+commit 380e7ab9180a901ab27037cbd30737613024844d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Jun 6 14:00:16 2026 -0400
+
+    .
+
+commit d8ae10f2ca53682dfcd913ec3894033a9f946169
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Jun 6 13:59:03 2026 -0400
+
+    .
+
+commit b95c260953b95d0ac0059cb4b18eb0888b747c14
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Jun 6 13:56:25 2026 -0400
+
+    .
+
+commit d005a867da9c671acc2adc36866a247c3affae87
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jun 5 17:25:41 2026 -0400
+
+    .
+
+commit ecc2fd1ed9c6b6cb78bc05e5f0c75017774df727
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jun 5 17:23:07 2026 -0400
+
+    .
+
+commit a80b327543026c212cc905ae09d58ac1ee49b2ee
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jun 3 13:17:00 2026 -0400
+
+    .
+
+commit 51f808b1c551c09bd8e3d263aa3cee832ade8e79
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jun 3 13:13:25 2026 -0400
+
+    .
+
+commit 23bd90e2aed069242492e3a369e524edfe0302bc
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jun 3 12:52:37 2026 -0400
+
+    .
+
+commit 1cf752b54858a3b261cf90cfeec01f257176c1c6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 2 18:34:39 2026 -0400
+
+    .
+
+commit d57530b8498dc73b3c848f6eacb196bff7e5c3db
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 2 18:28:58 2026 -0400
+
+    .
+
+commit c483b63339dc018fce6d63325419955adbdef098
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 2 18:22:39 2026 -0400
+
+    .
+
+commit c24f9627b345e154ab1d00f01f3d23ea88e8e040
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 2 17:48:49 2026 -0400
+
+    .
+
+commit 34d1b59093f6cbaabaadeb6f07846fe165c11bcb
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 2 12:47:59 2026 -0400
+
+    sanity test
+
+commit fbed9d525df7ecc1bfb31eb9aa25236949b4a26f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 2 12:47:16 2026 -0400
+
+    sanity test
+
+commit cbf9febeb5310ee627abdfe138cface3caa67970
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 2 12:40:24 2026 -0400
+
+    minor
+
+commit 3650e96dc8ed4f3227c1914e67aa9acca640c36c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 2 16:31:46 2026 +0000
+
+    bumped changelog version
+
 commit adfb36219026a6cb310cc6454ccb618fb58a90ce
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Mon Jun 1 18:03:26 2026 -0400
