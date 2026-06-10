@@ -299,7 +299,10 @@ if [ "${dist_build_redistributable:-}" = "true" ]; then
       ## See also: 'buildconfig.d/30_signing_key.conf'
       ## Older. Broken due to lack of using "git merge" without "--no-ff".
       #[[ -v sq_git_trust_root ]] || sq_git_trust_root="93d79d25ad28539a0fea503fcf9ea9f12b683d72"
-      [[ -v sq_git_trust_root ]] || sq_git_trust_root="ac5e8736d2e2d5b2d44a6e2e84eedfe578e837d7"
+      ## Broken due to SSH signed git commits which are unsupported by 'sq-git'.
+      #[[ -v sq_git_trust_root ]] || sq_git_trust_root="ac5e8736d2e2d5b2d44a6e2e84eedfe578e837d7"
+      ## Also use 'HEAD' since source of issues with unknown security gain.
+      [[ -v sq_git_trust_root ]] || sq_git_trust_root="HEAD"
    fi
 
    ## Enable binary derivative repository by default for official builds.
