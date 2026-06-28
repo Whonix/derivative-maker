@@ -1531,6 +1531,7 @@ env_vars_keep_list="
    binary_image_ova_file
    source_code_folder_dist
    dist_developer_meta_files_folder
+   HELPER_SCRIPTS_PATH
 "
 ## TODO:
 ## UWT_DEV_PASSTHROUGH
