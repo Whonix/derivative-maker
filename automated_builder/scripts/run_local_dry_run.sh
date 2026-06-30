@@ -45,13 +45,13 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-exit_with_error() {
+die() {
    printf '%s\n' "ERROR: $*" >&2
    exit 1
 }
 
 if ! [ "${CI:-}" = "true" ]; then
-   exit_with_error "$0: Run only inside CI!"
+   die "$0: Run only inside CI!"
 fi
 
 ## Defaults.
@@ -78,7 +78,7 @@ while [ "$#" -gt 0 ]; do
          sed -n '/^##/{s/^## \{0,1\}//;p}' -- "$0"
          exit 0
          ;;
-      *) exit_with_error "unknown argument: '$1' (use '--' to pass args to dm-build-official)" ;;
+      *) die "unknown argument: '$1' (use '--' to pass args to dm-build-official)" ;;
    esac
 done
 
@@ -86,12 +86,12 @@ if [ -z "$source_dir" ]; then
    ## Default to the parent git tree of this script.
    source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 fi
-[ -d "$source_dir/.git" ] || exit_with_error "source_dir '$source_dir' is not a git checkout"
+[ -d "$source_dir/.git" ] || die "source_dir '$source_dir' is not a git checkout"
 [ -x "$source_dir/help-steps/dm-build-official" ] || \
-   exit_with_error "'$source_dir/help-steps/dm-build-official' not found / not executable"
+   die "'$source_dir/help-steps/dm-build-official' not found / not executable"
 
 run_as_user="$source_dir/help-steps/run-as-user"
-[ -x "$run_as_user" ] || exit_with_error "'$run_as_user' not found / not executable"
+[ -x "$run_as_user" ] || die "'$run_as_user' not found / not executable"
 
 ## {{ ensure submodules are present. The build-steps read files inside
 ## 'packages/kicksecure/helper-scripts' and other submodules; an
