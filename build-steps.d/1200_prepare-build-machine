@@ -3,11 +3,23 @@
 ## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Static-analysis waivers for this legacy build script:
+## - intentional word-splitting of command arguments (apt options, package
+##   lists) -- quoting them would pass a single argument and break the call;
+## - 'command -v' for dependency probing during early bootstrap, before the
+##   'has' helper is guaranteed present;
+## - 'rm' of specific, known files (not user-supplied paths).
+# shellcheck disable=SC2086
+## style-ok: no-has
+## style-ok: no-safe-rm
+
 set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -207,18 +219,20 @@ check-unicode() {
 
    test -x "$check_unicode_tool"
 
-   grep_find_unicode_wrapper_output="$("$check_unicode_tool" "$source_code_folder_dist" 2>&1)" || true
+   ## dm-check-unicode is silent on a clean run, so it passes only on a
+   ## zero exit AND no output; fail closed on anything else.
+   local check_unicode_rc
+   check_unicode_rc=0
+   grep_find_unicode_wrapper_output="$("$check_unicode_tool" "$source_code_folder_dist" 2>&1)" || check_unicode_rc="$?"
 
-   if [ "${grep_find_unicode_wrapper_output:-}" = "" ]; then
-      true "INFO: grep_find_unicode_wrapper_output empty, good, OK."
-   else
-      error "$0: ERROR: Unicode found!
-
-See also:
-https://forums.whonix.org/t/detecting-malicious-unicode-in-source-code-and-pull-requests/13754"
+   if [ "$check_unicode_rc" = "0" ] && [ -z "${grep_find_unicode_wrapper_output:-}" ]; then
+      true "INFO: dm-check-unicode passed cleanly (exit 0, no output), good, OK."
+      return 0
    fi
 
-   true
+   printf '%s\n' "${grep_find_unicode_wrapper_output:-}" >&2
+   error "$0: ERROR: dm-check-unicode did not pass cleanly (exit code ${check_unicode_rc}). See its output above. An exit code other than 1 means the tool could not run (e.g. a missing dependency). See also:
+https://forums.whonix.org/t/detecting-malicious-unicode-in-source-code-and-pull-requests/13754"
 }
 
 check-git-folder() {

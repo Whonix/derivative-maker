@@ -1,0 +1,283 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Runs inside the amd64 cowbuilder chroot set up by
+## 'build-steps.d/*_cowbuilder-setup' and populated by
+## 'build-steps.d/*_create-vbox-vm'. Exports the VirtualBox VM(s) to an
+## '.ova' (and runs an 'import --dry-run' sanity test) so that 'VBoxManage'
+## does not need to be installed on the build host. Invoked by
+## 'dm-prepare-release' (developer-meta-files) via 'cowbuilder --execute'.
+##
+## The VirtualBox registry that holds the VM lives in the 'dm-vbox-temp'
+## account inside this chroot (see 'pbuilder-chroot-script-create-vbox-vm'),
+## so the 'VBoxManage export' must run as 'dm-vbox-temp'. The resulting
+## '.ova' is moved to '$binary_image_ova_file', which is under the
+## bind-mounted '$binary_build_folder_dist', so it lands on the host.
+
+set -x
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+true "INFO: Currently running chroot script: ${BASH_SOURCE[0]}"
+
+## Variables arrive through the environment: the 'dm-prepare-release' host
+## wrapper exports them and invokes cowbuilder with '--preserve-env', so they
+## are carried into this chroot. Fail loud if a required one did not make it
+## across.
+##
+## TODO: Not all required variables are listed here, and some of the omitted
+## ones are only required in some instances. Consider adding checks later on
+## for those variables.
+for required_var in \
+   VMNAME vm_names_to_be_exported vm_multiple HOMEVAR_VBOX_TEMP \
+   SUDO_TO_VBOX_TEMP binary_image_ova_file eulafile_user producturl ; do
+   if [ ! -v "$required_var" ]; then
+      printf '%s\n' "ERROR: required variable '$required_var' not present in the chroot environment." >&2
+      exit 1
+   fi
+done
+
+## This script runs as root inside the cowbuilder chroot (via
+## 'cowbuilder --execute'), so 'sudo' to root is redundant. Worse, sudo's
+## 'env_reset' drops 'COWDANCER_ILISTFILE' while cowbuilder's 'libcowdancer'
+## remains LD_PRELOAD'ed, leaving the copy-on-write layer half-initialized so
+## that root file operations fail with 'cp: ... Cannot allocate memory'. Run
+## root commands directly (without sudo) so the inherited cowdancer
+## environment stays intact. '$SUDO_TO_VBOX_TEMP' is deliberately NOT cleared
+## here: it must drop privileges to the 'dm-vbox-temp' account whose
+## VirtualBox registry holds the VM.
+SUDO_TO_ROOT=""
+
+error() {
+   printf '%s\n' "ERROR: $*" >&2
+   exit 1
+}
+
+setup_vbox_temp_sudo() {
+   ## '$SUDO_TO_VBOX_TEMP' runs 'sudo --chdir' (-D), which sudo refuses
+   ## unless the policy permits 'runcwd'. On the build host that rule is
+   ## installed by 'build-steps.d/*_prepare-build-machine'; inside this
+   ## chroot it must be installed here. This script runs as root (via
+   ## 'cowbuilder --execute'), so the invoking user is root and a global
+   ## 'Defaults runcwd=*' is the matching rule. 'sponge' (used on the host)
+   ## may be absent in the chroot, so use 'tee' (as
+   ## 'pbuilder-chroot-script-virtualbox' does).
+   printf '%s\n' "Defaults runcwd=*" \
+      | SUDO_EDITOR="" VISUAL="" EDITOR=tee visudo -f /etc/sudoers.d/dm-vbox-temp-runcwd >/dev/null
+
+   ## Sanity test.
+   visudo --strict --check /etc/sudoers.d/dm-vbox-temp-runcwd
+}
+
+export_vbox_vm() {
+   if [ "${vm_names_to_be_exported}" = "" ]; then
+      error "Variable 'vm_names_to_be_exported' is empty!"
+   fi
+   if [ "${vm_multiple}" = "" ]; then
+      error "Variable 'vm_multiple' is empty!"
+   fi
+
+   safe-rm --force -- "${binary_image_ova_file}"
+   safe-rm --force -- "${HOMEVAR_VBOX_TEMP}/temp.ova"
+
+   local eulafile_vbox_temp
+   eulafile_vbox_temp="${HOMEVAR_VBOX_TEMP}/temp-eulafile.txt"
+
+   ## '$eulafile_user' is under the bind-mounted '$dist_binary_build_folder',
+   ## readable here; copy it into the 'dm-vbox-temp' home so 'VBoxManage
+   ## export --eulafile' (running as 'dm-vbox-temp') can read it.
+   cp -- "${eulafile_user}" "${eulafile_vbox_temp}"
+   chown -- "dm-vbox-temp:dm-vbox-temp" "${eulafile_vbox_temp}"
+
+   ## https://forums.whonix.org/t/allow-us-to-download-the-vm-files-in-a-compressed-format-like-zip-7z-gzip-etc/14210/6
+   ## tar parses TAR_OPTIONS itself, so the embedded single quotes around
+   ## the --mtime value are intentional.
+   ## TODO: Why are we setting mtime to sometime in 2015?
+   # shellcheck disable=SC2089
+   TAR_OPTIONS="\
+      ${TAR_OPTIONS:-}
+      --owner=0 --group=0 --numeric-owner \
+      --mode=go=rX,u+rw,a-s \
+      --sort=name \
+      --sparse \
+      --mtime='2015-10-21 00:00Z' \
+      --xz \
+      "
+   # shellcheck disable=SC2090
+   export TAR_OPTIONS
+   XZ_OPT="${XZ_OPT:-} -9"
+   export XZ_OPT
+
+   true "INFO: vm_names_to_be_exported: $vm_names_to_be_exported"
+
+   ## --vsys needs to precede --eulafile.
+   if [ "${vm_multiple}" = "false" ]; then
+      $SUDO_TO_VBOX_TEMP \
+         VBoxManage \
+            export "${VMNAME}" \
+            --vsys "0" \
+            --eulafile "${eulafile_vbox_temp}" \
+            --description "${description}" \
+            --manifest \
+            --product "${VMNAME}" \
+            --producturl "${producturl}" \
+            --vendor "${vendor}" \
+            --vendorurl "${vendorurl}" \
+            --version "${dist_build_version}" \
+            --output "${HOMEVAR_VBOX_TEMP}/temp.ova"
+   else
+      ## Only use '--eulafile' after "--vsys '0'".
+      ## No longer using additional, second '--eulafile' after "--vsys '1'"
+      ## No longer using:
+      # --vsys '1' \
+      # --eulafile "${binary_image_text_vbox_temp}" \
+      ##
+      ## This is to avoid a VirtualBox bug, which shows the second "Software License Agreement" screen,
+      ## which lacks the buttons [Agree] [Disagree] [Print] [Save].
+      ##
+      ## https://www.reddit.com/r/Whonix/comments/1jnavvb/cannot_install_whonix_virtualbox_asks_me_to_agree/
+      ## https://imgur.com/a/IGjI7TV
+      ##
+      ## Word-splitting of '$vm_names_to_be_exported' is intentional: it holds
+      ## multiple space-separated VM names (Whonix-Gateway Whonix-Workstation).
+      # shellcheck disable=SC2086
+      $SUDO_TO_VBOX_TEMP \
+         VBoxManage \
+            export ${vm_names_to_be_exported} \
+            --output "${HOMEVAR_VBOX_TEMP}/temp.ova" \
+            --vsys '0' \
+               --eulafile "${eulafile_vbox_temp}" \
+               --description "${description}" \
+               --manifest \
+               --product "Whonix-Gateway" \
+               --producturl "https://www.${project_clearnet}/wiki/Whonix-Gateway" \
+               --vendor "Whonix" \
+               --vendorurl "https://www.${project_clearnet}" \
+               --version "${dist_build_version}" \
+            --vsys '1' \
+               --description "${description}" \
+               --manifest \
+               --product "Whonix-Workstation" \
+               --producturl "https://www.${project_clearnet}/wiki/Whonix-Workstation" \
+               --vendor "Whonix" \
+               --vendorurl "https://www.${project_clearnet}" \
+               --version "${dist_build_version}"
+   fi
+
+   ## The export is stable when run in isolation, so a missing '.ova' here
+   ## points at pipeline / copy-on-write state rather than the export command.
+   ## On the failure path only (no cost on success), dump diagnostics that
+   ## distinguish the two failure modes: 'VBoxManage' ran via
+   ## '$SUDO_TO_VBOX_TEMP' (sudo -u dm-vbox-temp), whose env_reset drops
+   ## cowbuilder's cowdancer 'LD_PRELOAD' / 'COWDANCER_ILISTFILE' while this
+   ## shell runs under cowdancer -- so compare the dm-vbox-temp (no-cowdancer)
+   ## and root (cowdancer) views, and search the chroot's own fs, to tell a
+   ## genuinely-absent file (e.g. a concurrent base rebuild) from one merely
+   ## invisible to a single view.
+   ##
+   ## TODO: This comment is close to incomprehensible. Clarify or delete.
+   if [ ! -r "${HOMEVAR_VBOX_TEMP}/temp.ova" ]; then
+      true "ERROR-DIAG: temp.ova absent right after 'Successfully exported'."
+      true "ERROR-DIAG: expected --output: ${HOMEVAR_VBOX_TEMP}/temp.ova"
+      true "ERROR-DIAG: chroot HOME=${HOME:-UNSET} LD_PRELOAD=${LD_PRELOAD:-UNSET}"
+      true "ERROR-DIAG: SUDO_TO_VBOX_TEMP='${SUDO_TO_VBOX_TEMP:-UNSET}' SUDO_TO_ROOT='${SUDO_TO_ROOT:-UNSET}'"
+      true "ERROR-DIAG: root (cowdancer) view of '${HOMEVAR_VBOX_TEMP}':"
+      ls -la -- "${HOMEVAR_VBOX_TEMP}/" || true
+      true "ERROR-DIAG: dm-vbox-temp (no-cowdancer) view of '${HOMEVAR_VBOX_TEMP}':"
+      $SUDO_TO_VBOX_TEMP ls -la -- "${HOMEVAR_VBOX_TEMP}/" || true
+      true "ERROR-DIAG: chroot-fs search for '*.ova':"
+      find / -xdev -name '*.ova' 2>/dev/null || true
+      error "temp.ova not readable at '${HOMEVAR_VBOX_TEMP}/temp.ova' after export."
+   fi
+   ## Move from dm-vbox-temp user home folder to '$binary_image_ova_file',
+   ## which is under the bind-mounted '$binary_build_folder_dist' (so it
+   ## lands on the host).
+   mv --verbose -- "${HOMEVAR_VBOX_TEMP}/temp.ova" "${binary_image_ova_file}"
+
+   ## VirtualBox creates '$binary_image_ova_file' with u+r only, which is
+   ## problematic with respect to rsync. Make it world-readable so the
+   ## 'import --dry-run' below (and the host) can read it. The host wrapper
+   ## re-applies ownership ('$user_name') after the chroot returns.
+   chmod ugo+r -- "${binary_image_ova_file}"
+
+   sync
+
+   ## Sanity test.
+   test -r "${binary_image_ova_file}"
+
+   ## Sanity test: validate the standalone '.ova'.
+   ##
+   ## NOTE: A different --vmname is required, because ${VMNAME} does already
+   ## exist in the 'dm-vbox-temp' VirtualBox registry.
+   ##
+   ## Run as root (not '$SUDO_TO_VBOX_TEMP'): '--dry-run' only validates the
+   ## '.ova' file and must not touch the 'dm-vbox-temp' registry where the
+   ## just-exported VM still lives. root has an empty registry, which is what
+   ## a standalone-OVA validation wants.
+   if [ "${vm_multiple}" = "false" ]; then
+      ## Bug:
+      ## VBoxManage: error: Cannot import until the license agreement listed above is accepted.
+#       VBoxManage \
+#          import "${binary_image_ova_file}" \
+#          --vsys "0" \
+#          --eula show \
+#          --vmname "${VMNAME}-${dist_build_version}"
+
+      VBoxManage \
+         import "${binary_image_ova_file}" \
+         --vsys "0" \
+         --eula accept \
+         --vmname "${VMNAME}-${dist_build_version}" \
+         --dry-run
+   else
+      VBoxManage \
+         import "${binary_image_ova_file}" \
+         --vsys "0" \
+            --eula show \
+            --vmname "Whonix-Gateway-${dist_build_version}" \
+         --vsys "1" \
+            --eula show \
+            --vmname "Whonix-Workstation-${dist_build_version}"
+
+      VBoxManage \
+         import "${binary_image_ova_file}" \
+         --vsys "0" \
+            --eula accept \
+            --vmname "Whonix-Gateway-${dist_build_version}" \
+            --dry-run \
+         --vsys "1" \
+            --eula accept \
+            --vmname "Whonix-Workstation-${dist_build_version}" \
+            --dry-run
+   fi
+
+   local vm_name_to_be_deleted
+   for vm_name_to_be_deleted in ${vm_names_to_be_exported} ; do
+      ## Save disk space.
+      ## Delete temporary VM in temporary VM user build folder to save disk space
+      ## during the build process.
+      $SUDO_TO_VBOX_TEMP VBoxManage unregistervm "$vm_name_to_be_deleted" --delete || true
+      safe-rm -r -f -- "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$vm_name_to_be_deleted"
+   done
+}
+
+main() {
+   if [ ! "${dist_build_virtualbox:-}" = "true" ]; then
+      printf '%s\n' "INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_virtualbox is not set to 'true'."
+      return 0
+   fi
+
+   setup_vbox_temp_sudo
+
+   export_vbox_vm
+
+   sync
+}
+
+main "$@"

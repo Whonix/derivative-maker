@@ -13,6 +13,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 MYDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -112,6 +114,8 @@ Forwarded arguments:
 ##   sq_git_trust_root              trust root for sq-git log
 ##   dist_build_ignore_untagged     "true" or "false"
 ##   dist_build_ignore_uncommitted  "true" or "false"
+##   dist_build_ignore_unsigned     "true" or "false" (skip signature check;
+##                                  defaults to inverse of dist_build_sign_and_tag)
 ##
 ## For detailed design docs (trust model, TOFU, submodule trust, sq-git
 ## version assumptions, tag verification analysis), see:
@@ -177,10 +181,12 @@ fi
 [ -n "${sq_git_trust_root:-}" ]             || die 1 "env var sq_git_trust_root must be set"
 [ -n "${dist_build_ignore_untagged:-}" ]    || die 1 "env var dist_build_ignore_untagged must be set ('true' or 'false')"
 [ -n "${dist_build_ignore_uncommitted:-}" ] || die 1 "env var dist_build_ignore_uncommitted must be set ('true' or 'false')"
+[ -n "${dist_build_ignore_unsigned:-}" ]    || die 1 "env var dist_build_ignore_unsigned must be set ('true' or 'false')"
 [[ "${sq_git_policy_file}" =~ ^/ ]]         || die 1 "sq_git_policy_file must be an absolute path, got: '${sq_git_policy_file}'"
 [ -r "${sq_git_policy_file}" ]              || die 1 "sq_git_policy_file is not readable: '${sq_git_policy_file}'"
 [[ "${dist_build_ignore_untagged}"    =~ ^(true|false)$ ]] || die 1 "dist_build_ignore_untagged must be 'true' or 'false', got: '${dist_build_ignore_untagged}'"
 [[ "${dist_build_ignore_uncommitted}" =~ ^(true|false)$ ]] || die 1 "dist_build_ignore_uncommitted must be 'true' or 'false', got: '${dist_build_ignore_uncommitted}'"
+[[ "${dist_build_ignore_unsigned}"    =~ ^(true|false)$ ]] || die 1 "dist_build_ignore_unsigned must be 'true' or 'false', got: '${dist_build_ignore_unsigned}'"
 
 ## Pre-flight dependency checks. Explicit guards here are necessary because
 ## help-steps/pre does 'set +e' and functions called from '|| cls=$?' have
@@ -193,6 +199,19 @@ die_if_not_has git sq sqop sq-git safe-rm
 sq_git_verify() {
    local target_ref="$1"
    local label="$2"
+   ## --allow-unsigned escape hatch (dist_build_ignore_unsigned=true): the
+   ## caller has opted out of signing (e.g. dist_build_sign_and_tag=false for
+   ## AI-driven / local builds), so skip the cryptographic signature
+   ## authentication.
+   if [ "${dist_build_ignore_unsigned}" = "true" ]; then
+      if [ "${dist_build_redistributable}" = 'true' ]; then
+         printf '%s\n' "${bold}${red}ERROR: --allow-unsigned set but 'dist_build_redistributable' is set to 'true'! These settings are mutually exclusive.${reset}" >&2
+         return 1
+      fi
+
+      printf '%s\n' "${cyan}INFO: --allow-unsigned set: skipping sq-git signature verification for ${label}.${reset}" >&2
+      return 0
+   fi
    ## sq-git log --trust-root HEAD -- HEAD is unsafe when used without
    ## --policy-file, even if an openpgp-policy.toml file exists in the
    ## repository root directory. Because the trust root and target ref are the

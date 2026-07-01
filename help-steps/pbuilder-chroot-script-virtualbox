@@ -3,6 +3,11 @@
 ## Copyright (C) 2017 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Static-analysis waivers: 'command -v' (the 'has' helper is not present
+## inside the cowbuilder chroot) and 'rm' of a specific sudoers file.
+## style-ok: no-has
+## style-ok: no-safe-rm
+
 ## TODO: Functional but not enabled by default yet.
 ## This script gets executed by 'build-steps.d/*_cowbuilder-setup'.
 
@@ -14,6 +19,16 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## 'help-steps/pre' (which defines 'error') is not available inside the
+## pbuilder chroot where this script runs, so define a local 'error'
+## (mirrors 'pbuilder-chroot-script-create-vbox-vm').
+error() {
+   printf '%s\n' "ERROR: $*" >&2
+   exit 1
+}
 
 ## colors is not available in the pbuilder chroot where this
 ## script runs, so plain (uncolored) log messages.

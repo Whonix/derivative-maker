@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -21,43 +23,20 @@ source pre
 source variables
 
 prepare-release(){
-   ## TODO (Mac M1/M2 / arm64 VirtualBox OVA support):
+   ## VirtualBox OVA export inside the amd64 cowbuilder chroot:
    ##
-   ## 'build-steps.d/4600_create-vbox-vm' now creates the VirtualBox VM
-   ## inside an amd64 cowbuilder chroot (because VirtualBox is not
-   ## packaged for arm64 Linux). The VirtualBox registry therefore
-   ## lives inside that chroot, not on the build host.
-   ##
-   ## 'dm-prepare-release' (in 'Kicksecure/developer-meta-files',
-   ## checked out as a submodule under
-   ## '$dist_developer_meta_files_folder') still runs on the host and
-   ## still calls 'VBoxManage export' / 'VBoxManage unregistervm'
-   ## directly. With VirtualBox no longer on the host, those calls
-   ## will fail for '--target virtualbox' builds.
-   ##
-   ## A previous iteration of this branch wrapped the entire
-   ## 'dm-prepare-release' invocation inside the same amd64 chroot
-   ## (via a 'help-steps/pbuilder-chroot-script-prepare-release'
-   ## shim), but that required bind-mounting all of the operator's
-   ## release-signing credentials ('~/.signify', '~/.gnupg',
-   ## '~/.ssh', '~/.local/share/sequoia', '~/buildconfig.d',
-   ## '/etc/buildconfig-dist.d') into the chroot, which is too heavy
-   ## and fragile for what is structurally a small refactor.
-   ##
-   ## Proper fix lives in 'developer-meta-files', not here:
-   ##   - factor the 'VBoxManage'-using portion of 'dm-prepare-release'
-   ##     out into a separate step that 'dm-prepare-release' invokes
-   ##     via 'cowbuilder --execute' against the existing amd64 chroot
-   ##     ('/var/cache/pbuilder/base.cow_amd64'), or
-   ##   - have 'dm-prepare-release' shell each VBoxManage call into
-   ##     'cowbuilder --execute' in-place.
-   ## Either keeps signing/upload on the host (where the credentials
-   ## already are) and only the VBoxManage portion in the chroot.
-   ##
-   ## Until that refactor lands, '--target virtualbox' builds will
-   ## fail at this step. '--target qcow2' / '--target raw' /
-   ## '--target iso' / '--target windows' / '--target utm' continue
-   ## to work since they don't touch VBoxManage.
+   ## 'build-steps.d/4600_create-vbox-vm' creates the VirtualBox VM inside an
+   ## amd64 cowbuilder chroot (because VirtualBox is not packaged for arm64
+   ## Linux), so the VirtualBox registry lives inside that chroot, not on the
+   ## build host. Accordingly 'dm-prepare-release' (in
+   ## 'Kicksecure/developer-meta-files', a submodule under
+   ## '$dist_developer_meta_files_folder') runs only the 'VBoxManage'-using
+   ## portion of its 'virtualbox_export' inside that same chroot via
+   ## 'cowbuilder --execute' (chroot script
+   ## 'help-steps/pbuilder-chroot-script-export-vbox-vm'), writing the '.ova'
+   ## to the bind-mounted '$binary_image_ova_file' so it lands on the host.
+   ## Signing and upload stay on the host, where the operator's credentials
+   ## already are.
    "$dist_developer_meta_files_folder/usr/bin/dm-prepare-release" "$@"
 
    true

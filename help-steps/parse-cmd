@@ -3,6 +3,10 @@
 ## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Intentional, throughout this file: a leading '$' on variables already in
+## arithmetic context (e.g. $(( ${x} + 1 ))) is a harmless style choice.
+# shellcheck disable=SC2004
+
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/check_runtime.bsh
 
 #set -x
@@ -10,6 +14,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
 export HELPER_SCRIPTS_PATH
@@ -181,6 +187,8 @@ Advanced Options:
   --retry-after [script]          : Specify a script to run after retry. [default: none)
   --allow-uncommitted [true|false]: Permit builds with uncommitted changes (default: false).
   --allow-untagged [true|false]   : Permit builds from non-tagged sources (default: false).
+  --allow-unsigned [true|false]   : Skip git_sanity_test commit-signature verification (default: false).
+  --sign-and-tag [true|false]     : Sign and tag HEAD and submodules (default: true).
   --kernel [packages]             : Specify kernel packages (e.g., 'linux-image-amd64' or 'none').
   --headers [packages]            : Specify kernel header packages.
   --remote-derivative-packages    : Choose to use remote derivative packages instead of building derivative packages from source code. (default: false).
@@ -594,6 +602,32 @@ dist_build_one_parse_cmd() {
                   export dist_build_ignore_uncommitted="true"
                else
                   printf '%s\n' "${red}${bold}ERROR: supported options for --allow-uncommitted are 'true' or 'false'.${reset}"
+                  exit 1
+               fi
+               shift 2
+               ;;
+           --allow-unsigned)
+               if [ "${2:-}" = "false" ]; then
+                  true "${cyan}INFO: Would verify commit signatures (git_sanity_test).${reset}"
+                  export dist_build_ignore_unsigned="false"
+               elif [ "${2:-}" = "true" ]; then
+                  true "${cyan}INFO: Would skip commit signature verification (git_sanity_test).${reset}"
+                  export dist_build_ignore_unsigned="true"
+               else
+                  printf '%s\n' "${red}${bold}ERROR: supported options for --allow-unsigned are 'true' or 'false'.${reset}"
+                  exit 1
+               fi
+               shift 2
+               ;;
+           --sign-and-tag)
+               if [ "${2:-}" = "true" ]; then
+                  true "${cyan}INFO: Would sign and tag HEAD and submodules.${reset}"
+                  export dist_build_sign_and_tag="true"
+               elif [ "${2:-}" = "false" ]; then
+                  true "${cyan}INFO: Would skip signing and tagging (sign-and-tag no-op).${reset}"
+                  export dist_build_sign_and_tag="false"
+               else
+                  printf '%s\n' "${red}${bold}ERROR: supported options for --sign-and-tag are 'true' or 'false'.${reset}"
                   exit 1
                fi
                shift 2
