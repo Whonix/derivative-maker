@@ -1,3 +1,47 @@
+commit 44c83df82e5d604343774f4a6a5a8979f8e32d0a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 30 19:31:33 2026 -0400
+
+    .
+
+commit 73fe0cce0e811612a4b8ff4fcfc9703d68ada3d6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 30 19:26:37 2026 -0400
+
+    .
+
+commit c71c0ea70927bcadb78490eaa8ba4a76e55208b0
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 30 15:48:23 2026 -0400
+
+    Revert "refactoring"
+
+    This reverts commit 8bc0545e819d02eb80d727a52b0deb2739b0a0be.
+
+commit 8bc0545e819d02eb80d727a52b0deb2739b0a0be
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 30 15:46:06 2026 -0400
+
+    refactoring
+
+commit 6c0d02c398a4f33dbb08eb9b4e83dca7e4960225
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 30 15:45:54 2026 -0400
+
+    .
+
+commit 20bd3586651916cd1229c36f1ed07456ed9c3ddc
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jun 30 15:21:43 2026 -0400
+
+    .
+
+commit 149639e2c2ccd3675029085695f0f6db36a8804d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Jun 29 23:38:46 2026 +0000
+
+    bumped changelog version
+
 commit 5277b85a284b2f8b275bb4354c5845ed012107b6
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Mon Jun 29 19:35:42 2026 -0400
