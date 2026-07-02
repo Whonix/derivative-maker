@@ -851,7 +851,7 @@ fi
 ## Help update-torbrowser and other software find the Tor server if using
 ## '--connection tor'.
 if [ "${dist_build_sources_clearnet_or_onion:-}" = 'onion' ]; then
-   if [ -z "${CURL_PROXY}" ]; then
+   if [ -z "${CURL_PROXY:-}" ]; then
       ## TODO: Possibly allow customizing the server and port for this?
       ## HARDCODED.
       CURL_PROXY='--proxy socks5h://127.0.0.1:9050'
@@ -1025,7 +1025,7 @@ fi
 ## that may be attached to the git tag so that 'dist_build_version' is a
 ## clean version string regardless of which release channel we are on.
 ## Single sed invocation with alternation instead of three pipelines.
-dist_build_version="$(printf "%s\n" "$dist_build_version" | sed "s#-(developers-only|testers-only|stable)##g")"
+dist_build_version="$(printf "%s\n" "$dist_build_version" | sed -E "s#-(developers-only|testers-only|stable)##g")"
 
 ## Using `export`, so 70_log_build_version can read it.
 export dist_build_version
