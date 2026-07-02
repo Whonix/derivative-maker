@@ -3,6 +3,10 @@
 ## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Intentional word-splitting of cowbuilder command arguments (e.g. the
+## optional COWBUILDER_PREFIX); quoting them would break the call.
+# shellcheck disable=SC2086
+
 ## example usage:
 
 #make_cross_build_platform_list="armel armhf i386 amd64 arm64" ./build-steps.d/*_cowbuilder-setup --allow-untagged true --allow-uncommitted true --flavor source --target root
@@ -12,6 +16,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -124,7 +130,7 @@ cowbuilder_setup_do() {
                   --mirror "$dist_build_apt_sources_mirror" \
                   --debootstrap "$dist_source_help_steps_folder/mmdebstrap" \
                   --hookdir "$dist_source_help_steps_folder/pbuilder-hooks" \
-                  --extrapackages "sudo devscripts debhelper strip-nondeterminism fakeroot apt-transport-tor eatmydata aptitude cowdancer fasttrack-archive-keyring adduser sq" \
+                  --extrapackages "sudo devscripts debhelper strip-nondeterminism fakeroot apt-transport-tor eatmydata aptitude cowdancer fasttrack-archive-keyring adduser sq qemu-utils safe-rm" \
                   || { cowbuilder_exit_code="$?" ; true; };
 
          if [ -d "$base_folder" ]; then

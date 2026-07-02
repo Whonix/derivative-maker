@@ -32,6 +32,14 @@ source "${repo_root}/help-steps/variables"
 
 cd -- "${repo_root}"
 
+## Opt-out for local work via dist_build_sign_and_tag (set in
+## help-steps/variables; default 'true', overridden via --sign-and-tag or a
+## buildconfig.d snippet).
+if [ ! "${dist_build_sign_and_tag}" = "true" ]; then
+   true "INFO: ${BASH_SOURCE[0]}: dist_build_sign_and_tag=${dist_build_sign_and_tag}, skipping sign+tag."
+   exit 0
+fi
+
 ## Redistributable builds rely on offline-signed upstream tags;
 ## re-tagging or re-signing locally defeats the offline-key trust
 ## root. CI is exempt - the dry-run pipeline runs against a

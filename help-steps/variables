@@ -3,11 +3,22 @@
 ## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Static-analysis waivers for this legacy, sourced build library:
+## - intentional word-splitting of command arguments;
+## - 'command -v' for dependency probing during early bootstrap, before the
+##   'has' helper is guaranteed present;
+## - 'rm' of specific, known files (not user-supplied paths).
+# shellcheck disable=SC2086
+## style-ok: no-has
+## style-ok: no-safe-rm
+
 #set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "${BASH_SOURCE[0]} INFO: begin"
 
@@ -123,6 +134,23 @@ export binary_build_folder_dist
 MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
 [ -n "${source_code_folder_dist:-}" ] || source_code_folder_dist="$(dirname -- "$MYDIR")"
 export source_code_folder_dist
+
+## '$binary_build_folder_dist' and '$source_code_folder_dist' are bind-mounted
+## into the cowbuilder chroot for the VirtualBox VM steps -- see
+## 'build-steps.d/4600_create-vbox-vm' and 'dm-prepare-release' (in
+## developer-meta-files), which pass them via 'cowbuilder --bindmounts'.
+## pbuilder word-splits BINDMOUNTS on whitespace internally
+## ('for i in $BINDMOUNTS'), so a path containing whitespace silently breaks the
+## bind-mount. Fail early here, with a clear message, instead of late with a
+## cryptic pbuilder error.
+for space_check_var in binary_build_folder_dist source_code_folder_dist ; do
+   case "${!space_check_var}" in
+      *[[:space:]]*)
+         error "${space_check_var} must not contain whitespace (it is bind-mounted into the cowbuilder chroot and pbuilder word-splits BINDMOUNTS): '${!space_check_var}'"
+         ;;
+   esac
+done
+unset space_check_var
 
 [ -n "${dist_parent_folder:-}" ] || dist_parent_folder="$(dirname -- "$source_code_folder_dist")"
 [ -n "${dist_developer_meta_files_folder:-}" ] || dist_developer_meta_files_folder="${source_code_folder_dist}/packages/kicksecure/developer-meta-files"
@@ -336,6 +364,9 @@ else
 
    ## Non-redistributable builds use '--tb open' by default.
    [ -n "${anon_shared_inst_tb:-}" ] || anon_shared_inst_tb="open"
+
+   [ -n "${build_remote_repo_enable:-}" ] || build_remote_repo_enable="false"
+   export build_remote_repo_enable
 fi
 ## Export sq_git_trust_root so 'help-steps/git_sanity_test' can read it.
 export sq_git_trust_root
@@ -546,6 +577,15 @@ if [ "${dist_build_source_run:-}" = "true" ]; then
    [ -n "${dist_build_type_short:-}" ] || dist_build_type_short="source"
    [ -n "${dist_build_desktop:-}" ] || dist_build_desktop="none"
 fi
+
+## Some flavor/target combinations do not set 'dist_build_type_long' in the
+## per-flavor blocks above -- e.g. the 'kicksecure-cli' / 'kicksecure-lxqt'
+## blocks only set it when 'dist_build_type' is 'vm' or 'host', so a
+## '--target source' build leaves it unset. Give it a useful value in all
+## cases by defaulting to 'dist_build_type_short' (always set by the flavor
+## blocks, and equal to 'dist_build_type_long' for kicksecure builds), so
+## every consumer can rely on it being set.
+[ -n "${dist_build_type_long:-}" ] || dist_build_type_long="${dist_build_type_short:-}"
 
 export dist_build_type_long
 
@@ -769,6 +809,10 @@ fi
 #[ -n "${REPO_PROXY:-}" ] || REPO_PROXY="http://127.0.0.1:9977"
 [ -n "${APPROX_PROXY_ENABLE:-}" ] || APPROX_PROXY_ENABLE='yes'
 
+[ -v DEBOOTSTRAP_PREFIX ] || DEBOOTSTRAP_PREFIX=""
+[ -v COWBUILDER_PREFIX ] || COWBUILDER_PREFIX=""
+[ -v LIVEBUILD_PREFIX ] || LIVEBUILD_PREFIX=""
+
 if [ "${APPROX_PROXY_ENABLE}" = "yes" ]; then
    ## apt parameters must be without quotes
    ## apt parameters must be without equals sign
@@ -807,14 +851,28 @@ if [ "${dist_build_sources_clearnet_or_onion:-}" = 'onion' ]; then
    fi
 fi
 
+## CURL_RESUME resumes a partially-downloaded file (curl '--continue-at -',
+## the same value tb-updater uses for '--resume'). Default it and export so
+## build steps that reference ${CURL_RESUME:-} resume large downloads; an
+## inherited value still wins.
+[ -n "${CURL_RESUME:-}" ] || CURL_RESUME="--continue-at -"
+export CURL_RESUME
+
 ## Export COWBUILDER_PREFIX so it is available in make-helper.bsh.
 export COWBUILDER_PREFIX
 
+## Variables removed from the environment before entering a target chroot
+## (chroot_run). These name host-only state that must not leak into the built
+## image: TEMP/TMPDIR are host temp dirs, and HELPER_SCRIPTS_PATH points at the
+## host build tree -- inside the chroot the INSTALLED helper-scripts must be
+## used, and package postinsts source "${HELPER_SCRIPTS_PATH:-}/..." expecting
+## it empty so the installed '/usr/libexec/helper-scripts' path is used.
 chroot_env_vars_var_remove_list="
    TEMP
    TEMPDIR
    TMP
    TMPDIR
+   HELPER_SCRIPTS_PATH
 "
 
 chroot_remove_env_list=""
@@ -1096,7 +1154,13 @@ if [ "${dist_build_qcow2:-}" = "true" ]; then
    dist_build_files_to_upload+=("$libvirt_target_qcow2_xz_archive_file")
 fi
 
-if [ "${dist_build_installer_dist:-}" = "true" ]; then
+## Default this target flag at its source so consumers (notably
+## dm-upload-images) can read it bare under 'nounset'; parse-cmd sets it
+## 'true' only for a '--target installer-dist' build.
+[ -n "${dist_build_installer_dist:-}" ] || dist_build_installer_dist="false"
+export dist_build_installer_dist
+
+if [ "${dist_build_installer_dist}" = "true" ]; then
    [ -n "${ssh_uploader_account:-}" ] || ssh_uploader_account="root"
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="
 ${ssh_uploader_account}@kicksecure.com:/var/rsync/dist-installer-cli
@@ -1156,6 +1220,47 @@ if [ ! "${dist_build_conf_file:-}" = "" ]; then
       source "$dist_build_conf_file"
    fi
 fi
+
+## }}}
+
+## {{{ sign-and-tag toggle and signature-verification escape
+##
+## Secure defaults; no auto-detection. Placed after buildconfig.d sourcing so
+## an explicit value (a ${HOMEVAR}/buildconfig.d snippet, env, or the
+## --sign-and-tag / --allow-unsigned options) always wins over the defaults.
+
+## dist_build_sign_and_tag: whether 'help-steps/sign-and-tag' signs and tags
+## HEAD and every submodule. Default 'true'. Set 'false' for local work where
+## the submodule-gitlink re-bumping that re-signing causes is unwanted (it
+## rewrites submodule HEADs and re-commits the parent gitlinks, dirtying the
+## branch).
+[ -v dist_build_sign_and_tag ] || dist_build_sign_and_tag="true"
+export dist_build_sign_and_tag
+
+## dist_build_ignore_unsigned: signature-skip flag consumed by
+## help-steps/git_sanity_test, alongside dist_build_ignore_untagged /
+## dist_build_ignore_uncommitted. Default 'false' (verify). Set 'true' only
+## when deliberately building from unsigned commits; pair it with
+## dist_build_sign_and_tag=false, since not signing means signatures cannot be
+## verified.
+[ -v dist_build_ignore_unsigned ] || dist_build_ignore_unsigned="false"
+export dist_build_ignore_unsigned
+
+## dist_build_script_skip_package_install: optional whitespace-separated list of
+## packages a custom-config build wants skipped at install time (see
+## build-steps.d/*_install-packages).
+[ -v dist_build_script_skip_package_install ] || dist_build_script_skip_package_install=""
+export dist_build_script_skip_package_install
+
+## install_package_list: optional whitespace-separated extra-package lists a
+## custom-config build may set (see build-steps.d/*_install-packages).
+[ -v install_package_list ] || install_package_list=""
+export install_package_list
+
+## flavor_meta_packages_to_install: The core metapackage(s) for an image (this
+## pulls in most of a system's packages).
+[ -v flavor_meta_packages_to_install ] || flavor_meta_packages_to_install=""
+export flavor_meta_packages_to_install
 
 ## }}}
 
@@ -1467,6 +1572,7 @@ env_vars_keep_list="
    tb_disable_anon_ws_dns_conf
    anon_shared_inst_tb
    CURL_PROXY
+   CURL_RESUME
    SKIP_SCRIPTS
    SOURCE_DATE_EPOCH
    dist_aptgetopt_file

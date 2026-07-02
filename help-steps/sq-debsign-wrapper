@@ -32,6 +32,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -40,7 +42,7 @@ true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
 sq_bin="${SQ_BIN:-sq}"
 
-die() {
+exit_with_error() {
   printf '%s\n' "$0: ERROR: $*" >&2
   exit 2
 }
@@ -53,14 +55,14 @@ while (($#)); do
       shift
       ;;
     --local-user|--personal-digest-preferences|--list-options)
-      (($# >= 2)) || die "'$1' requires an argument"
+      (($# >= 2)) || exit_with_error "'$1' requires an argument"
       shift 2
       ;;
     --local-user=*|--personal-digest-preferences=*|--list-options=*)
       shift
       ;;
     --output)
-      (($# >= 2)) || die "--output requires an argument"
+      (($# >= 2)) || exit_with_error "--output requires an argument"
       output="$2"
       shift 2
       ;;
@@ -75,7 +77,7 @@ while (($#)); do
     -*)
       bad_opt="$1"
       shift
-      die "unexpected option: '$bad_opt'"
+      exit_with_error "unexpected option: '$bad_opt'"
       ;;
     *)
       break
@@ -83,17 +85,17 @@ while (($#)); do
   esac
 done
 
-[ -n "${output:-}" ] || die "no --output path supplied"
+[ -n "${output:-}" ] || exit_with_error "no --output path supplied"
 
-(($# >= 1)) || die "no input file supplied"
+(($# >= 1)) || exit_with_error "no input file supplied"
 input="$1"
 shift
 
-[ -n "${input:-}" ] || die "input file must not be empty"
+[ -n "${input:-}" ] || exit_with_error "input file must not be empty"
 
-(($# == 0)) || die "unexpected extra argument(s): '$*'"
+(($# == 0)) || exit_with_error "unexpected extra argument(s): '$*'"
 
-[ -n "${DEBEMAIL-}" ] || die "DEBEMAIL is not set or empty"
+[ -n "${DEBEMAIL-}" ] || exit_with_error "DEBEMAIL is not set or empty"
 
 cmd=(
   "$sq_bin"
