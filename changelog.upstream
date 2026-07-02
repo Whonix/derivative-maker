@@ -1,3 +1,452 @@
+commit a37a16985caab5b174e17c5bd5380ef5c5805859
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 07:18:14 2026 -0400
+
+    .
+
+commit e636aaaeecb1b097e4a0dcec3d78acc72e29ae00
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 07:11:31 2026 -0400
+
+    .
+
+commit ebbe1cd363cb192ab44ce530cb79d6fcc8c589dc
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 05:57:45 2026 -0400
+
+    .
+
+commit 3efa1077294812bf7a1ea8372feae2efc404116f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 05:55:21 2026 -0400
+
+    .
+
+commit 859aebe1d67f04d3d8cbcc33296a31db3615d5e4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 05:15:36 2026 -0400
+
+    .
+
+commit 11a2e91f7c012a37da62c8564b49fe86c3ae99d5
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 05:11:11 2026 -0400
+
+    .
+
+commit 58ec87812ad8c54c3266b6ddabf3fd9308f1f391
+Merge: c7e93560e 0f1d6e0ef
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 04:17:45 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/claude/default-build-remote-derivative-pkgs'
+
+commit 0f1d6e0eff9d2cdea7e138ac3c9f2ce4b1b70c24
+Author: claude (derivative-maker b0dfc869-1cb7-42f6-8aa8-8ad1eafa0b81) <noreply@anthropic.com>
+Date:   Thu Jul 2 04:08:37 2026 -0400
+
+    variables: default build_remote_derivative_pkgs to "false"
+
+    build-steps.d/2800_create-lb-iso:51 (and 232/374/427) reference
+    ${build_remote_derivative_pkgs} without a nounset guard, so a build that
+    never passed --remote-derivative-packages aborted with "unbound
+    variable" under 'set -u'. The variable is otherwise only set by
+    parse-cmd when that option is given.
+
+    Fix at the source rather than papering over each reader with ${var:-}:
+    initialize it in help-steps/variables alongside the other boolean
+    build-flag defaults, using the same '[ -n "${var:-}" ] ||' idiom so
+    parse-cmd / env / buildconfig.d still win. "false" is the normal path
+    (build derivative packages locally, serve them from the local temp apt
+    repo).
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_01FhPYFwuCtfJn3tJJHstoXg
+
+commit c7e93560e2a177ba966619f5b93decbf19e04b6f
+Merge: 7b9fbf3f3 7487bc528
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 03:52:35 2026 -0400
+
+    Merge remote-tracking branch 'github-whonix/master'
+
+commit 7487bc528dcb0d82b62033d16ac3f8b86febc472
+Merge: cdf54e688 2c2114b85
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 03:51:48 2026 -0400
+
+    Merge pull request #16 from ArrayBolt3/arraybolt3/trixie
+
+    Arraybolt3/trixie
+
+commit 7b9fbf3f3c6b4fa72a6e08cb3d90aa66baab4ca4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 03:43:30 2026 -0400
+
+    update VirtualBox download links for Whonix Windows Installer
+
+commit aaa30efa07489f50b102187a27b5bc83c044a5e2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 03:43:05 2026 -0400
+
+    .
+
+commit 616aef278a31497dcb85fe00067a57280dacbedd
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 02:36:20 2026 -0400
+
+    .
+
+commit 0874245d09c9f3c6fb3f72edd757725deb726724
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 02:31:20 2026 -0400
+
+    .
+
+commit a241f6ef81d31f689619298a5523ee9458b56012
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 02:13:33 2026 -0400
+
+    .
+
+commit eb3e396e84eb096842ef6065b9aa5a9e15154de3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 01:57:56 2026 -0400
+
+    comments
+
+commit 1275afb360b67f378b8950bb0c69048cb649f10f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 01:43:54 2026 -0400
+
+    output
+
+commit 5b3a38a17068c840eb58a477be56e7844b238d65
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 01:40:35 2026 -0400
+
+    .
+
+commit b66a5509475f6476e25b07b39b7f0f70a4b8fd00
+Merge: cdf54e688 2c2114b85
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 01:39:24 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit 2c2114b85c33d5c90fa219f98930d2604d209c4f
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Wed Jul 1 21:42:28 2026 -0400
+
+    Additional fixes for nounset, linting, other issues from Claude
+
+commit 61cfd7011c958c372b75c15e470480840fbbe4a8
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Wed Jul 1 20:56:52 2026 -0400
+
+    Comment change, remove an unneeded check_variable_name check against hardcoded values
+
+commit 3a152834b8991b6c7260f3d8ba60537f98b13654
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Tue Jun 30 23:32:30 2026 -0400
+
+    Modified and squashed commit of the following:
+
+    commit a8efa16d3bf867edd678c3d0190406438ccb4fb6
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 19:36:09 2026 -0400
+
+        4600: bindmounts comment -- repeated --bindmounts flags do not help either
+
+        Verified from source: pbuilder-modules mounts via unquoted 'for mnt in
+        $BINDMOUNTS', and '--bindmounts' appends to one string, so repeated flags only
+        help for separate paths, not a space within a path. Note that in the comment.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit ef1150a51e3a8f4c11d75a31ac793258959f29a7
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 19:30:25 2026 -0400
+
+        variables: fail early if a cowbuilder-bindmounted folder has whitespace
+
+        binary_build_folder_dist and source_code_folder_dist are bind-mounted into the
+        cowbuilder chroot for the VirtualBox VM steps (4600_create-vbox-vm and
+        developer-meta-files' dm-prepare-release, via 'cowbuilder --bindmounts').
+        pbuilder word-splits BINDMOUNTS on whitespace internally ('for i in
+        $BINDMOUNTS'), so a path with whitespace silently breaks the bind-mount with a
+        cryptic failure deep in the build. Check both folders right where they are set
+        and error out early with a clear, named message instead.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit d8e12459c98e117100e8bd7daf2af070e7b83cc0
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 19:25:56 2026 -0400
+
+        4600 create-vbox-vm: document bindmounts space-handling; fix stale env-file note
+
+        pbuilder word-splits BINDMOUNTS internally ('for i in $BINDMOUNTS'), so a
+        bind-mount path with a space is unsupported by pbuilder itself and a bash array
+        would not help -- note that so the space-joined string is not "fixed" later.
+        Also drop the now-stale "referenced from the env file" wording (variables now
+        arrive through the environment).
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit 903ff3c4c5d26f1137f59e7435e2dbf1f807c5c0
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 19:18:03 2026 -0400
+
+        vbox chroot: pass variables via --preserve-env, not a generated env-file
+
+        4600_create-vbox-vm and dm-prepare-release's virtualbox_export each serialized
+        the build variables to an env file ('{ ...; declare -p; } > chroot-env-*-vbox-vm')
+        that the chroot script then sourced -- runtime-generated code, against the
+        prefer-static / no-generated-code conventions.
+
+        Instead, export the variables and let the existing '--preserve-env' on the
+        cowbuilder call carry them into the chroot (verified: a --preserve-env'd,
+        exported variable reaches an 'cowbuilder --execute' script's environment).
+        The env-file's two loops become 'export "$var"' rather than
+        'declare -p "$var" > file'; '$SUDO_TO_ROOT' already appends
+        '--preserve-env=$env_vars_keep_list', and several allowlist entries are in the
+        list but not exported, so exporting them here is what makes --preserve-env
+        actually carry them. The chroot scripts drop the env-file argument + 'source'
+        and read straight from the environment, failing loud if a required variable did
+        not cross.
+
+        Verified end to end: a full kicksecure-cli/virtualbox dry-run passes (4600
+        create + 5200 export both run with no env file; OVA produced; exit 0).
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit 737e6d36a7dc182d15a2524afc3573aa90f60bb2
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 18:31:18 2026 -0400
+
+        export-vbox-vm: verify temp.ova as root, with fail-path diagnostics
+
+        After 'VBoxManage export' prints "Successfully exported", verify the '.ova' with
+        a single root-side readability check (root runs under cowbuilder's cowdancer, so
+        it sees the file the export wrote). No retry: re-running only this in-chroot
+        export step against the existing base shows the export is stable -- the file is
+        written and immediately visible every run -- and a full dry-run e2e passes end
+        to end (OVA produced). On the failure path only (zero cost on success) dump the
+        two copy-on-write views, a chroot-fs '*.ova' search, and HOME / LD_PRELOAD /
+        SUDO_TO_VBOX_TEMP, so that if the file ever does go missing again the log pins
+        down whether it is genuinely absent or merely invisible to one view.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit 2f3cfa3bdf0c7d9551cb4fdcd1b591e9faef6d5a
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 16:21:22 2026 -0400
+
+        help-steps: rename custom die() -> exit_with_error (log_run_die collision)
+
+        The sq-debsign-wrapper, sq-git-wrapper and run-as-user wrappers each define
+        their own die() -- a name collision with helper-scripts log_run_die.sh's die().
+        Rename the local function to exit_with_error (these standalone wrappers do not
+        source log_run_die, so porting to its die() is not sensible).
+
+        Static-gate compliance for the touched files (no runtime change beyond the
+        strict block): complete the R-010 strict-mode block, and a no-has waiver for
+        run-as-user's bootstrap 'command -v' probe.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit 537a919f1f94cf74727c25bde2d0134975f84cc1
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 16:08:09 2026 -0400
+
+        4600 create-vbox-vm: chroot env file is serialized data, not a script
+
+        The env file passed to the create-vbox-vm chroot script (restored via
+        'source') is serialized variables (declare -x), never executed -- drop the
+        misleading '#!/bin/bash' shebang and frame it as a data file.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit d57eb0a637cbc3afc8616e0849d9725dcc702e74
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 15:35:35 2026 -0400
+
+        variables: default dist_build_installer_dist at its source (nounset)
+
+        dm-upload-images:62 reads $dist_build_installer_dist bare, but parse-cmd only
+        sets it 'true' for a --target installer-dist build, so it was unbound for other
+        targets and aborted dm-upload-images under set -o nounset. Give it a useful
+        default ('false') at its source in help-steps/variables (which dm-upload-images
+        sources), so the bare consumer is safe -- rather than guarding the reader.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit 945588fe3b2e403ba15c94663ad1534747197d21
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 15:12:45 2026 -0400
+
+        sign-and-tag toggle: drop AI auto-detection, use secure defaults + local snippet
+
+        On reflection, auto-detecting an AI agent (CLAUDECODE) and silently skipping
+        signing + signature verification is too magic and weakens the gate by default.
+        Make it explicit instead:
+
+        - help-steps/variables: remove ai_detected entirely. dist_build_sign_and_tag
+          now defaults to 'true' and dist_build_ignore_unsigned to 'false' (sign and
+          verify); no auto-derivation. An explicit value still wins ([ -v ]).
+        - The opt-out lives only in a ${HOMEVAR}/buildconfig.d snippet (a local quirk),
+          which sets dist_build_sign_and_tag=false AND dist_build_ignore_unsigned=true
+          together.
+        - parse-cmd / sign-and-tag: drop the AI-detection wording from help/comments.
+
+        The mechanisms (the --sign-and-tag / --allow-unsigned options, the
+        sign-and-tag no-op, and git_sanity_test's --allow-unsigned escape) remain, but
+        are opt-in and secure-by-default; real / CI / redistributable builds are
+        unaffected.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit 98351efddb5541c004e894ac7368642c7724695d
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 15:01:04 2026 -0400
+
+        git_sanity_test: add --allow-unsigned escape, wired to dist_build_sign_and_tag
+
+        Skipping sign-and-tag leaves HEAD unsigned, which git_sanity_test's sq-git
+        authentication rejects (trust_root=HEAD does not bypass it: the trust root
+        itself must be policy-verifiable). So pair the signing opt-out with a
+        signature-verification opt-out, mirroring --allow-untagged / --allow-uncommitted.
+
+        - git_sanity_test: read a new dist_build_ignore_unsigned env var; when 'true',
+          sq_git_verify() skips the sq-git signature authentication (still runs the
+          tag and uncommitted checks). Propagates into --mode submodules via the
+          exported env var. Validated like the sibling ignore flags.
+        - help-steps/variables: derive dist_build_ignore_unsigned as the inverse of
+          dist_build_sign_and_tag (not signing => cannot verify signatures); explicit
+          value wins ([ -v ]).
+        - help-steps/parse-cmd: add an idiomatic '--allow-unsigned true|false' option.
+
+        Net effect: AI-driven / local builds (dist_build_sign_and_tag=false) skip both
+        signing and signature verification; real / CI / redistributable builds keep
+        the full cryptographic gate.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit 8fbf50610c6ddfa0799ac3e96c42f4c1833a8bc9
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 14:32:52 2026 -0400
+
+        sign-and-tag: add dist_build_sign_and_tag toggle, auto-skip for AI agents
+
+        help-steps/sign-and-tag re-signs HEAD and every submodule (commit --amend
+        -S), which rewrites submodule HEAD SHAs and re-bumps the parent repo's
+        submodule gitlinks -- dirtying the working branch. That is useful on
+        ephemeral CI / in docker / for users committing their own submodule changes,
+        but unwanted for AI-driven local work.
+
+        - help-steps/variables: add a generic ai_detected flag (Claude Code is the
+          first agent: CLAUDECODE set => true; extensible). Add dist_build_sign_and_tag,
+          defaulting to false when ai_detected=true and true otherwise. Both use
+          '[ -v ... ]' so an explicit value (--sign-and-tag option, env, or
+          buildconfig.d snippet) always wins. Placed after buildconfig.d sourcing.
+        - help-steps/sign-and-tag: become a clean no-op (exit 0) when
+          dist_build_sign_and_tag != true, before the redistributable/policy checks
+          and the destructive submodule amend walk.
+        - help-steps/parse-cmd: add an idiomatic '--sign-and-tag true|false' option.
+
+        A ${HOMEVAR}/buildconfig.d snippet can force the skip robustly where
+        CLAUDECODE is not propagated (e.g. the systemd-run e2e worker across the
+        sudo boundary).
+
+        Static-gate compliance for parse-cmd (no runtime change): complete the
+        R-010 strict-mode block and waive the intentional SC2004 arithmetic style.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit 3b253850440b228fa0520a10ea22577ec63997dc
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 14:03:27 2026 -0400
+
+        vbox: create and export the VirtualBox VM inside the cowbuilder chroot
+
+        VirtualBox is installed into the amd64 cowbuilder chroot (it is not packaged
+        for arm64 Linux and the build host stays clean), so both VM creation and OVA
+        export must run there via cowbuilder --execute, with the artifacts written to
+        bind-mounted paths so they land on the host.
+
+        - 1300_cowbuilder-setup: add qemu-utils and safe-rm to the chroot
+          --extrapackages (needed by the VBox chroot scripts: qemu-img convert and
+          safe-rm cleanup).
+        - pbuilder-chroot-script-create-vbox-vm: install a runcwd sudoers rule so
+          '$SUDO_TO_VBOX_TEMP' (sudo --chdir) is permitted inside the chroot
+          (mirrors the host rule from prepare-build-machine); clear the redundant
+          $SUDO_TO_ROOT (the script already runs as root, and sudo's env_reset broke
+          cowbuilder's cowdancer COW layer -> 'cp: Cannot allocate memory').
+        - pbuilder-chroot-script-export-vbox-vm: new chroot script that runs the
+          'VBoxManage export' / 'import --dry-run' portion of dm-prepare-release's
+          virtualbox_export; the .ova is moved to the bind-mounted
+          binary_image_ova_file so it lands on the host. (Host wrapper lives in the
+          developer-meta-files submodule.)
+        - 5200_prepare-release: document the now-implemented in-chroot export design.
+        - pbuilder-chroot-script-virtualbox: define a local error() (help-steps/pre
+          is not available in the chroot).
+        - 1600_export-libvirt-xml: stop copying the Whonix-External / Whonix-Internal
+          network XML files; they were removed from the libvirt-dist package.
+
+        Static-gate compliance for the touched files (no runtime change): complete
+        the R-010 strict-mode block and add the SC2086 / command-v / safe-rm waivers
+        documented inline.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+    commit 15dbd0cb4410c8f98b11d5a2be971cf49a3f5c4a
+    Author: claude (dev22 c20093f1-1b30-4397-87b6-9586321c87df) <noreply@anthropic.com>
+    Date:   Tue Jun 30 14:03:09 2026 -0400
+
+        build: nounset/exit-code robustness for unicode check, CURL_RESUME, cowbuilder
+
+        Functional changes:
+        - 1200_prepare-build-machine: drive dm-check-unicode by its exit code and
+          fail closed -- an exit code other than the malicious-unicode finding means
+          the tool could not run, which is an error, not a pass.
+        - 1400_local-dependencies + help-steps/variables: make CURL_RESUME
+          nounset-safe (${CURL_RESUME:-}) with a useful default (--continue-at -,
+          matching tb-updater); keep resume OFF for the two Windows downloads
+          (VirtualBox installer, vc_redist) that return HTTP 416 with it.
+        - help-steps/variables: always set dist_build_type_long to a useful value
+          (default to dist_build_type_short) so flavor/target combinations that did
+          not set it -- e.g. --target source --flavor kicksecure-lxqt -- no longer
+          trip set -o nounset in downstream consumers.
+        - 4600_create-vbox-vm: use ${COWBUILDER_PREFIX:-} like every other consumer.
+
+        Static-gate compliance for the touched files (no runtime change): complete
+        the R-010 strict-mode block (shopt -s inherit_errexit/shift_verbose, already
+        enabled via help-steps/pre), and add file-level waivers documenting the
+        intentional word-splitting (SC2086), bootstrap 'command -v', and 'rm' of
+        specific known files.
+
+        Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+        Claude-Session: https://claude.ai/code/session_018bezwAzE9uxSX1xrH7okFV
+
+commit cdf54e688fbebf54743b468a4c8f1b31d28ae692
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 1 00:04:17 2026 +0000
+
+    bumped changelog version
+
 commit 44c83df82e5d604343774f4a6a5a8979f8e32d0a
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Tue Jun 30 19:31:33 2026 -0400
