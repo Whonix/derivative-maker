@@ -19,6 +19,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -37,7 +39,7 @@ true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 sq_bin="${SQ_BIN:-sq}"
 debug="${SQ_GIT_WRAPPER_DEBUG:-}"
 
-die() {
+exit_with_error() {
   printf '%s\n' "$0: ERROR: $*" >&2
   exit 2
 }
@@ -54,14 +56,14 @@ status_fd=""
 while (($#)); do
   case "$1" in
     --keyid-format)
-      [ "$#" -ge 2 ] || die "missing value for --keyid-format '$1'"
+      [ "$#" -ge 2 ] || exit_with_error "missing value for --keyid-format '$1'"
       shift 2
       ;;
     --keyid-format=*)
       shift
       ;;
     --status-fd)
-      [ "$#" -ge 2 ] || die "missing value for --status-fd"
+      [ "$#" -ge 2 ] || exit_with_error "missing value for --status-fd"
       status_fd="$2"
       shift 2
       ;;
@@ -70,14 +72,14 @@ while (($#)); do
       shift
       ;;
     --verify)
-      [ "$#" -ge 3 ] || die "missing arguments for --verify option"
+      [ "$#" -ge 3 ] || exit_with_error "missing arguments for --verify option"
       mode="verify"
       sigfile="$2"
-      [ "$3" = "-" ] || die "expected '-' after signature file, got '$3'"
+      [ "$3" = "-" ] || exit_with_error "expected '-' after signature file, got '$3'"
       shift 3
       ;;
     -bsau)
-      [ "$#" -ge 2 ] || die "missing signing key after -bsau option"
+      [ "$#" -ge 2 ] || exit_with_error "missing signing key after -bsau option"
       mode="sign"
       signing_key="$2"
       shift 2
@@ -88,7 +90,7 @@ while (($#)); do
       shift
       ;;
     -u)
-      [ "$#" -ge 2 ] || die "missing signing key after -u option"
+      [ "$#" -ge 2 ] || exit_with_error "missing signing key after -u option"
       mode="sign"
       signing_key="$2"
       shift 2
@@ -99,7 +101,7 @@ while (($#)); do
       shift
       ;;
     --local-user)
-      [ "$#" -ge 2 ] || die "missing signing key after --local-user option"
+      [ "$#" -ge 2 ] || exit_with_error "missing signing key after --local-user option"
       mode="sign"
       signing_key="$2"
       shift 2
@@ -122,7 +124,7 @@ while (($#)); do
       break
       ;;
     -*)
-      die "unexpected option: '$1'"
+      exit_with_error "unexpected option: '$1'"
       ;;
     *)
       ## Be tolerant if a caller passes the signing key as a leftover arg.
@@ -130,7 +132,7 @@ while (($#)); do
         signing_key="$1"
         shift
       else
-        die "unexpected argument: '$1'"
+        exit_with_error "unexpected argument: '$1'"
       fi
       ;;
   esac
@@ -138,7 +140,7 @@ done
 
 case "$mode" in
   verify)
-    [ -n "${sigfile:-}" ] || die "no signature file supplied"
+    [ -n "${sigfile:-}" ] || exit_with_error "no signature file supplied"
 
     ## Git provides the signed payload on stdin.
     ##
@@ -174,7 +176,7 @@ case "$mode" in
     ;;
 
   sign)
-    [ -n "${signing_key:-}" ] || die "no signing key supplied"
+    [ -n "${signing_key:-}" ] || exit_with_error "no signing key supplied"
 
     cmd=( "$sq_bin" sign )
 
@@ -210,6 +212,6 @@ case "$mode" in
     ;;
 
   *)
-    die "could not detect sign or verify mode"
+    exit_with_error "could not detect sign or verify mode"
     ;;
 esac

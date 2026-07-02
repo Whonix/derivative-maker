@@ -3,13 +3,18 @@
 ## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Bootstrap dependency probe uses 'command -v' (no helper-scripts dep).
+## style-ok: no-has
+
 set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
-die() { printf '%s\n' "ERROR: $*" >&2; exit 1; }
+exit_with_error() { printf '%s\n' "ERROR: $*" >&2; exit 1; }
 
 print_usage() {
   printf '%s\n' "\
@@ -67,12 +72,12 @@ target_user=""
 while [ "$#" -gt 0 ]; do
    case "$1" in
       --chown)
-         [ -n "${2:-}" ] || die "--chown requires a directory argument"
+         [ -n "${2:-}" ] || exit_with_error "--chown requires a directory argument"
          chown_dir="$2"
          shift 2
          ;;
       --shell)
-         [ -n "${2:-}" ] || die "--shell requires a shell path argument"
+         [ -n "${2:-}" ] || exit_with_error "--shell requires a shell path argument"
          target_shell="$2"
          shift 2
          ;;
@@ -85,15 +90,15 @@ while [ "$#" -gt 0 ]; do
          exit 0
          ;;
       *)
-         die "unknown option: '$1' (use '--' to separate options from <user> <cmd>)"
+         exit_with_error "unknown option: '$1' (use '--' to separate options from <user> <cmd>)"
          ;;
    esac
 done
 
 if [ "$#" -eq 0 ]; then
-  die "missing <user> and <cmd> arguments; see --help"
+  exit_with_error "missing <user> and <cmd> arguments; see --help"
 elif [ "$#" -eq 1 ]; then
-  die "missing <cmd>; see --help"
+  exit_with_error "missing <cmd>; see --help"
 fi
 
 target_user="$1"
@@ -101,7 +106,7 @@ shift
 
 case "$target_user" in
    *[!a-zA-Z0-9_.-]*|"")
-      die "refusing to operate on suspicious username: '$target_user'"
+      exit_with_error "refusing to operate on suspicious username: '$target_user'"
       ;;
 esac
 
@@ -117,7 +122,7 @@ if id -u -- "$target_user" >/dev/null 2>&1; then
 fi
 
 [ "$caller_uid" = "0" ] || \
-   die "caller is uid '$caller_uid', not root, and not '$target_user'; refusing to escalate."
+   exit_with_error "caller is uid '$caller_uid', not root, and not '$target_user'; refusing to escalate."
 
 ## Prerequisite: 'sponge' (moreutils) for atomic visudo write. The
 ## build itself installs 'moreutils' in
@@ -125,7 +130,7 @@ fi
 ## 'buildconfig.d/30_dependencies.conf'), but this wrapper runs before
 ## any build step, so we need it on the host already.
 command -v sponge >/dev/null \
-   || die "'sponge' not found on PATH; 'apt-get install moreutils' and retry"
+   || exit_with_error "'sponge' not found on PATH; 'apt-get install moreutils' and retry"
 
 ## Idempotent user creation.
 if ! id -- "$target_user" >/dev/null 2>&1; then
@@ -147,7 +152,7 @@ EOF
 ## Optional source-tree chown. Recursive ownership changes are
 ## destructive, so this is opt-in.
 if [ -n "$chown_dir" ]; then
-   [ -d "$chown_dir" ] || die "--chown target '$chown_dir' is not a directory"
+   [ -d "$chown_dir" ] || exit_with_error "--chown target '$chown_dir' is not a directory"
    chown -R -- "$target_user:$target_user" "$chown_dir"
 fi
 

@@ -13,25 +13,54 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
-true "INFO: Currently running chroot script: ${BASH_SOURCE[0]} $*"
+true "INFO: Currently running chroot script: ${BASH_SOURCE[0]}"
 
-env_file="${1:-}"
-if [ -z "$env_file" ] || [ ! -r "$env_file" ]; then
-   printf '%s\n' "ERROR: env file '$env_file' not readable inside chroot." >&2
-   exit 1
-fi
+## Variables arrive through the environment: the '4600_create-vbox-vm' host
+## wrapper exports the curated allowlist and invokes `sudo ... cowbuilder`
+## with '--preserve-env', so they are carried into this chroot (VMNAME, VMRAM,
+## VRAM, binary_image_raw_file, ...). Fail loud if a required one did not
+## make it.
+for required_var in \
+   VMNAME VMRAM VRAM binary_image_raw_file HOMEVAR_VBOX_TEMP \
+   SUDO_TO_VBOX_TEMP vm_names_to_be_exported ; do
+   if [ ! -v "$required_var" ]; then
+      printf '%s\n' "ERROR: required variable '$required_var' not present in the chroot environment." >&2
+      exit 1
+   fi
+done
 
-## Restores VMNAME, VMRAM, VRAM, binary_image_raw_file,
-## HOMEVAR_VBOX_TEMP, SUDO_TO_VBOX_TEMP, SUDO_TO_ROOT, dist_build_type_*,
-## dist_build_fast1, dist_build_raw, dist_build_virtualbox,
-## vm_names_to_be_exported, etc. passed through from the host wrapper.
-# shellcheck disable=SC1090
-source "$env_file"
+## This script runs as root inside the cowbuilder chroot (via
+## 'cowbuilder --execute'), so 'sudo' to root is redundant. Worse, sudo's
+## 'env_reset' drops 'COWDANCER_ILISTFILE' while cowbuilder's 'libcowdancer'
+## remains LD_PRELOAD'ed, leaving the copy-on-write layer half-initialized so
+## that root file operations fail with 'cp: ... Cannot allocate memory'. Run
+## root commands directly (without sudo) so the inherited cowdancer
+## environment stays intact. '$SUDO_TO_VBOX_TEMP' is deliberately NOT cleared
+## here: it must drop privileges to the 'dm-vbox-temp' account.
+SUDO_TO_ROOT=""
 
 error() {
    printf '%s\n' "ERROR: $*" >&2
    exit 1
+}
+
+setup_vbox_temp_sudo() {
+   ## '$SUDO_TO_VBOX_TEMP' runs 'sudo --chdir' (-D), which sudo refuses
+   ## unless the policy permits 'runcwd'. On the build host that rule is
+   ## installed by 'build-steps.d/*_prepare-build-machine'; inside this
+   ## chroot it must be installed here. This script runs as root (via
+   ## 'cowbuilder --execute'), so the invoking user is root and a global
+   ## 'Defaults runcwd=*' is the matching rule. 'sponge' (used on the host)
+   ## may be absent in the chroot, so use 'tee' (as
+   ## 'pbuilder-chroot-script-virtualbox' does).
+   printf '%s\n' "Defaults runcwd=*" \
+      | SUDO_EDITOR="" VISUAL="" EDITOR=tee visudo -f /etc/sudoers.d/dm-vbox-temp-runcwd >/dev/null
+
+   ## Sanity test.
+   visudo --strict --check /etc/sudoers.d/dm-vbox-temp-runcwd
 }
 
 debugging_pre() {
@@ -91,13 +120,29 @@ convert_raw_to_vdi() {
 
 general_setup() {
    ## Create a new VM. Name: $VMNAME
-   $SUDO_TO_VBOX_TEMP VBoxManage createvm --name "$VMNAME" --register
-
-   if ! printf '%s\n' "$dist_build_target_arch" | grep --fixed-strings -- "64" ; then
-      $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --ostype Debian
-   else
-      $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --ostype Debian_64
-   fi
+   ##
+   ## The platform architecture is fixed at 'createvm' time and the OS type must
+   ## match it, so select both from '$dist_build_target_arch' with an exact
+   ## 'case' (a substring test for '64' would misfile 'arm64' as x86-64).
+   case "$dist_build_target_arch" in
+      i386)
+         $SUDO_TO_VBOX_TEMP VBoxManage createvm --name "$VMNAME" --register
+         $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --ostype Debian
+         ;;
+      amd64)
+         $SUDO_TO_VBOX_TEMP VBoxManage createvm --name "$VMNAME" --register
+         $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --ostype Debian_64
+         ;;
+      arm64)
+         $SUDO_TO_VBOX_TEMP VBoxManage createvm --name "$VMNAME" --platform-architecture arm --register
+         $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --ostype Debian_arm64
+         ## ARM has no legacy BIOS; boot via EFI.
+         $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --firmware efi
+         ;;
+      *)
+         error "Unsupported dist_build_target_arch '$dist_build_target_arch' for VirtualBox VM creation."
+         ;;
+   esac
 
    ## SATA AHCI is VirtualBox's default for VMs created using the VirtualBox
    ## graphical user interface (GUI) for Debian 64-bit VMs.
@@ -129,8 +174,10 @@ general_setup() {
    ## Settings->Display->Video Memory
    $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --vram "$VRAM"
 
-   ## Enable PAE.
-   $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --pae on
+   ## Enable PAE. x86-only feature.
+   if [ ! "$dist_build_target_arch" = "arm64" ]; then
+      $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --x86-pae on
+   fi
 
    ## 3 virtual CPU cores by default.
    ## No longer 4 virtual CPU cores by default.
@@ -439,6 +486,8 @@ main() {
       printf '%s\n' "INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_virtualbox is not set to 'true'."
       return 0
    fi
+
+   setup_vbox_temp_sudo
 
    debugging_pre
 

@@ -3,11 +3,17 @@
 ## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Intentional word-splitting of curl command arguments (CURL_RESUME,
+## CURL_PROXY, CURL_OPTS, ...); quoting them would break the call.
+# shellcheck disable=SC2086
+
 set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -195,9 +201,14 @@ virtualbox_windows_installer_download() {
    #CURL_PRGRS="$source_code_folder_dist/packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/curl-prgrs"
    CURL_PRGRS="curl"
 
-   ## Causing issues.
+   ## Resume must stay OFF for the two downloads below (VirtualBox Windows
+   ## installer and vc_redist). With resume enabled they fail:
    ## > curl: (22) The requested URL returned error: 416
-   #CURL_RESUME="--continue-at -"
+   ## 'help-steps/variables' now exports CURL_RESUME="--continue-at -" by
+   ## default (to match tb-updater), so explicitly clear it here. Previously
+   ## this was a commented-out assignment, which sufficed only while the
+   ## global default was empty.
+   CURL_RESUME=""
 
    ## TODO
    #CURL_PROXY=
@@ -208,16 +219,16 @@ virtualbox_windows_installer_download() {
    CURL_OUT_FILE="$binary_build_folder_dist/virtualbox-windows-installer-binary/$versioned_virtualbox_file_name"
 
    $CURL_PRGRS \
-      $CURL_RESUME \
+      ${CURL_RESUME:-} \
       --fail \
-      $CURL_PROXY \
+      ${CURL_PROXY:-} \
       $CURL_FORCE_SSL \
       --retry-connrefused \
       --retry 10 \
       --retry-delay 60 \
       --max-time "$curl_download_max_time" \
       --location \
-      $CURL_OPTS \
+      ${CURL_OPTS:-} \
       --output "$CURL_OUT_FILE" \
       "$curl_download_target_url"
 
@@ -244,16 +255,16 @@ virtualbox_windows_installer_download() {
    CURL_FORCE_SSL="--tlsv1.2 --proto =https"
 
    $CURL_PRGRS \
-      $CURL_RESUME \
+      ${CURL_RESUME:-} \
       --fail \
-      $CURL_PROXY \
+      ${CURL_PROXY:-} \
       $CURL_FORCE_SSL \
       --retry-connrefused \
       --retry 10 \
       --retry-delay 60 \
       --max-time "$curl_download_max_time" \
       --location \
-      $CURL_OPTS \
+      ${CURL_OPTS:-} \
       --output "$CURL_OUT_FILE" \
       "$curl_download_target_url"
 
