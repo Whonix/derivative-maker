@@ -1090,6 +1090,18 @@ set_default_variable binary_image_qcow2_file "${dist_binary_build_folder}/${SHOR
 ## resolves in both.
 set_default_variable binary_image_vdi_dir "${HOMEVAR}/derivative-maker-vbox-workdir"
 
+## Like '$binary_build_folder_dist' / '$source_code_folder_dist' (checked
+## earlier), '$binary_image_vdi_dir' is passed via 'cowbuilder --bindmounts',
+## which pbuilder word-splits on whitespace, so a path containing whitespace
+## silently breaks the bind-mount. It is checked here rather than in that early
+## loop because it is only defined at this point. Fail early with a clear
+## message instead of late with a cryptic pbuilder / VirtualBox error.
+case "$binary_image_vdi_dir" in
+   *[[:space:]]*)
+      error "binary_image_vdi_dir must not contain whitespace (it is bind-mounted into the cowbuilder chroot and pbuilder word-splits BINDMOUNTS): '$binary_image_vdi_dir'"
+      ;;
+esac
+
 ## NOTE: 'binary_image_{raw,qcow2}_file_for_unified' reads like a list but
 ## is singular by construction. For a unified (multi-VM) build such as
 ## Whonix, 'vm_names_to_be_exported' contains exactly two names (Gateway

@@ -160,14 +160,7 @@ error() {
    $output_cmd "${blue}############################################################${reset}"
    error_reason="${bold}message:${reset} $*
 "
-   $output_cmd "      ${bold}${red}See above! (There should be a bold, red message surrounded by blue hashtags (#).)${reset}"
-   ## Trip the ERR trap (see the 'ERR path' comment at the top of this file) so
-   ## the backtrace / retry / exit handler runs. Use 'false' - a defined command
-   ## that cleanly returns 1 - rather than a bare undefined 'error_', which
-   ## tripped the same trap only via a misleading 'command not found' (exit code
-   ## 127), polluting 'last_failed_bash_command' and 'last_failed_exit_code' in
-   ## the diagnostics.
-   false
+   error_ "See above! (There should be a bold, red message surrounded by blue hashtags (#).)"
    true
 }
 
