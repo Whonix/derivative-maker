@@ -364,6 +364,9 @@ else
 
    ## Non-redistributable builds use '--tb open' by default.
    [ -n "${anon_shared_inst_tb:-}" ] || anon_shared_inst_tb="open"
+
+   [ -n "${build_remote_repo_enable:-}" ] || build_remote_repo_enable="false"
+   export build_remote_repo_enable
 fi
 ## Export sq_git_trust_root so 'help-steps/git_sanity_test' can read it.
 export sq_git_trust_root
@@ -806,6 +809,10 @@ fi
 #[ -n "${REPO_PROXY:-}" ] || REPO_PROXY="http://127.0.0.1:9977"
 [ -n "${APPROX_PROXY_ENABLE:-}" ] || APPROX_PROXY_ENABLE='yes'
 
+[ -v DEBOOTSTRAP_PREFIX ] || DEBOOTSTRAP_PREFIX=""
+[ -v COWBUILDER_PREFIX ] || COWBUILDER_PREFIX=""
+[ -v LIVEBUILD_PREFIX ] || LIVEBUILD_PREFIX=""
+
 if [ "${APPROX_PROXY_ENABLE}" = "yes" ]; then
    ## apt parameters must be without quotes
    ## apt parameters must be without equals sign
@@ -854,11 +861,18 @@ export CURL_RESUME
 ## Export COWBUILDER_PREFIX so it is available in make-helper.bsh.
 export COWBUILDER_PREFIX
 
+## Variables removed from the environment before entering a target chroot
+## (chroot_run). These name host-only state that must not leak into the built
+## image: TEMP/TMPDIR are host temp dirs, and HELPER_SCRIPTS_PATH points at the
+## host build tree -- inside the chroot the INSTALLED helper-scripts must be
+## used, and package postinsts source "${HELPER_SCRIPTS_PATH:-}/..." expecting
+## it empty so the installed '/usr/libexec/helper-scripts' path is used.
 chroot_env_vars_var_remove_list="
    TEMP
    TEMPDIR
    TMP
    TMPDIR
+   HELPER_SCRIPTS_PATH
 "
 
 chroot_remove_env_list=""
@@ -1231,6 +1245,22 @@ export dist_build_sign_and_tag
 ## verified.
 [ -v dist_build_ignore_unsigned ] || dist_build_ignore_unsigned="false"
 export dist_build_ignore_unsigned
+
+## dist_build_script_skip_package_install: optional whitespace-separated list of
+## packages a custom-config build wants skipped at install time (see
+## build-steps.d/*_install-packages).
+[ -v dist_build_script_skip_package_install ] || dist_build_script_skip_package_install=""
+export dist_build_script_skip_package_install
+
+## install_package_list: optional whitespace-separated extra-package lists a
+## custom-config build may set (see build-steps.d/*_install-packages).
+[ -v install_package_list ] || install_package_list=""
+export install_package_list
+
+## flavor_meta_packages_to_install: The core metapackage(s) for an image (this
+## pulls in most of a system's packages).
+[ -v flavor_meta_packages_to_install ] || flavor_meta_packages_to_install=""
+export flavor_meta_packages_to_install
 
 ## }}}
 

@@ -9,6 +9,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -31,7 +33,7 @@ main() {
    ## /home/user/derivative-binary/aptrepo_local/kicksecure
    ## /home/user/derivative-binary/aptrepo_local/whonix
 
-   $SUDO_TO_ROOT rm -f -- "$dist_sources_list_temp_initial_deb_sources_list"
+   $SUDO_TO_ROOT safe-rm --force -- "$dist_sources_list_temp_initial_deb_sources_list"
 
    true "derivative_name_list: $derivative_name_list"
 
@@ -48,8 +50,8 @@ main() {
       $SUDO_TO_ROOT mkdir --parents -- "$CHROOT_FOLDER/$dist_sources_list_temp_build_folder"
 
       true "dist_sources_list_temp_initial_deb_sources_list: $dist_sources_list_temp_initial_deb_sources_list"
-      true "sources_list_target_build_remote_derivative: $sources_list_target_build_remote_derivative"
-      true "build_remote_derivative_pkgs: $build_remote_derivative_pkgs"
+      true "sources_list_target_build_remote_derivative: ${sources_list_target_build_remote_derivative:-}"
+      true "build_remote_derivative_pkgs: ${build_remote_derivative_pkgs:-}"
 
       if [ "${build_remote_derivative_pkgs:-}" = "true" ]; then
          $SUDO_TO_ROOT cp -- "$source_code_folder_dist/packages/kicksecure/usability-misc/usr/bin/repo-add-dist" "$CHROOT_FOLDER/$DEB_INSTALL_FOLDER/repo-add-dist"

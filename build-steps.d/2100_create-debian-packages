@@ -24,6 +24,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -57,6 +59,10 @@ download_tpo_packages() {
    build_run_function get_newer_packages_from_third_party_repositories "$@"
 }
 
+## Everything after the unconditional error/return below is intentionally
+## retained (an incomplete future implementation, documented via the XXX/TODO
+## notes) and is therefore unreachable; suppress the SC2317 warnings for it.
+# shellcheck disable=SC2317
 download_virtualbox_packages_virtualbox_org() {
    ## Only when using '--target virtualbox'.
    if [ ! "${dist_build_virtualbox:-}" = "true" ]; then
@@ -113,7 +119,7 @@ download_packages_from_debian_sid() {
       #newer_package_list="calamares"
    #fi
 
-   if [ "${dist_build_virtualbox:-}" = "true" ] || [ "${dist_build_iso:-}" = "true" ]; then
+   #if [ "${dist_build_virtualbox:-}" = "true" ] || [ "${dist_build_iso:-}" = "true" ]; then
       ## See:
       ## https://forums.whonix.org/t/challenges-installing-virtualbox/9984/7
       ##
@@ -144,11 +150,12 @@ download_packages_from_debian_sid() {
       ## please drop virtualbox-guest-dkms virtualbox-guest-source
       ## https://bugs.launchpad.net/ubuntu/+source/virtualbox/+bug/1933248
 
-      newer_package_list="virtualbox-guest-additions-iso"
+      ## We package Guest Additions ourselves now.
+      #newer_package_list="virtualbox-guest-additions-iso"
 
-      if [ "${dist_build_target_arch:-}" = "amd64" ] || [ "${dist_build_target_arch:-}" = "i386" ]; then
-         newer_package_list+=" virtualbox-guest-utils "
-         newer_package_list+=" virtualbox-guest-x11 "
+      #if [ "${dist_build_target_arch:-}" = "amd64" ] || [ "${dist_build_target_arch:-}" = "i386" ]; then
+         #newer_package_list+=" virtualbox-guest-utils "
+         #newer_package_list+=" virtualbox-guest-x11 "
 
          #if [ "${dist_build_virtualbox:-}" = "true" ]; then
             ## These packages are not needed for the ISO.
@@ -159,8 +166,8 @@ download_packages_from_debian_sid() {
             #newer_package_list+=" virtualbox-qt "
             #newer_package_list+=" virtualbox-source "
          #fi
-      fi
-   fi
+      #fi
+   #fi
 
    if [ -n "${newer_package_list}" ]; then
       build_run_function get_newer_packages_from_third_party_repositories "$@"
@@ -169,6 +176,9 @@ download_packages_from_debian_sid() {
 
 ## usage example for manual testing:
 #./build-steps.d/*_create-debian-packages --allow-untagged true --allow-uncommitted true --flavor source --target iso --function download_packages_from_debian_forky_backports
+## No backports packages are needed for non-ISO builds at present. Keeping
+## downloader code for future reference.
+# shellcheck disable=SC2317
 download_packages_from_debian_forky_backports() {
    available_architectures_for_download_only_list="all"
    dist_build_special_packages_chroot_script="$dist_source_help_steps_folder/repo_download_chroot_script"
@@ -275,6 +285,10 @@ is not included in available_architectures_for_download_only_list: $available_ar
       dist_build_download_script_exit_code=0
 
       if [ "${make_use_cowbuilder:-}" = "true" ]; then
+         ## $COWBUILDER_PREFIX is intentionally unquoted: it is set to
+         ## something like 'env http_proxy=... foo=bar' that must split
+         ## into multiple argv slots.
+         # shellcheck disable=SC2086
          $SUDO_TO_ROOT \
             --preserve-env \
                ${COWBUILDER_PREFIX:-} \
