@@ -288,6 +288,14 @@ export BUILD_HEADER_PKGS
 export dist_build_ignore_untagged
 export dist_build_ignore_uncommitted
 
+## Default to "false" so callers can use literal-string equality tests
+## (!= 'true' / = 'true') without guarding the unset case. 'parse-cmd' sets
+## this to "true"/"false" when --remote-derivative-packages is passed. "false"
+## is the normal path: build derivative packages locally and serve them from
+## the local temp apt repo instead of pulling them from a remote repository.
+[ -n "${build_remote_derivative_pkgs:-}" ] || build_remote_derivative_pkgs="false"
+export build_remote_derivative_pkgs
+
 ## Default to "false" so callers can use literal-string equality
 ## tests (= 'false' / = 'true') without having to second-guess the
 ## unset case. dm-build-official-one sets dist_build_redistributable
