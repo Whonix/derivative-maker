@@ -33,8 +33,6 @@ cd help-steps
 source pre
 source variables
 
-source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/strings.bsh"
-
 main() {
    if [ ! "${dist_build_virtualbox:-}" = "true" ]; then
       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_virtualbox is not set to 'true'.${reset}"
@@ -79,7 +77,6 @@ main() {
    for env_vars_var_keep_item in $env_vars_keep_list; do
       ## Skip variables unset in this run; an unset allowlist entry is not an
       ## error.
-      check_variable_name "$env_vars_var_keep_item" || continue
       [ -v "$env_vars_var_keep_item" ] || continue
       # shellcheck disable=SC2163  # dynamic export of the allowlisted name is intended
       export "$env_vars_var_keep_item"

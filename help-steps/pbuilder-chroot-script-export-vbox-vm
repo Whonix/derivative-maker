@@ -181,7 +181,7 @@ export_vbox_vm() {
    ## genuinely-absent file (e.g. a concurrent base rebuild) from one merely
    ## invisible to a single view.
    ##
-   ## TODO: This comment is close to incomprehensible. Clarify or delete.
+   ## TODO: Make this comment easier to read.
    if [ ! -r "${HOMEVAR_VBOX_TEMP}/temp.ova" ]; then
       true "ERROR-DIAG: temp.ova absent right after 'Successfully exported'."
       true "ERROR-DIAG: expected --output: ${HOMEVAR_VBOX_TEMP}/temp.ova"
