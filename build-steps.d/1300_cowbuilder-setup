@@ -62,12 +62,17 @@ cowbuilder_setup_do() {
    if [ "${dist_build_unsafe_io:-}" = "true" ]; then
       if [ "${DOCKER:-}" = "true" ]; then
          ## https://forums.whonix.org/t/docker-container-that-builds-whonix-images/17494/21
-         true "INFO: Skip re-mounting /var/cache/pbuilder as tmpfs because DOCKER=true, ok."
+         true "INFO: Skip re-mounting '$cowbuilder_cache_dir' as tmpfs because DOCKER=true, ok."
       else
-         if $SUDO_TO_ROOT mount | grep -- /var/cache/pbuilder | grep -- tmpfs ; then
-            true "INFO: /var/cache/pbuilder already tmpfs."
+         ## Create the mount point first: a relocated (non-default)
+         ## '$cowbuilder_cache_dir' may not exist yet, and 'mount' fails on a
+         ## missing target. Harmless for the default '/var/cache/pbuilder'
+         ## (already created by the 'pbuilder' package).
+         $SUDO_TO_ROOT mkdir --parents -- "$cowbuilder_cache_dir"
+         if $SUDO_TO_ROOT mount | grep -- "$cowbuilder_cache_dir" | grep -- tmpfs ; then
+            true "INFO: '$cowbuilder_cache_dir' already tmpfs."
          else
-            $SUDO_TO_ROOT mount -t tmpfs -o size=2G none /var/cache/pbuilder
+            $SUDO_TO_ROOT mount -t tmpfs -o size=2G none "$cowbuilder_cache_dir"
          fi
       fi
    fi
