@@ -1332,12 +1332,13 @@ export sq_git_policy_file
 if [ "${dist_build_redistributable:-}" = "true" ] \
    && [ "${build_remote_repo_enable:-}" = "false" ] \
    && [ ! "${dist_build_redistributable_allow_no_repo:-}" = "true" ]; then
-   error "${red}${bold}\
-'--repo false' (or build_remote_repo_enable=false) is incompatible with a
-redistributable build (dist_build_redistributable=true). Redistributable
-images must point at the official APT repository so end users can receive
-updates. To override this guard for testing or special-purpose builds,
-set dist_build_redistributable_allow_no_repo=true via the environment or
+   error "\
+${red}${bold}'--repo false' (or build_remote_repo_enable=false) is incompatible with a
+redistributable build (dist_build_redistributable=true)!
+
+Redistributable images must point at the official APT repository so end users
+can receive updates. To override this guard for testing or special-purpose
+builds set dist_build_redistributable_allow_no_repo=true via the environment or
 a buildconfig.d/*.conf file.${reset}"
 fi
 
