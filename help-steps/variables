@@ -303,6 +303,7 @@ export build_remote_derivative_pkgs
 ## GitHub Actions and most other CI runners.
 [ -n "${dist_build_redistributable:-}" ] || dist_build_redistributable="false"
 [ -n "${CI:-}" ]                         || CI="false"
+export dist_build_redistributable
 
 ## Configuration precedence (lowest -> highest):
 ##   1. Code defaults (this file)
