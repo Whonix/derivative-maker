@@ -1319,6 +1319,7 @@ if [ -z "${openpgp_policy_file_resolved:-}" ]; then
    # > openpgp_cert_candidate: '/home/user/derivative-maker/buildconfig.d/openpgp-cert.pem'
    # > openpgp_cert_candidate: '/etc/buildconfig-dist.d/openpgp-cert.pem'
    # > openpgp_cert_candidate: '/home/user/buildconfig.d/openpgp-cert.pem'
+   ## TODO: What code to check to verify this?
 fi
 
 ## ${sq_git_policy_file} precedence:
