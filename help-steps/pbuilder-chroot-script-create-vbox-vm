@@ -452,13 +452,15 @@ audio_enable() {
    ## Older. Issues have been reported:
    ## https://forums.whonix.org/t/choppy-sound-on-workstation-change-virtualbox-audio-settings-to-virtualbox-defaults-ac97-versus-intel-hd/17876
    ## But overall was still better than Intel HD in combination with PipeWire.
+   #$SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --audio-controller=ac97
    ##
    ## hda:
    ## Completely broken in combination with PipeWire.
    ## https://forums.whonix.org/t/virtualbox-intel-hd-audio-and-pipewire-incompatibility-audio-broken-after-increasing-ram-to-5-gb-no-sound-after-latest-updates-pipewire-bug/18211
    ## https://gitlab.freedesktop.org/pipewire/pipewire/-/issues/4263
-   #$SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --audio-controller=hda
-   $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --audio-controller=ac97
+   ## Switching back to Intel HDA as per:
+   ## https://forums.whonix.org/t/virtualbox-intel-hd-audio-and-pipewire-incompatibility-audio-broken-after-increasing-ram-to-5-gb-no-sound-after-latest-updates-pipewire-bug/18211/31
+   $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --audio-controller=hda
 
    ## Host audio driver can be oss, alsa or pulse.
    ## Unfortunately, no auto detection available.
