@@ -135,11 +135,6 @@
         url = https://github.com/Kicksecure/genmkfile.git
         #url = https://gitlab.com/kicksecure/genmkfile.git
 
-[submodule "gpg-bash-lib"]
-        path = packages/kicksecure/gpg-bash-lib
-        url = https://github.com/Kicksecure/gpg-bash-lib.git
-        #url = https://gitlab.com/kicksecure/gpg-bash-lib.git
-
 [submodule "grub-live"]
         path = packages/kicksecure/grub-live
         url = https://github.com/Kicksecure/grub-live.git
