@@ -1,3 +1,149 @@
+commit a1c7ab3fd59ba9fa118011b8848b5af4796049c1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 20:56:39 2026 -0400
+
+    .
+
+commit 7da745d03669ad51e4fd36787202a8bc1f3b1609
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 20:54:27 2026 -0400
+
+    fix
+
+commit 859dc3fb0691d51d224f1d55153df8bc1348597a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 20:53:28 2026 -0400
+
+    .
+
+commit 5b5ec8442158a414c2607c5174ae9ae4b2f9a7b3
+Merge: f76062b15 b7f36a3f2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 20:53:15 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit b7f36a3f2454241f680964f6c96ad51fba1c3905
+Merge: f76062b15 4b1588a72
+Author: assisted-by-ai (Bot Account) (Machine Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Thu Jul 2 20:43:48 2026 -0400
+
+    Merge pull request #49 from org-ai-assisted/claude/vbox-vdi-workdir-bind-mount
+
+    Move VirtualBox VM disk off the pbuilder chroot fs; add cowbuilder_cache_dir
+
+commit 4b1588a7232122dead2f822153284b3472c2f886
+Author: claude (derivative-maker3 ffb70f1b-ad5f-4fe1-9c66-bbc9e65a090f) <noreply@anthropic.com>
+Date:   Thu Jul 2 18:16:53 2026 -0400
+
+    Address AI review: revert pre error_ change; whitespace-guard binary_image_vdi_dir
+
+    Two findings from a Codex review of this branch:
+
+    - Revert the help-steps/pre error() change. 'error_' is NOT a typo: it is a
+      deliberate undefined-command sentinel. The exception handler
+      (exception_handler_process_shared / the retry logic) keys off the first token
+      of 'last_failed_bash_command' being literally 'error_' to SKIP auto-retry for
+      deliberate errors. Replacing the undefined 'error_' with 'false' made that
+      first token 'false', so deliberate validation errors would be auto-retried
+      (retrying 'false') before aborting. The 'command not found' / exit 127 in the
+      diagnostics is a benign, inherent side effect of the sentinel design; a
+      defined helper cannot preserve it because the ERR trap captures the inner
+      failing command, not the 'error_' call. So restore upstream behavior verbatim.
+
+    - Whitespace-guard 'binary_image_vdi_dir'. It is now passed via
+      'cowbuilder --bindmounts', which pbuilder word-splits on whitespace, so a
+      whitespace path silently breaks the bind-mount. The existing early guard only
+      covers 'binary_build_folder_dist' / 'source_code_folder_dist'; add a matching
+      check right after 'binary_image_vdi_dir' is defined (it is set too late for
+      the early loop).
+
+    Re-verified: '--dry-run true --target virtualbox' gateway+workstation build,
+    unified export 'Successfully exported 2 machine(s)', overall exit 0.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_013KGErLCzVcqd2kYV2DJT5E
+
+commit d2f61de0c363ac124c2115db3553193e8d33e3b1
+Author: claude (derivative-maker3 ffb70f1b-ad5f-4fe1-9c66-bbc9e65a090f) <noreply@anthropic.com>
+Date:   Thu Jul 2 17:55:49 2026 -0400
+
+    variables: fix nounset-unsafe CURL_PROXY and BRE alternation in version strip
+
+    Two pre-existing bugs surfaced while reviewing the create-vbox-vm change:
+
+    - CURL_PROXY is referenced bare ('${CURL_PROXY}') under 'set -o nounset' on
+      the onion path that is meant to SET it, so an onion build ('--connection
+      tor') aborts on the unbound variable before the default is assigned. Guard
+      with '${CURL_PROXY:-}', matching every other reference in the tree.
+
+    - The channel-suffix strip used a basic regex, so '(', '|' and ')' were literal
+      and the substitution never matched: 'dist_build_version' kept its
+      '-developers-only' / '-testers-only' / '-stable' marker. Use 'sed -E' so the
+      alternation works as the comment intends.
+
+    NOTE: the sed fix changes 'dist_build_version' for channel builds (e.g.
+    '18.2.0.7-developers-only-15-g...' -> '18.2.0.7-15-g...'), which propagates to
+    artifact filenames, the binary build folder path, and the in-VM Build_Version
+    stamp.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_013KGErLCzVcqd2kYV2DJT5E
+
+commit b5d96aa558e076ece54c4f6214c7be43a7352c20
+Author: claude (derivative-maker3 ffb70f1b-ad5f-4fe1-9c66-bbc9e65a090f) <noreply@anthropic.com>
+Date:   Thu Jul 2 17:19:38 2026 -0400
+
+    Move VirtualBox VM disk off the pbuilder chroot fs; add cowbuilder_cache_dir
+
+    The 'create-vbox-vm' step converted the raw image to a '.vdi' and stored the
+    VM inside the cowbuilder chroot (dm-vbox-temp home, persisted into base.cow via
+    --save-after-login). On a small/volatile chroot filesystem (e.g. Qubes dmroot)
+    this fails with 'VERR_DISK_FULL': the step needs a ~6 GB raw copy plus a ~6 GB
+    .vdi, and base.cow accumulates the disk.
+
+    Two changes:
+
+    1. cowbuilder_cache_dir (help-steps/variables), default '/var/cache/pbuilder',
+       overridable and exported so the multi-gigabyte cowbuilder chroots can be
+       relocated onto larger/persistent storage. All in-tree references now use it
+       (set_cowbuilder_folders, 1300_cowbuilder-setup, 1400_local-dependencies).
+       1300_cowbuilder-setup mkdir's the dir before the tmpfs mount, since a
+       relocated path may not exist yet.
+
+    2. Bind-mount-not-copy for the .vdi. New binary_image_vdi_dir
+       ('$HOMEVAR/derivative-maker-vbox-workdir') is bind-mounted into the chroot as
+       its own mount, so:
+       - 'convertfromraw' reads the already-bind-mounted raw directly (no 6 GB copy)
+         and writes the .vdi straight onto host '/rw'-backed storage;
+       - the disk never touches the chroot filesystem or base.cow (only the tiny
+         VirtualBox registry, referencing this absolute path, is persisted);
+       - it is a dedicated mount (not nested under the operator's 0770
+         '$binary_build_folder_dist') so the unprivileged 'dm-vbox-temp' account can
+         traverse to it; its chroot parent is a root:root 0755 pbuilder mountpoint.
+       4600_create-vbox-vm and dm-prepare-release both mkdir it and add it to
+       'bindmounts'; the export step cleans it on teardown. Ownership is handed to
+       'dm-vbox-temp' scoped to the per-VM folder (recursively) plus the mount root
+       itself (non-recursively, for traversal), leaving sibling per-flavor VM
+       folders untouched.
+
+    Also fix help-steps/pre error(): it invoked an undefined 'error_', which only
+    tripped the ERR trap via a misleading 'command not found' (exit 127). Trip it
+    with 'false' and actually print the 'See above' hint.
+
+    Verified end-to-end with a '--dry-run true --target virtualbox' build (gateway
+    + workstation): 4600 completes with no copy and no VERR_DISK_FULL, and the
+    unified export reports 'Successfully exported 2 machine(s)'.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_013KGErLCzVcqd2kYV2DJT5E
+
+commit f76062b15d2f8bf4b019090b4f0ffe8f43d4c32f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 2 12:25:43 2026 +0000
+
+    bumped changelog version
+
 commit ef9bafc799caa1accbc95619644fe19e2785636e
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Thu Jul 2 08:19:26 2026 -0400
