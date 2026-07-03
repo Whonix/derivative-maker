@@ -269,6 +269,8 @@ export_vbox_vm() {
       ## 'binary_image_vdi_dir' in 'help-steps/variables'), not the
       ## 'dm-vbox-temp' home; 'unregistervm --delete' removes the '.vdi' itself
       ## but leave no empty work folder behind.
+      ## TODO: "leave no empty work folder behind"? What does that mean?
+      ## Should it be "leaves an empty work folder behind"?
       safe-rm -r -f -- "$binary_image_vdi_dir/$vm_name_to_be_deleted"
    done
 }

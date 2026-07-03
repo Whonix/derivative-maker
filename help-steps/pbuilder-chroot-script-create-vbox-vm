@@ -43,12 +43,12 @@ done
 SUDO_TO_ROOT=""
 
 ## Absolute path of the VM disk. It lives under '$binary_image_vdi_dir' (on the
-## bind-mounted host build folder, '/rw'-backed), NOT the chroot-local
-## 'dm-vbox-temp' home, so the multi-gigabyte disk stays off the small
-## pbuilder chroot filesystem and out of 'base.cow'. The VirtualBox registry
-## (persisted into 'base.cow' via '--save-after-login') records this absolute
-## path; the same bind mount is re-established in the export step, so it
-## resolves there too. See 'help-steps/variables' ('binary_image_vdi_dir').
+## bind-mounted host build folder), NOT the chroot-local 'dm-vbox-temp' home,
+## so the multi-gigabyte disk stays off the small pbuilder chroot filesystem
+## and out of 'base.cow'. The VirtualBox registry (persisted into 'base.cow'
+## via '--save-after-login') records this absolute path; the same bind mount
+## is re-established in the export step, so it resolves there too. See
+## 'help-steps/variables' ('binary_image_vdi_dir').
 vdi_dir="$binary_image_vdi_dir/$VMNAME"
 vdi_file="$vdi_dir/$VMNAME.vdi"
 
@@ -124,8 +124,8 @@ convert_raw_to_vdi() {
    ## lets it traverse into the per-VM folder regardless of the host umask on
    ## the mount point, while leaving sibling per-flavor VM folders under it
    ## (e.g. a Gateway folder while building the Workstation) untouched.
-   $SUDO_TO_ROOT chown "dm-vbox-temp:dm-vbox-temp" "$binary_image_vdi_dir"
-   $SUDO_TO_ROOT chown --recursive "dm-vbox-temp:dm-vbox-temp" "$vdi_dir"
+   $SUDO_TO_ROOT chown -- "dm-vbox-temp:dm-vbox-temp" "$binary_image_vdi_dir"
+   $SUDO_TO_ROOT chown --recursive -- "dm-vbox-temp:dm-vbox-temp" "$vdi_dir"
 
    ## Debugging.
    $SUDO_TO_VBOX_TEMP qemu-img info "$vdi_file"

@@ -1072,9 +1072,9 @@ set_default_variable binary_image_raw_file "${dist_binary_build_folder}/${SHORT_
 set_default_variable binary_image_qcow2_file "${dist_binary_build_folder}/${SHORT_VMNAME}-${dist_build_desktop}-${dist_build_version}.${target_architecture_pretty_name}.qcow2"
 
 ## Working folder for the intermediate VirtualBox '.vdi' created by
-## 'build-steps.d/*_create-vbox-vm'. Deliberately on host '/rw'-backed storage
-## (a sibling of '$binary_build_folder_dist' under '$HOMEVAR') rather than the
-## chroot's 'dm-vbox-temp' home, so the multi-gigabyte disk stays off the small
+## 'build-steps.d/*_create-vbox-vm'. Deliberately on a sibling of
+## '$binary_build_folder_dist' under '$HOMEVAR' rather than the chroot's
+## 'dm-vbox-temp' home, so the multi-gigabyte disk stays off the small
 ## pbuilder chroot filesystem and out of 'base.cow' (only the tiny VirtualBox
 ## registry, referencing this absolute path, is persisted via
 ## '--save-after-login').
