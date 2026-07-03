@@ -235,11 +235,6 @@
         url = https://github.com/Kicksecure/repository-dist.git
         #url = https://gitlab.com/kicksecure/repository-dist.git
 
-[submodule "ro-mode-init"]
-        path = packages/kicksecure/ro-mode-init
-        url = https://github.com/Kicksecure/ro-mode-init.git
-        #url = https://gitlab.com/kicksecure/ro-mode-init.git
-
 [submodule "sandbox-app-launcher"]
         path = packages/kicksecure/sandbox-app-launcher
         url = https://github.com/Kicksecure/sandbox-app-launcher.git
