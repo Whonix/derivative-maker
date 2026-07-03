@@ -1088,7 +1088,7 @@ set_default_variable binary_image_qcow2_file "${dist_binary_build_folder}/${SHOR
 ## 'dm-vbox-temp' can traverse to reach the (chown'ed) disk. The same mount is
 ## re-established in the export step, so the registry's absolute medium path
 ## resolves in both.
-set_default_variable binary_image_vdi_dir "${HOMEVAR}/derivative-maker-vbox-workdir"
+set_default_variable binary_image_vdi_dir "${HOMEVAR}/derivative-binary_vbox-workdir"
 
 ## Like '$binary_build_folder_dist' / '$source_code_folder_dist' (checked
 ## earlier), '$binary_image_vdi_dir' is passed via 'cowbuilder --bindmounts',
