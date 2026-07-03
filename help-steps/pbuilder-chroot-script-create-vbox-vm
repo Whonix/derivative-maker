@@ -24,7 +24,7 @@ true "INFO: Currently running chroot script: ${BASH_SOURCE[0]}"
 ## VRAM, binary_image_raw_file, ...). Fail loud if a required one did not
 ## make it.
 for required_var in \
-   VMNAME VMRAM VRAM binary_image_raw_file HOMEVAR_VBOX_TEMP \
+   VMNAME VMRAM VRAM binary_image_raw_file binary_image_vdi_dir HOMEVAR_VBOX_TEMP \
    SUDO_TO_VBOX_TEMP vm_names_to_be_exported ; do
    if [ ! -v "$required_var" ]; then
       printf '%s\n' "ERROR: required variable '$required_var' not present in the chroot environment." >&2
@@ -41,6 +41,16 @@ done
 ## environment stays intact. '$SUDO_TO_VBOX_TEMP' is deliberately NOT cleared
 ## here: it must drop privileges to the 'dm-vbox-temp' account.
 SUDO_TO_ROOT=""
+
+## Absolute path of the VM disk. It lives under '$binary_image_vdi_dir' (on the
+## bind-mounted host build folder, '/rw'-backed), NOT the chroot-local
+## 'dm-vbox-temp' home, so the multi-gigabyte disk stays off the small
+## pbuilder chroot filesystem and out of 'base.cow'. The VirtualBox registry
+## (persisted into 'base.cow' via '--save-after-login') records this absolute
+## path; the same bind mount is re-established in the export step, so it
+## resolves there too. See 'help-steps/variables' ('binary_image_vdi_dir').
+vdi_dir="$binary_image_vdi_dir/$VMNAME"
+vdi_file="$vdi_dir/$VMNAME.vdi"
 
 error() {
    printf '%s\n' "ERROR: $*" >&2
@@ -79,8 +89,11 @@ delete_vbox_vm() {
    sync
 
    ## The "$SUDO_TO_VBOX_TEMP VBoxManage unregistervm --delete" does not do its job,
-   ## we have to manually delete the VM folder.
+   ## we have to manually delete the VM folder (the machine registration, which
+   ## 'createvm --register' stores in the 'dm-vbox-temp' default machine folder)
+   ## and the VM disk work folder (on the bind-mounted host build folder).
    $SUDO_TO_ROOT safe-rm -r -f -- "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$VMNAME"
+   $SUDO_TO_ROOT safe-rm -r -f -- "$vdi_dir"
    sync
 
    ## Delete old ova.
@@ -89,33 +102,42 @@ delete_vbox_vm() {
 }
 
 convert_raw_to_vdi() {
-   $SUDO_TO_VBOX_TEMP mkdir --parents "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$VMNAME"
+   $SUDO_TO_ROOT mkdir --parents "$vdi_dir"
 
-   ## Can be safely deleted because stored under dedicated, temporary user account.
-   ## Must be deleted for this step to be idempotent. Otherwise "VBoxManage convertfromraw" would fail.
-   $SUDO_TO_VBOX_TEMP safe-rm -f -- "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$VMNAME/$VMNAME.vdi"
+   ## Must be deleted for this step to be idempotent. Otherwise
+   ## "VBoxManage convertfromraw" would fail.
+   $SUDO_TO_ROOT safe-rm -f -- "$vdi_file"
 
-   ## Copy $binary_image_raw_file into a folder accessible by "dm-vbox-temp" user.
+   ## Convert directly from the bind-mounted '$binary_image_raw_file'; no
+   ## intermediate multi-gigabyte copy is made. 'convertfromraw' only reads its
+   ## source, so run it as root (this script already runs as root; '$SUDO_TO_ROOT'
+   ## is empty here, and root reads the bind-mounted raw regardless of its mode).
+   ## The output '.vdi' lands on the bind-mounted host build folder (/rw), not
+   ## the chroot (dmroot).
    ## TODO: Sequential / non-parallel. Not yet parallelizable builds.
-   $SUDO_TO_ROOT cp "$binary_image_raw_file" "$HOMEVAR_VBOX_TEMP/temp-raw-image.raw"
-   $SUDO_TO_ROOT chown "dm-vbox-temp:dm-vbox-temp" "$HOMEVAR_VBOX_TEMP/temp-raw-image.raw"
+   $SUDO_TO_ROOT VBoxManage convertfromraw "$binary_image_raw_file" "$vdi_file"
 
-   $SUDO_TO_VBOX_TEMP VBoxManage convertfromraw "$HOMEVAR_VBOX_TEMP/temp-raw-image.raw" "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$VMNAME/$VMNAME.vdi"
-
-   ## Safe disk space.
-   $SUDO_TO_VBOX_TEMP safe-rm -- "$HOMEVAR_VBOX_TEMP/temp-raw-image.raw"
+   ## Hand ownership of the per-VM disk folder and its '.vdi' to 'dm-vbox-temp'
+   ## so the subsequent 'VBoxManage' calls (which drop to that account to
+   ## compact and register the disk) can read/write it. Chown the bind-mount
+   ## root itself too, but NON-recursively: making 'dm-vbox-temp' its owner
+   ## lets it traverse into the per-VM folder regardless of the host umask on
+   ## the mount point, while leaving sibling per-flavor VM folders under it
+   ## (e.g. a Gateway folder while building the Workstation) untouched.
+   $SUDO_TO_ROOT chown "dm-vbox-temp:dm-vbox-temp" "$binary_image_vdi_dir"
+   $SUDO_TO_ROOT chown --recursive "dm-vbox-temp:dm-vbox-temp" "$vdi_dir"
 
    ## Debugging.
-   $SUDO_TO_VBOX_TEMP qemu-img info "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$VMNAME/$VMNAME.vdi"
+   $SUDO_TO_VBOX_TEMP qemu-img info "$vdi_file"
 
    if [ "${dist_build_fast1:-}" = "1" ]; then
       printf '%s\n' "INFO: run with '--fast 1' switch, skipping compacting vdi."
    else
-      $SUDO_TO_VBOX_TEMP VBoxManage modifymedium --compact "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$VMNAME/$VMNAME.vdi"
+      $SUDO_TO_VBOX_TEMP VBoxManage modifymedium --compact "$vdi_file"
    fi
 
    ## Debugging.
-   $SUDO_TO_VBOX_TEMP qemu-img info "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$VMNAME/$VMNAME.vdi"
+   $SUDO_TO_VBOX_TEMP qemu-img info "$vdi_file"
 }
 
 general_setup() {
@@ -166,7 +188,7 @@ general_setup() {
    ## HDD gets added in the gateway / workstation specific functions below.
 
    ## Attach the HDD.
-   $SUDO_TO_VBOX_TEMP VBoxManage storageattach "$VMNAME" --storagectl "controller" --nonrotational=on --discard=on --type hdd --port 0 --medium "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$VMNAME/$VMNAME.vdi"
+   $SUDO_TO_VBOX_TEMP VBoxManage storageattach "$VMNAME" --storagectl "controller" --nonrotational=on --discard=on --type hdd --port 0 --medium "$vdi_file"
 
    ## RAM
    $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --memory "$VMRAM"

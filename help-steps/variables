@@ -851,7 +851,7 @@ fi
 ## Help update-torbrowser and other software find the Tor server if using
 ## '--connection tor'.
 if [ "${dist_build_sources_clearnet_or_onion:-}" = 'onion' ]; then
-   if [ -z "${CURL_PROXY}" ]; then
+   if [ -z "${CURL_PROXY:-}" ]; then
       ## TODO: Possibly allow customizing the server and port for this?
       ## HARDCODED.
       CURL_PROXY='--proxy socks5h://127.0.0.1:9050'
@@ -1025,7 +1025,7 @@ fi
 ## that may be attached to the git tag so that 'dist_build_version' is a
 ## clean version string regardless of which release channel we are on.
 ## Single sed invocation with alternation instead of three pipelines.
-dist_build_version="$(printf "%s\n" "$dist_build_version" | sed "s#-(developers-only|testers-only|stable)##g")"
+dist_build_version="$(printf "%s\n" "$dist_build_version" | sed -E "s#-(developers-only|testers-only|stable)##g")"
 
 ## Using `export`, so 70_log_build_version can read it.
 export dist_build_version
@@ -1069,6 +1069,38 @@ set_default_variable dist_binary_build_folder "${binary_build_folder_dist}/${dis
 
 set_default_variable binary_image_raw_file "${dist_binary_build_folder}/${SHORT_VMNAME}-${dist_build_desktop}-${dist_build_version}.${target_architecture_pretty_name}.raw"
 set_default_variable binary_image_qcow2_file "${dist_binary_build_folder}/${SHORT_VMNAME}-${dist_build_desktop}-${dist_build_version}.${target_architecture_pretty_name}.qcow2"
+
+## Working folder for the intermediate VirtualBox '.vdi' created by
+## 'build-steps.d/*_create-vbox-vm'. Deliberately on host '/rw'-backed storage
+## (a sibling of '$binary_build_folder_dist' under '$HOMEVAR') rather than the
+## chroot's 'dm-vbox-temp' home, so the multi-gigabyte disk stays off the small
+## pbuilder chroot filesystem and out of 'base.cow' (only the tiny VirtualBox
+## registry, referencing this absolute path, is persisted via
+## '--save-after-login').
+##
+## It is bind-mounted into the chroot as its OWN mount (see the 'bindmounts' in
+## 'build-steps.d/*_create-vbox-vm' and 'dm-prepare-release') rather than being
+## nested under the bind-mounted '$binary_build_folder_dist'. That matters for
+## traversal: '$binary_build_folder_dist' is the operator's build folder (mode
+## '0770', owned by the build user), which the unprivileged chroot account
+## 'dm-vbox-temp' cannot traverse. As its own mount its chroot parent is
+## '$HOMEVAR', a pbuilder-created 'root:root 0755' mountpoint that
+## 'dm-vbox-temp' can traverse to reach the (chown'ed) disk. The same mount is
+## re-established in the export step, so the registry's absolute medium path
+## resolves in both.
+set_default_variable binary_image_vdi_dir "${HOMEVAR}/derivative-maker-vbox-workdir"
+
+## Like '$binary_build_folder_dist' / '$source_code_folder_dist' (checked
+## earlier), '$binary_image_vdi_dir' is passed via 'cowbuilder --bindmounts',
+## which pbuilder word-splits on whitespace, so a path containing whitespace
+## silently breaks the bind-mount. It is checked here rather than in that early
+## loop because it is only defined at this point. Fail early with a clear
+## message instead of late with a cryptic pbuilder / VirtualBox error.
+case "$binary_image_vdi_dir" in
+   *[[:space:]]*)
+      error "binary_image_vdi_dir must not contain whitespace (it is bind-mounted into the cowbuilder chroot and pbuilder word-splits BINDMOUNTS): '$binary_image_vdi_dir'"
+      ;;
+esac
 
 ## NOTE: 'binary_image_{raw,qcow2}_file_for_unified' reads like a list but
 ## is singular by construction. For a unified (multi-VM) build such as
@@ -1470,10 +1502,16 @@ export host_architecture
 #[ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="i386 amd64"
 export make_cross_build_platform_list
 
+## Parent folder holding the cowbuilder 'base.cow_<arch>' / 'cow.cow_<arch>'
+## chroots. Overridable so the (multi-gigabyte) chroots can be relocated off a
+## small or volatile root filesystem (e.g. onto persistent '/rw' storage on
+## Qubes). Exported so child build tools (genmkfile) inherit it.
+[ -v cowbuilder_cache_dir ] || cowbuilder_cache_dir="/var/cache/pbuilder"
+export cowbuilder_cache_dir
+
 set_cowbuilder_folders() {
-   ## TODO: change that folder
-   cow_folder="/var/cache/pbuilder/cow.cow_${dist_build_multiarch_package_item}"
-   base_folder="/var/cache/pbuilder/base.cow_${dist_build_multiarch_package_item}"
+   cow_folder="$cowbuilder_cache_dir/cow.cow_${dist_build_multiarch_package_item}"
+   base_folder="$cowbuilder_cache_dir/base.cow_${dist_build_multiarch_package_item}"
 }
 
 [ -n "${dist_build_file_system:-}" ] || dist_build_file_system="ext4"
@@ -1650,6 +1688,8 @@ env_vars_keep_list="
    binary_image_qcow2_file
    binary_image_qcow2_file_for_unified
    binary_image_ova_file
+   binary_image_vdi_dir
+   cowbuilder_cache_dir
    source_code_folder_dist
    dist_developer_meta_files_folder
    HELPER_SCRIPTS_PATH
