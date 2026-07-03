@@ -95,7 +95,13 @@ main() {
    ## bash array nor repeated '--bindmounts' flags help: each flag just appends to
    ## the same whitespace-split BINDMOUNTS string. These are controlled build
    ## paths with no spaces (help-steps/variables fails early otherwise).
-   bindmounts="$binary_build_folder_dist $source_code_folder_dist"
+   ## '$binary_image_vdi_dir' is bind-mounted as its OWN mount (not nested under
+   ## '$binary_build_folder_dist') so the unprivileged chroot account
+   ## 'dm-vbox-temp' can traverse to the VM disk; see 'binary_image_vdi_dir' in
+   ## 'help-steps/variables'. The bind source must exist before cowbuilder
+   ## mounts it.
+   mkdir --parents -- "$binary_image_vdi_dir"
+   bindmounts="$binary_build_folder_dist $source_code_folder_dist $binary_image_vdi_dir"
 
    local cowbuilder_exit_code
    cowbuilder_exit_code=0

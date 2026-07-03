@@ -36,7 +36,8 @@ true "INFO: Currently running chroot script: ${BASH_SOURCE[0]}"
 ## for those variables.
 for required_var in \
    VMNAME vm_names_to_be_exported vm_multiple HOMEVAR_VBOX_TEMP \
-   SUDO_TO_VBOX_TEMP binary_image_ova_file eulafile_user producturl ; do
+   SUDO_TO_VBOX_TEMP binary_image_ova_file binary_image_vdi_dir \
+   eulafile_user producturl ; do
    if [ ! -v "$required_var" ]; then
       printf '%s\n' "ERROR: required variable '$required_var' not present in the chroot environment." >&2
       exit 1
@@ -264,6 +265,11 @@ export_vbox_vm() {
       ## during the build process.
       $SUDO_TO_VBOX_TEMP VBoxManage unregistervm "$vm_name_to_be_deleted" --delete || true
       safe-rm -r -f -- "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$vm_name_to_be_deleted"
+      ## The VM disk lives on the bind-mounted host build folder (see
+      ## 'binary_image_vdi_dir' in 'help-steps/variables'), not the
+      ## 'dm-vbox-temp' home; 'unregistervm --delete' removes the '.vdi' itself
+      ## but leave no empty work folder behind.
+      safe-rm -r -f -- "$binary_image_vdi_dir/$vm_name_to_be_deleted"
    done
 }
 
