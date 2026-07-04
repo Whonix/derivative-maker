@@ -302,6 +302,10 @@ export build_remote_derivative_pkgs
 ## to "true" for redistributable builds; CI is set to "true" by
 ## GitHub Actions and most other CI runners.
 [ -n "${dist_build_redistributable:-}" ] || dist_build_redistributable="false"
+## Exported so child helpers (e.g. git_sanity_test, which relies on inherited
+## env in build context rather than re-sourcing this file) see it. Symmetric
+## with 'dist_build_ignore_unsigned' further below.
+export dist_build_redistributable
 [ -n "${CI:-}" ]                         || CI="false"
 
 ## Configuration precedence (lowest -> highest):
