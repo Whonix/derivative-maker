@@ -157,6 +157,9 @@ docker_run_opts=()
 ## "the input device is not a TTY" and exits non-zero.
 if [ "${CI:-}" = "true" ]; then
   true "INFO: CI detected, omitting '--interactive --tty' for docker run."
+  ## Inform the container entrypoint that this is a headless run so it does
+  ## not abort on its "TTY needs to be enabled" guard.
+  docker_run_opts+=( --env 'CI=true' )
 else
   docker_run_opts+=( --interactive --tty )
 fi
