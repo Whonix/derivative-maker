@@ -227,7 +227,7 @@ lb config noauto \\
 URIs: http://127.0.0.1:9977/debian-fasttrack/
 Suites: ${dist_build_apt_stable_release}-fasttrack
 Components: main contrib
-Enabled: yes
+Enabled: no
 Signed-By: /usr/share/keyrings/fasttrack-archive-keyring.gpg" | sponge -- archives/fasttrack.sources.chroot
    if [ "${build_remote_derivative_pkgs}" = 'true' ]; then
       printf '%s\n' "$sources_list_build_remote_derivative" | sponge -- archives/derivative-temp.sources.chroot
