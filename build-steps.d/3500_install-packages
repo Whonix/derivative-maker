@@ -362,27 +362,24 @@ $dist_build_script_skip_package_install${reset}"
 
    ## Weak recommended packages. No other package depends on it. Can be
    ## easily uninstalled. For better usability.
-   if [ "${dist_build_virtualbox:-}" = "true" ]; then
+   ##
+   ## Out-commented because metapackage dependencies are currently being used
+   ## for virtualbox-guest-additions-iso, and virtualbox-guest-* is no longer
+   ## being used by us.
+   #if [ "${dist_build_virtualbox:-}" = "true" ] \
+      ## || [ "${dist_build_iso:-}" = "true" ]; then
       ## See also build-steps.d/*_create-debian-packages function
       ## download_virtualbox_packages_from_debian_sid
 
-      pkg-add-to-install-list virtualbox-guest-utils
-      pkg-add-to-install-list virtualbox-guest-x11
+      #pkg-add-to-install-list virtualbox-guest-utils
+      #pkg-add-to-install-list virtualbox-guest-x11
 
-      ## https://packages.debian.org/virtualbox-guest-additions-iso is available for architecture "all".
-      ##
-      ## Not required but keeping in case above packages become unavailable.
-      ## Allows for higher flexibility if later switches from/to
-      ## virtualbox.org repository or Debian fasttrack repository are required.
-      ##
-      ## https://packages.debian.org/sid/virtualbox-guest-additions-iso
-      ##
-      ## provides:
+      ## https://packages.debian.org/virtualbox-guest-additions-iso is available for architecture "all". It provides:
       ## /usr/share/virtualbox/VBoxGuestAdditions.iso
-      pkg-add-to-install-list virtualbox-guest-additions-iso
-   else
-      true "${cyan}INFO: skipping installation of weak recommended guest additions, because not using --target virtualbox, ok.${reset}"
-   fi
+      #pkg-add-to-install-list virtualbox-guest-additions-iso
+   #else
+      #true "${cyan}INFO: skipping installation of weak recommended guest additions, because not using --target virtualbox, ok.${reset}"
+   #fi
 
    true "VMNAME: $VMNAME"
    true "dist_build_gui: $dist_build_gui"
