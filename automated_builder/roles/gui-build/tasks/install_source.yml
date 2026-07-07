@@ -1,9 +1,0 @@
----
-- name: Create install_source script
-  template:
-    src: ./roles/common/templates/install_source.sh
-    dest: /home/ansible/install_source.sh
-    mode: 0744
-
-- name: Run install_source script for tag
-  shell: "/home/ansible/install_source.sh {{ GIT_REPO }} {{ REF_NAME }} {{ REF_NAME }} {{ GITHUB_EVENT_NAME }} > /home/ansible/install_source.log 2>&1"
