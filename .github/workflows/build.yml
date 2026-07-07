@@ -1,0 +1,53 @@
+---
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**ci**'
+    tags:
+      - '*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    steps:
+      - name: Checkout (recursive submodules)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Build kicksecure-cli raw (${{ matrix.arch }})
+        env:
+          CI: "true"
+        run: |
+          ./docker/derivative-maker-docker-run -- \
+            --flavor kicksecure-cli \
+            --target raw \
+            --type vm \
+            --arch ${{ matrix.arch }} \
+            --allow-untagged true \
+            --allow-uncommitted true \
+            --allow-unsigned true \
+            --freedom false \
+            --repo true \
+            --remote-derivative-packages true
+
+      - name: Upload build output + logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kicksecure-cli-raw-${{ matrix.arch }}
+          path: ~/binary_mnt/
+          retention-days: 7

@@ -33,7 +33,8 @@ DEBIAN_FRONTEND=noninteractive \
     sq sqv sqop sequoia-git sequoia-chameleon-gnupg gpg-agent \
     dbus dbus-user-session ca-certificates git time curl lsb-release fakeroot \
     dpkg-dev fasttrack-archive-keyring safe-rm adduser sudo approx docker.io \
-    docker-cli
+    docker-cli \
+    python3 python3-yaml
 
 ## Create the derivative account + passwordless sudo drop-in only when
 ## this script runs inside the docker image (where 'USER=user' and
@@ -44,7 +45,7 @@ DEBIAN_FRONTEND=noninteractive \
 ## 'USER=root' / 'HOME=/root', and creating user 'root' or a
 ## 'root ALL=(ALL) NOPASSWD:ALL' drop-in is pointless and confusing.
 if [ "${USER}" != "root" ]; then
-   adduser --quiet --disabled-password --home "${HOME}" --gecos "${USER},,,," "${USER}"
+   adduser --quiet --disabled-password --uid "${DM_UID:-1000}" --home "${HOME}" --gecos "${USER},,,," "${USER}"
    printf '%s\n' "${USER} ALL=(ALL) NOPASSWD:ALL" | tee -- /etc/sudoers.d/passwordless_sudo >/dev/null
    chmod 440 -- /etc/sudoers.d/passwordless_sudo
 fi
