@@ -1,3 +1,200 @@
+commit 6bea73000bdd981f409f7c8fa6e29eff9492749b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 06:47:23 2026 -0400
+
+    .
+
+commit 13f83d190fb470eab9d7792f850f814f661f5334
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 06:31:18 2026 -0400
+
+    .
+
+commit 42ec4ac05e9f1e1a85637859a8384b9cf988a04c
+Merge: 9e47d827b e4694e5e5
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 06:28:55 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit 9e47d827b48ba1746910be5878303ed4d4b7bae9
+Merge: 84ca38bbb 7dea8b5a8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 06:27:54 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit 84ca38bbb1ae7fa82b20cd5959d7518b8743bac3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 06:02:56 2026 -0400
+
+    .
+
+commit 7dea8b5a85ee757085770d5068d77a0f0db23e4d
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Jul 5 11:38:06 2026 -0400
+
+    Stop pulling VirtualBox Guest Additions from Debian repos
+
+commit d1edbc94a3737acf95d53d503e89dab4aca3131d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Jul 4 17:14:35 2026 -0400
+
+    .
+
+commit 2994d450efec3bde943c4303467d57f7ed23094f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Jul 4 16:07:03 2026 -0400
+
+    .
+
+commit e4694e5e52c331f560fd97037946dccbb5a6ab95
+Author: claude (dev51 c174cb1f-7906-40e7-be69-3900163e1e27) <noreply@anthropic.com>
+Date:   Sat Jul 4 08:09:33 2026 -0400
+
+    variables: export dist_build_redistributable
+
+    git_sanity_test reads dist_build_redistributable under 'set -o nounset'
+    (help-steps/git_sanity_test line 207, in the dist_build_ignore_unsigned=true
+    branch). In build context that helper does not re-source help-steps/variables
+    and relies on inherited environment, but dist_build_redistributable was only
+    set as a plain shell variable here, not exported. dist_build_ignore_unsigned
+    (the sibling flag it is checked against) is exported. The asymmetry made
+    git_sanity_test abort with "dist_build_redistributable: unbound variable",
+    breaking the AI/local (unsigned) path of derivative-update.
+
+    Export it at the source, symmetric with the neighbouring exports.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_01DDauvnfp92JCERvxrnjnoM
+
+commit 5ee26b2bf72c7cd9fbd3e3065c14d500b0108a1b
+Author: claude (dev51 c174cb1f-7906-40e7-be69-3900163e1e27) <noreply@anthropic.com>
+Date:   Sat Jul 4 07:55:55 2026 -0400
+
+    docker: allow headless CI run without a TTY
+
+    The CI branch of derivative-maker-docker-run deliberately omits
+    'docker run --interactive --tty' because CI stdin is /dev/null and
+    '-t' requires a real TTY. But entrypoint.sh has required a TTY on
+    stdin since its first commit and aborted with "TTY needs to be
+    enabled" otherwise, so every headless/CI build failed at container
+    start.
+
+    Pass CI=true into the container and gate the entrypoint TTY guard on
+    it: interactive misuse (human forgot -t) still gets the helpful error,
+    while headless CI proceeds.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_01DDauvnfp92JCERvxrnjnoM
+
+commit 801c45e77b25993e6dda723fa557199c49d36b38
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Fri Jul 3 21:27:10 2026 -0400
+
+    disable fasttrack for iso build
+
+commit 3e65a5f31d7b407591f618b46ebe13f05526f90d
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Fri Jul 3 21:22:56 2026 -0400
+
+    fix
+
+commit 1f5740e55b8113501edfa4a95399f59439bd8d25
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Fri Jul 3 18:33:04 2026 -0400
+
+    minor
+
+commit e16e393e61f7cf3a38266f151243c220ca8f18c9
+Merge: 15d44c086 7b5d59a7f
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Fri Jul 3 18:14:30 2026 -0400
+
+    Merge branch 'master' into arraybolt3/trixie
+
+commit 36f3676f65e1471bdcb9530f3dc74eb3cbac60bc
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 3 15:29:17 2026 -0400
+
+    deprecate ro-mode-init (initramfs-only) (ported to dracut)
+
+commit 61888b7066d6f6d984357fce02fd2d38c3cf232f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 3 15:27:44 2026 -0400
+
+    deprecate gpg-bash-lib (port to sq)
+
+commit 2a648a260b85e026b85f4420574dcc51a8e02087
+Author: claude (dev42 08e1f373-4824-43b0-b4d4-e48187e4d900) <noreply@anthropic.com>
+Date:   Fri Jul 3 15:13:00 2026 -0400
+
+    AGENTS.md: point contributors to dist-ai for comprehensive tests
+
+    Basic tests stay in each package; the high-volume regression/fuzz/e2e
+    suites (too much for human review) live in the AI-maintained dist-ai
+    repo. Establish the convention that packages with such a suite link to
+    it from their own AGENTS.md.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_014Pag3UZHFWciJjKjnUwPWS
+
+commit ff7efec2c502485a43a34536e79cf43b7f829cfa
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 3 14:09:03 2026 -0400
+
+    .
+
+commit 2e88e29d0c27eee2c4c862c132e6392ff538a51e
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 3 14:05:41 2026 -0400
+
+    .
+
+commit 751e558d920f0201edd76159bba4595aed063cf9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 3 14:05:37 2026 -0400
+
+    .
+
+commit 91a3411e582cbc0826755ba86a4fd8d7357e0e8b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 3 13:56:56 2026 -0400
+
+    VirtualBox AC97 -> Intel HDA
+
+    https://forums.whonix.org/t/virtualbox-intel-hd-audio-and-pipewire-incompatibility-audio-broken-after-increasing-ram-to-5-gb-no-sound-after-latest-updates-pipewire-bug/18211/31
+
+commit 25032010e2ca9802633006094ffeb6f54c18b7a3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 3 13:30:23 2026 -0400
+
+    .
+
+commit 76db3fdb6be9390860793386337ed2d05b0d03e7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 3 13:25:33 2026 -0400
+
+    .
+
+commit 7b5d59a7f78ab06274bf808d68b0a08104a725b1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 3 00:59:21 2026 +0000
+
+    bumped changelog version
+
+commit 15d44c08683a1a29a18c73f28e522a2bdeab4edd
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Jul 2 20:57:17 2026 -0400
+
+    fix
+
+commit 525f63eb6a9884fa24b577dafbef0a951f64ba73
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Jul 2 20:57:05 2026 -0400
+
+    todo
+
 commit a1c7ab3fd59ba9fa118011b8848b5af4796049c1
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Thu Jul 2 20:56:39 2026 -0400
