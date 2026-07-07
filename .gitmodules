@@ -325,6 +325,11 @@
         url = https://github.com/Kicksecure/user-sysmaint-split.git
         #url = https://gitlab.com/kicksecure/user-sysmaint-split.git
 
+[submodule "virtualbox-guest-additions-iso"]
+        path = packages/kicksecure/virtualbox-guest-additions-iso
+        url = https://github.com/Kicksecure/virtualbox-guest-additions-iso.git
+        #url = https://gitlab.com/kicksecure/virtualbox-guest-additions-iso.git
+
 [submodule "vm-config-dist"]
         path = packages/kicksecure/vm-config-dist
         url = https://github.com/Kicksecure/vm-config-dist.git
