@@ -154,6 +154,8 @@ download_packages_from_debian_sid() {
       #newer_package_list="virtualbox-guest-additions-iso"
 
       #if [ "${dist_build_target_arch:-}" = "amd64" ] || [ "${dist_build_target_arch:-}" = "i386" ]; then
+         ## These packages are no longer needed for installed systems. We
+         ## install Guest Additions from virtualbox-guest-additions-iso now.
          #newer_package_list+=" virtualbox-guest-utils "
          #newer_package_list+=" virtualbox-guest-x11 "
 
