@@ -1,3 +1,27 @@
+commit df41d6c788cf4a7d90b90c179ac17d652d923133
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 07:24:10 2026 -0400
+
+    .
+
+commit 18ee82dd7656ef1551e14f659abf0ea91f2226f1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 07:03:28 2026 -0400
+
+    .
+
+commit 53836a964c799630af778b1dc7097db9440f8b24
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 07:00:40 2026 -0400
+
+    add virtualbox-guest-additions-iso repository sub module
+
+commit 72619880f10c7a2240ed0e8e3b7bd4ac281fe3f5
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 10:51:06 2026 +0000
+
+    bumped changelog version
+
 commit 6bea73000bdd981f409f7c8fa6e29eff9492749b
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Tue Jul 7 06:47:23 2026 -0400
