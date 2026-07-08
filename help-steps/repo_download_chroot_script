@@ -3,11 +3,21 @@
 ## Copyright (C) 2019 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Static-analysis waivers: 'command -v' below (the 'has' helper is not sourced
+## in this cowbuilder chroot) and 'rm' (safe-rm is not guaranteed present in the
+## chroot at this stage). '$newer_package_list' is deliberately word-split (a
+## space-separated apt package list).
+## style-ok: no-has
+## style-ok: no-safe-rm
+# shellcheck disable=SC2086
+
 set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: (hardcoded) this script is: help-steps/repo_download_chroot_script"
 true "INFO:  This script is supposed to be either executed:"
@@ -50,9 +60,14 @@ if [ -f "${if_no_pbuilder_base_folder}/var/cache/derivative-maker/temporary-repo
    ## Fix for:
    ## The key(s) in the keyring /etc/apt/trusted.gpg.d/newer.asc are ignored as the file is not readable by user '_apt' executing apt-key.
    chmod o+r -- "/etc/apt/trusted.gpg.d/newer.asc"
-   ## Debugging.
-   sq inspect -- "/etc/apt/trusted.gpg.d/newer.asc"
-   sq cert lint --cert-file "/etc/apt/trusted.gpg.d/newer.asc"
+   ## Debugging (best-effort). "sq" is a Rust binary that panics ("capacity
+   ## overflow") under qemu-user aarch64 emulation, so these purely
+   ## informational calls must never abort the build when cross-building
+   ## arm64 on a non-arm64 host. This is a qemu-user bug (fixed upstream in
+   ## qemu >= 10.2.0), not an sq or derivative-maker bug. apt's own Release
+   ## verification uses gpgv (C) and is unaffected.
+   sq inspect -- "/etc/apt/trusted.gpg.d/newer.asc" || true
+   sq cert lint --cert-file "/etc/apt/trusted.gpg.d/newer.asc" || true
 fi
 
 if [ "${temp_newer_packages:-}" = "" ]; then

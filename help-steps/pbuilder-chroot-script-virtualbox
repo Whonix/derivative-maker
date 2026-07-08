@@ -72,7 +72,7 @@ ls -la -- "$HOMEVAR_VBOX_TEMP"
 chown --recursive -- "dm-vbox-temp" "/home/dm-vbox-temp"
 
 adduser "dm-vbox-temp" sudo
-printf "%s\n" "dm-vbox-temp ALL=(ALL:ALL) NOPASSWD:ALL" | SUDO_EDITOR="" VISUAL="" EDITOR=tee visudo -f "/etc/sudoers.d/dm-vbox-temp_nopassword" >/dev/null
+printf "%s\n" "Defaults env_keep += \"OPENSSL_ia32cap\"" "dm-vbox-temp ALL=(ALL:ALL) NOPASSWD:ALL" | SUDO_EDITOR="" VISUAL="" EDITOR=tee visudo -f "/etc/sudoers.d/dm-vbox-temp_nopassword" >/dev/null
 
 ## Debugging.
 cat /etc/sudoers.d/dm-vbox-temp_nopassword
@@ -123,7 +123,14 @@ dist_installer_cli_arguments+=("--no-import")
 
 success="true"
 ## virtualbox-installer / dist-installer-cli
-if ! sudo --non-interactive -u "dm-vbox-temp" DIST_APTGETOPT_SERIALIZED="$DIST_APTGETOPT_SERIALIZED" bash -x /usr/bin/dist-installer-cli-standalone "${dist_installer_cli_arguments[@]}" ; then
+## OPENSSL_ia32cap=0 forces OpenSSL to use its portable software crypto
+## implementation instead of CPU-accelerated (AES-NI/PCLMULQDQ) paths. On a
+## non-amd64 build host the amd64 chroot runs under qemu-user emulation, whose
+## AES-GCM emulation miscomputes TLS record MACs ("bad record mac"), breaking
+## HTTPS to download.virtualbox.org. The value is preserved across the
+## installer's internal 'sudo apt-get' hop by the 'env_keep' rule added to the
+## dm-vbox-temp sudoers drop above. Harmless (native crypto) on an amd64 host.
+if ! sudo --non-interactive -u "dm-vbox-temp" OPENSSL_ia32cap=0 DIST_APTGETOPT_SERIALIZED="$DIST_APTGETOPT_SERIALIZED" bash -x /usr/bin/dist-installer-cli-standalone "${dist_installer_cli_arguments[@]}" ; then
   success=false
 fi
 
