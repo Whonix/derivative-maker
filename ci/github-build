@@ -26,7 +26,11 @@ set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
 
-arch="${1:?arch required (amd64 or arm64)}"
+arch="${1:-}"
+if [ -z "${arch}" ]; then
+   printf '%s\n' "${BASH_SOURCE[0]}: arch required (amd64 or arm64)" >&2
+   exit 1
+fi
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
