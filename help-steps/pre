@@ -164,6 +164,62 @@ error() {
    true
 }
 
+## retry_run - run a command, retrying only on TRANSIENT (network/fetch)
+## failures. Shared by apt-get, curl, git and similar call sites so a transient
+## upstream blip (a repo mid-publish 404, a dropped connection, a 5xx, a
+## hash-sum mismatch) does not abort the build. A non-transient failure (unmet
+## dependencies, a real 4xx, a config error) returns immediately, no retry.
+##
+## Usage:  retry_run [--tries N] [--delay S] -- CMD [ARG...]
+## Streams CMD's output live and also captures it to judge retryability.
+## Returns CMD's exit code (0 on eventual success), so callers handle failure
+## exactly as they would the bare command.
+retry_run() {
+   local retry_run_tries=4 retry_run_delay=15
+   while [ "$#" -gt 0 ]; do
+      case "$1" in
+         --tries) retry_run_tries="$2" ; shift 2 ;;
+         --delay) retry_run_delay="$2" ; shift 2 ;;
+         --)      shift ; break ;;
+         *)       error "retry_run: unknown option: $1" ;;
+      esac
+   done
+   [ "$#" -ge 1 ] || error "retry_run: no command given"
+
+   ## Transient patterns shared by apt and curl. Deliberately does NOT match
+   ## 'unmet dependencies', 'held broken packages', a plain 4xx, etc.
+   local retry_run_transient_re='Failed to fetch|Unable to fetch some archives|Hash Sum mismatch|Temporary failure resolving|Could not resolve host|Could not connect|Failed to connect|Connection (refused|reset|timed out|failed)|reset by peer|Operation timed out|Empty reply from server|Recv failure|transfer closed|GnuTLS recv error|SSL_ERROR_SYSCALL|Received HTTP code 5[0-9][0-9]|HTTP/[0-9.]+ (408|429|50[0-9])|Undetermined Error'
+
+   local retry_run_attempt retry_run_rc retry_run_tmp
+   retry_run_tmp="$(mktemp)"
+   for (( retry_run_attempt=1 ; retry_run_attempt<=retry_run_tries ; retry_run_attempt++ )); do
+      ## Stream live (tee to stdout) AND capture (tmp) to judge retryability.
+      ## 'if <pipeline>' suppresses errexit for the attempt; pipefail (set in
+      ## the preamble) makes the pipeline reflect CMD, and PIPESTATUS[0] is
+      ## CMD's own exit code.
+      if "$@" 2>&1 | tee -- "$retry_run_tmp"; then
+         retry_run_rc=0
+      else
+         retry_run_rc="${PIPESTATUS[0]}"
+      fi
+
+      if [ "$retry_run_rc" = "0" ]; then
+         safe-rm --force -- "$retry_run_tmp" || true
+         return 0
+      fi
+      if ! grep --quiet --extended-regexp -- "$retry_run_transient_re" "$retry_run_tmp"; then
+         printf '%s\n' "retry_run: '$1' failed (exit $retry_run_rc), non-transient; not retrying." >&2
+         break
+      fi
+      if [ "$retry_run_attempt" -lt "$retry_run_tries" ]; then
+         printf '%s\n' "retry_run: '$1' transient failure (exit $retry_run_rc), attempt $retry_run_attempt/$retry_run_tries; retry in $(( retry_run_attempt * retry_run_delay ))s..." >&2
+         sleep "$(( retry_run_attempt * retry_run_delay ))"
+      fi
+   done
+   safe-rm --force -- "$retry_run_tmp" || true
+   return "$retry_run_rc"
+}
+
 ## function_trace and process_backtrace are sourced from
 ## helper-scripts (trace.bsh) at the top of this file. They print
 ## their result to stdout; callers capture into a local variable.
