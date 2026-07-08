@@ -109,6 +109,12 @@ The format is:
 - Verbatim quote: `"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"`.
 - Verified: 2026-04.
 
+**`actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5`**
+- Source: https://github.com/actions/cache/releases/tag/v5.0.5
+- Verbatim quote: `"27d5ce7f107fe9357f9df03efb73ab90386fccae"`.
+- Verified: 2026-07-08 by git-api tag resolution; matches the pin in developer-meta-files' apt-install-with-cache action.
+- Used by `local-build.yml` (approx package-cache sidecar). No `restore-keys` on the paired step (G-A-007).
+
 **`github/codeql-action/{init,analyze,upload-sarif}@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4.35.2`**
 - Source: https://github.com/github/codeql-action/releases/tag/v4.35.2
 - Verbatim quote: `"95e58e9a2cdfd71adc6e0353d5c52f41a045d225"`.
@@ -140,8 +146,8 @@ are mutable.
     'https://index.docker.io/v2/library/debian/manifests/trixie' \
     | grep -i 'docker-content-digest:'
   ```
-- Multi-arch index digest. Used by both `lint.yml` and `dry-run.yml`;
-  bump both call sites in lockstep.
+- Multi-arch index digest. Used by both `local-lint.yml` and
+  `local-build-dry-run.yml`; bump both call sites in lockstep.
 
 Dependabot does NOT auto-bump container digests in workflow `image:`,
 so this needs manual re-pinning when porting to a new Debian release.

@@ -1,0 +1,78 @@
+#!/bin/bash
+
+## Copyright (C) 2025 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Runs INSIDE the derivative-maker docker container, invoked from
+## .github/workflows/local-build.yml as:
+##
+##   ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch <amd64|arm64>
+##
+## Signs HEAD before building so build-steps.d/1100_sanity-tests' sq-git
+## signature verification passes without the --allow-unsigned escape hatch,
+## then builds the kicksecure-cli raw image for the given architecture.
+##
+## Signing and building run in a SINGLE container invocation (unlike
+## ci/dry-run.d/{150,200,300}, which are separate steps in a persistent
+## systemd container) so home-directory state created by signing-key-create
+## beyond the mounted ~/.gnupg survives into sign-and-tag and the build.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+arch=""
+while [ "$#" -gt 0 ]; do
+   case "$1" in
+      --arch)
+         if [ "$#" -lt 2 ]; then
+            printf '%s\n' "${BASH_SOURCE[0]}: --arch requires a value" >&2
+            exit 1
+         fi
+         arch="$2"
+         shift 2
+         ;;
+      *)
+         printf '%s\n' "${BASH_SOURCE[0]}: unexpected argument: $1" >&2
+         exit 1
+         ;;
+   esac
+done
+
+case "${arch}" in
+   amd64 | arm64) ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --arch <amd64|arm64> is required (got: '${arch}')" >&2
+      exit 1
+      ;;
+esac
+
+cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
+
+## Create signing material (idempotent; signing-key-create never overwrites an
+## existing key) and sign+tag HEAD. Mirrors ci/dry-run.d/150_signing-key-create
+## and ci/dry-run.d/200_sign-and-tag.
+./help-steps/signing-key-create
+./help-steps/sign-and-tag
+
+## --allow-uncommitted and --allow-untagged mirror ci/dry-run.d/300 (still
+## required by the build after signing); --allow-unsigned is intentionally
+## omitted so the sq-git verification runs against a real signature. Note the
+## key is a fresh CI key minted by signing-key-create, so a green check
+## exercises the signing/verification MECHANISM end to end -- it is a
+## self-signed build, not maintainer provenance.
+./derivative-maker \
+   --flavor kicksecure-cli \
+   --target raw \
+   --type vm \
+   --arch "${arch}" \
+   --allow-uncommitted true \
+   --allow-untagged true \
+   --freedom false \
+   --repo true \
+   --remote-derivative-packages true

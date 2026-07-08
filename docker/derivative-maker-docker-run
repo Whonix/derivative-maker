@@ -18,6 +18,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 HOST_USER="$(id -u)"
 DOCKER_USER="user"
@@ -76,12 +78,18 @@ volume_prepare() {
 }
 
 build_docker_image() {
+  ## Hoist the subshell out of the command arguments so 'set -o errexit'
+  ## catches a failing 'id' instead of silently passing an empty --build-arg.
+  local dm_uid
+  dm_uid="$(id -u)"
   if [ -z "$(docker images --quiet -- "${IMG}" 2> /dev/null)" ]; then
     sudo \
     "${sudo_options_maybe[@]}" \
     -- \
       docker \
         build \
+        --build-arg \
+        DM_UID="${dm_uid}" \
         --tag \
         "${IMG}:latest" \
         "${DOCKER_DIR}"
@@ -156,10 +164,10 @@ docker_run_opts=()
 ## requires a real TTY on stdin; without one Docker prints
 ## "the input device is not a TTY" and exits non-zero.
 if [ "${CI:-}" = "true" ]; then
-  true "INFO: CI detected, omitting '--interactive --tty' for docker run."
-  ## Inform the container entrypoint that this is a headless run so it does
-  ## not abort on its "TTY needs to be enabled" guard.
-  docker_run_opts+=( --env 'CI=true' )
+  ## Keep --tty: it allocates a pty so the systemd entrypoint service streams
+  ## build output to docker stdout (live CI logs). Drop --interactive: it
+  ## needs a real host TTY. --env CI=true tells the container it is headless.
+  docker_run_opts+=( --tty --env 'CI=true' )
 else
   docker_run_opts+=( --interactive --tty )
 fi
@@ -185,5 +193,6 @@ sudo \
           --non-interactive \
           --preserve-env \
           -u "${DOCKER_USER}" \
+          user_name="${DOCKER_USER}" \
           -- \
             "/usr/bin/derivative-maker-docker-start" "${COMMAND}" "${@}"

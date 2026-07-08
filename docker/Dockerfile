@@ -14,6 +14,13 @@ ENV \
 USER=user \
 HOME=/home/user
 
+## Create the in-container 'user' with this uid. Defaults to 1000 for local
+## use; CI passes --build-arg DM_UID=$(id -u) so the container user matches
+## the host runner (uid 1001 on GitHub runners), required for the bind-mounted
+## volumes to be writable during the build and readable by the runner after.
+ARG DM_UID=1000
+ENV DM_UID=${DM_UID}
+
 COPY derivative-maker-docker-setup /usr/bin
 COPY build-data/docker-entrypoint.target /etc/systemd/system
 COPY build-data/docker-entrypoint.service /etc/systemd/system

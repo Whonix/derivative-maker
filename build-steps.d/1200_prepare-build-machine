@@ -98,6 +98,7 @@ build_machine_setup() {
    #$SUDO_TO_ROOT safe-rm -f -- /etc/apt/sources.list.d/extrepo_kicksecure.sources
    #$SUDO_TO_ROOT "$str_replace_many_tool" trixie forky /etc/apt/sources.list.d/* || true
 
+   retry_run --tries 4 --delay 15 -- \
    $SUDO_TO_ROOT \
       apt-get \
          "${DIST_APTGETOPT[@]}" \
@@ -108,6 +109,7 @@ build_machine_setup() {
    true "dist_build_upgrade_build_machine: $dist_build_upgrade_build_machine"
    if [ ! "${dist_build_upgrade_build_machine:-}" = "0" ]; then
       ## Update package lists and upgrade.
+      retry_run --tries 4 --delay 15 -- \
       $SUDO_TO_ROOT \
          apt-get \
             "${DIST_APTGETOPT[@]}" \
@@ -192,6 +194,7 @@ build_machine_setup() {
    ## host. This keeps the host clean and is required when building
    ## arm64 VirtualBox OVAs ('Mac M1/M2') from an arm64 Linux host.
 
+   retry_run --tries 4 --delay 15 -- \
    $SUDO_TO_ROOT \
       apt-get \
          "${DIST_APTGETOPT[@]}" \
@@ -396,6 +399,7 @@ packages_installation_from_backports_repository() {
       return 0
    fi
 
+   retry_run --tries 4 --delay 15 -- \
    $SUDO_TO_ROOT \
       apt-get \
          "${DIST_APTGETOPT[@]}" \
@@ -403,6 +407,7 @@ packages_installation_from_backports_repository() {
          -o Dir::Etc::sourceparts="-" \
          update
 
+   retry_run --tries 4 --delay 15 -- \
    $SUDO_TO_ROOT \
       apt-get \
          "${DIST_APTGETOPT[@]}" \
