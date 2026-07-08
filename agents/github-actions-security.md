@@ -146,8 +146,8 @@ are mutable.
     'https://index.docker.io/v2/library/debian/manifests/trixie' \
     | grep -i 'docker-content-digest:'
   ```
-- Multi-arch index digest. Used by both `lint.yml` and `dry-run.yml`;
-  bump both call sites in lockstep.
+- Multi-arch index digest. Used by both `local-lint.yml` and
+  `local-build-dry-run.yml`; bump both call sites in lockstep.
 
 Dependabot does NOT auto-bump container digests in workflow `image:`,
 so this needs manual re-pinning when porting to a new Debian release.
