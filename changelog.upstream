@@ -1,3 +1,555 @@
+commit ec024fd0a6e67e4812ac855f3ab9a335a0aa100f
+Merge: 4f64db4b8 86d8213a8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 8 16:19:41 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit 4f64db4b8c1154bfc3e9e2a3d372d9e9260711d9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 8 16:09:30 2026 -0400
+
+    delete automated_builder (replaced by new CI scripts)
+
+commit 86d8213a8d8ae4cd0f31356ec63fa961890a4ab8
+Merge: 36a4a4045 8e9a18a9d
+Author: assisted-by-ai (Bot Account) (Machine Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Wed Jul 8 16:06:44 2026 -0400
+
+    Merge pull request #52: native GitHub CI build (signed amd64+arm64) + apt-cache + retry_run
+
+    Native amd64+arm64 signed build via ci/github-build; approx + docker-image apt caching; generic retry_run behind all apt calls (incl. pbuilder chroot). Original commits by @Mycobee preserved.
+
+commit 8e9a18a9d0c3343c0e6db09a78f9c62b285b02aa
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 15:50:30 2026 -0400
+
+    3500: restore (apt_get_exit_code: ...) in the "failed again" message
+
+    The second diagnostic message lost its "(apt_get_exit_code: $apt_get_exit_code)"
+    detail during the retry_run rewrite. Restore it so the exit code is shown
+    in both the first and the "as expected, failed again" error lines, as
+    before. Full diff vs master now contains only the intended changes
+    (strict-mode/SC2086 waiver, retry_run wraps, two comments).
+
+    ## AI-Assisted
+
+commit 18c32d3d7fb64b2c084f6b9791b20d9a172c5d38
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 15:44:55 2026 -0400
+
+    3500: keep the original debug re-run exit-code capture + "did not fail?!?"
+
+    When restoring the debug-output gathering I had simplified the capture to
+    '|| true' and dropped the invariant check. Restore both verbatim: the
+    debug re-run captures its own exit code via
+    '|| { apt_get_exit_code="$?" ; true; }', and if that re-run unexpectedly
+    SUCCEEDS (retry_run had given up), flag it loudly with "Second attempt
+    installing ... did not fail?!?" and error, rather than silently
+    proceeding. Only a genuine repeated failure falls through to
+    apt_get_parse_unmet_dependency.
+
+    ## AI-Assisted
+
+commit 9ecb34ef82ccc7b72262f04bad52bf570f55345a
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 15:24:36 2026 -0400
+
+    retry-run: validate --tries/--delay (AI review)
+
+    Codex + a local fresh-eyes pass flagged that retry_run did not validate
+    its counters: a missing value tripped an unbound $2 under nounset, a
+    non-integer broke the arithmetic, and '--tries 0' returned success
+    WITHOUT running the command. Reject a missing value and require a
+    positive-integer --tries / non-negative-integer --delay. This also
+    guarantees nothing in the loop can trigger errexit, so the pipefail
+    restore at the end is always reached.
+
+    Unit-tested: normal success, real-failure-propagation, and each misuse
+    (tries 0 / non-numeric / missing value / no command) now rejected.
+
+    ## AI-Assisted
+
+commit b1af6919fd4f93407d1c1040f2e24cb32042c37b
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 15:06:58 2026 -0400
+
+    dm-docker-image-cache: graceful fallback on docker load failure
+
+    A corrupted cache tar (partial write, disk/cache issue) made 'docker load'
+    fail under errexit, aborting the CI step with no recovery -- blocking PRs
+    until the cache expired. Treat a load failure as a cache miss: warn, drop
+    the bad tar, and continue so build_docker_image rebuilds the image.
+
+    Addresses CodeRabbit review on ci/dm-docker-image-cache.
+
+    ## AI-Assisted
+
+commit e2f0138046c4f302c26e4cb434c4c5cfdc6d2301
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 15:03:03 2026 -0400
+
+    2100: SC2086 waiver on the retry_run-wrapped apt update line
+
+    $SUDO_TO_ROOT is intentionally word-split (it may be 'sudo --...'); add a
+    per-line shellcheck disable=SC2086 matching this file's per-line-waiver
+    idiom, so the wrapped call is gate-clean.
+
+    ## AI-Assisted
+
+commit c93f4d6f81273a1695a613b186a35ea860316502
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 15:01:08 2026 -0400
+
+    3500: restore the debug-output gathering the retry_run rewrite dropped
+
+    The pkg-install rewrite replaced the two-attempt logic with retry_run but
+    also removed the step that populated $apt_get_output -- which
+    apt_get_parse_unmet_dependency parses to surface unmet dependencies. That
+    left the diagnosis empty (and would hit an unbound $apt_get_output under
+    nounset on a real failure).
+
+    Restore it as a step AFTER retry_run gives up: on a non-transient / retry-
+    exhausted failure, re-run the install once capturing its combined output
+    into $apt_get_output, then diagnose. retry_run still owns the transient
+    retry; this only runs on genuine failure.
+
+    ## AI-Assisted
+
+commit f8511407294452f3967e922074de38b43099320f
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 14:23:59 2026 -0400
+
+    retry_run: extract to help-steps/retry-run; wrap all apt calls incl. chroot
+
+    Use retry_run behind every apt-get call for consistency, in and out of
+    the pbuilder/cowbuilder chroot.
+
+    - help-steps/retry-run: new standalone, dependency-minimal library (needs
+      only a pre-defined error + coreutils). Kept out of help-steps/pre so the
+      pbuilder-chroot-script-* can source just this, not pre's colors /
+      exception handlers / helper-scripts deps. Self-contained: enables
+      pipefail locally for its 'CMD | tee' capture and restores the caller's
+      setting, so it is correct regardless of caller shell options; uses rm
+      (not safe-rm, absent in the chroot) for its mktemp tmpfile.
+    - help-steps/pre: source the helper instead of defining retry_run inline.
+    - build-steps.d/{3500,2100,1200}: wrap every network apt-get (update,
+      install, dist-upgrade, fix-broken/-missing). 3500 gains the two missing
+      strict-mode shopt lines + an SC2086 waiver so the touched file is clean.
+    - build-steps.d/1300_cowbuilder-setup: copy retry-run into the chroot home
+      (beside pbuilder_config_file).
+    - help-steps/pbuilder-chroot-script-main: define a minimal local error,
+      source the copied retry-run, wrap its apt dist-upgrade; complete its
+      strict-mode + SC2086 waiver.
+
+    Verified: retry_run unit test (success / transient-recovers / non-transient
+    / pipefail-restore) 6/6; bash -n + shellcheck + ASCII clean; static gate
+    clean except one pre-existing item: pre's intentional 'set +o errexit'
+    (retry/exception mode) trips R-011, which has no waiver and is unsafe to
+    restructure. inherit_errexit added to 3500 (its $() are guarded) and
+    pbuilder-chroot-script-main (its only $() is commented out) -- validated
+    by the CI build.
+
+    ## AI-Assisted
+
+commit e59c44a9f11622ffc901ec3dfe5ed45ae0f028f1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 8 14:17:19 2026 -0400
+
+    .
+
+commit 09a4cb06a3fce067f4a734ac323e2fe19a9de255
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 8 14:07:59 2026 -0400
+
+    .
+
+commit 9dbfdf6e7a926adc57aa32c6665ca5653453d1cb
+Merge: 15851d7c6 36a4a4045
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 8 14:07:43 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit bb9312b3adfa7313559e19c337870b81024f335b
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 13:01:28 2026 -0400
+
+    help-steps/pre: add generic retry_run; use it in 3500_install-packages
+
+    Phase 1 of a shared retry helper for the many apt-get / curl call sites.
+
+    - help-steps/pre: retry_run [--tries N] [--delay S] -- CMD [ARG...] runs a
+      command, streaming its output (tee) while capturing it to judge
+      retryability. It retries only TRANSIENT failures -- a shared regex
+      covering apt and curl fetch errors (mid-publish 404, dropped
+      connection, 5xx, hash-sum mismatch, DNS/TLS blips) -- with linear
+      backoff, and returns immediately on a non-transient failure (unmet
+      deps, real 4xx). Returns CMD's exit code, so callers are unchanged.
+      Defined in pre (not a separate sourced file) because pre is the shared
+      preamble that already defines error() and is sourced everywhere; the
+      help-steps dir var is not yet set that early to source a sibling.
+
+    - build-steps.d/3500_install-packages: wrap the derivative package
+      install (the currently-flaky site) in retry_run, replacing the
+      hand-rolled two-attempt logic whose "second attempt" was diagnostic
+      only and even errored on an unexpected recovery. Non-transient
+      failures still fall through to apt_get_parse_unmet_dependency + error.
+
+    Verified: unit-tested retry_run (success / transient-recovers /
+    non-transient-immediate / exhausted), gate green, bash -n + shellcheck
+    clean, ASCII. Phases 2-3 (remaining network apt calls; curl sites) to
+    follow.
+
+    ## AI-Assisted
+
+commit 2b7160f306af112238cd7e711e96017000782c8d
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 12:00:55 2026 -0400
+
+    CI: also cache the docker image (image-build apt, the second level)
+
+    Adds the missing caching level. ci/approx-cache-sidecar covers the big
+    in-container apt workload (target-OS packages via approx); this covers
+    the other one: the docker IMAGE build, whose Dockerfile RUNs
+    docker-setup's apt-get install of ~30 build-host tools directly against
+    the mirrors (approx is not up during 'docker build'), re-downloaded on
+    every ephemeral runner.
+
+    - ci/dm-docker-image-cache: docker save/load "${IMG}:latest" via a
+      runner-owned tar, so build_docker_image's 'docker images' guard finds
+      the loaded image and skips the rebuild. CI-guarded like the sidecar.
+    - local-build.yml: actions/cache the image tar keyed on hashFiles('docker/**')
+      (no restore-keys, G-A-007); load on hit before the build, save on miss
+      after. Per-arch key (amd64/arm64 images differ).
+
+    actions/cache is already in the provenance table. Net win is modest
+    (~30 packages; the tar shuffle offsets some of it), but it completes
+    both-levels apt caching.
+
+    ## AI-Assisted
+
+commit eb099834888f177df6f336bc63899bbcd036997f
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 11:16:36 2026 -0400
+
+    github-actions-security.md: fix outdated workflow file names
+
+    The container-digest note referenced `lint.yml` and `dry-run.yml`, which
+    were renamed to `local-lint.yml` and `local-build-dry-run.yml` (G-A-005
+    'local-' prefix). Update the names so the "bump both call sites in
+    lockstep" instruction points at the files that actually pin the digest.
+
+    ## AI-Assisted
+
+commit 256aeb07812c15c978628b9ad7456a2c8a89004a
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 11:10:51 2026 -0400
+
+    CI: cache the build's apt downloads via a runner-owned approx sidecar
+
+    Adapt developer-meta-files' apt-install-with-cache pattern to the build's
+    approx package cache. approx's dir (docker-run CACHER_VOLUME,
+    $HOME/approx_cache_mnt) is chowned to the in-container approx uid 101:102
+    mode 770 by volume_prepare, so the unprivileged runner cannot tar it
+    directly - the exact root-owned-dir case actions/cache must avoid.
+
+    - ci/approx-cache-sidecar: seed the approx dir from a runner-owned
+      sidecar before the build (pre-creating it with the 101:102/770 perms
+      volume_prepare expects, so its 'if [ ! -d ]' guard leaves the seeded
+      contents in place) and snapshot new packages back after (sudo-reading
+      the approx-owned dir, then handing the sidecar back to the runner so
+      actions/cache can tar it). CI-guarded like the upstream helper.
+    - local-build.yml: actions/cache the sidecar (no restore-keys, G-A-007;
+      hashFiles key per arch), plus seed/snapshot steps around the build.
+    - agents/github-actions-security.md: add the actions/cache@v5.0.5
+      provenance row (same SHA the developer-meta-files action pins).
+
+    First run is a cache miss (empty seed == today's behavior); later runs
+    reuse the cached packages, cutting download time and live approx fetches.
+
+    ## AI-Assisted
+
+commit f766b6d0db5c1fa37091473e609cbabd11588423
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 10:57:41 2026 -0400
+
+    ci/github-build: take --arch option instead of a bare positional
+
+    Accept `--arch <amd64|arm64>` (parsed with a while/case loop, the
+    docker-run/parse-cmd idiom) instead of a positional $1, and validate
+    the value against the amd64|arm64 enum (the positional form accepted
+    anything). local-build.yml now invokes it as
+    `... --custom ci/github-build -- --arch "${ARCH}"`.
+
+    ## AI-Assisted
+
+commit 1615976f7583641281990eecb2965284df4b3580
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 10:38:37 2026 -0400
+
+    sign-tag-head: explicit arg init instead of ${1:?} expansion
+
+    Replace the compact ${1:?...} required-arg form with the codebase's
+    typical assign-then-validate idiom: nounset-safe ${1:-} plus a
+    [ -n ... ] || error guard, using the error() helper this file already
+    sources from help-steps/pre (matching git_sanity_test's
+    '[ -n "${VAR:-}" ] || die ...' shape). This was the last ${1:?}
+    occurrence in the tree.
+
+    ## AI-Assisted
+
+commit 4ecbb16df7623db433f4c85cf1c89c83d578c0d9
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 10:26:15 2026 -0400
+
+    ci/github-build: explicit arg init instead of ${1:?} expansion
+
+    Replace the compact ${1:?...} required-arg form with the codebase's
+    typical assign-then-validate idiom (nounset-safe ${1:-} plus an explicit
+    guard), matching ci/dry-run.d/100_install's printf-to-stderr + exit 1
+    style.
+
+    ## AI-Assisted
+
+commit 946b94ac37972e1d9c07e728d36e271d616b3f5f
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 10:01:29 2026 -0400
+
+    CI: conform build workflow to agents/github-actions-security.md
+
+    Audit against the repo's CI security checklist and typical style:
+
+    - Rename build.yml -> local-build.yml (G-A-005: repo-private build
+      workflows carry the 'local-' prefix, like local-test-build.yml).
+    - Pin actions/checkout to the repo's verified SHA
+      de0fac2e... (# v6.0.2) from the provenance table, matching every
+      sibling workflow, instead of a self-picked v6.0.3. upload-artifact
+      043fb46d... (# v7.0.1) already matches the table.
+    - Add the fork-PR guard on the build-triggering job (rule 3).
+    - Header now cites agents/github-actions-security.md and annotate each
+      control with the rule it satisfies (permissions, persist-credentials,
+      env-routing, timeout, ci/*.sh).
+
+    Kept the workflow minimal: no step-summary panel, so there is no inline
+    post-checkout shell (rule 7 stays clean). All seven checklist rules
+    conform; Codex + a local review found no other issues.
+
+    ## AI-Assisted
+
+commit 3a758f39ec6d5096bd19d3a0cf86a37951e72ee5
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 08:53:43 2026 -0400
+
+    docker image: install signify-openbsd + moreutils for signing (Build #4)
+
+    Build #4 failed in ci/github-build at signing-key-create, whose
+    sanity_tests gate on 'command -v signify-openbsd' and 'command -v
+    sponge'. The derivative-maker-docker image did not ship either, so
+    signing aborted before the build. Add signify-openbsd and moreutils
+    (provides sponge) to docker/derivative-maker-docker-setup, matching the
+    proven ci/dry-run.d/100_install package set. sq / sqop / sq-git
+    (sequoia-git) are already installed.
+
+    ## AI-Assisted
+
+commit 8a74275c522abc1b67fee7f633bd8b73fababe80
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 08:48:48 2026 -0400
+
+    ci/github-build: don't overstate the signature check (AI review)
+
+    Fresh-eyes review noted the comment implied provenance assurance. The
+    CI key is self-signed (signing-key-create mints it), so verifying the
+    signature only proves the sq-git mechanism runs end to end, not
+    maintainer provenance. Reword accordingly.
+
+    ## AI-Assisted
+
+commit 8e3a4bb6df6a4e749047ee39bea18fd647adf2c9
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 08:41:58 2026 -0400
+
+    docker scripts: complete strict-mode preamble (R-010)
+
+    Add the two missing shopt lines (inherit_errexit, shift_verbose) to
+    docker/derivative-maker-docker-run and docker/derivative-maker-docker-setup
+    so the touched files satisfy the R-010 strict-mode block in full.
+
+    ## AI-Assisted
+
+commit 4babce783e2843d9c4f0b0742e7ab8356464ec33
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 08:40:13 2026 -0400
+
+    CI: sign HEAD before building; move build logic to ci/github-build
+
+    Build #3 showed that dropping --allow-unsigned makes build-steps.d/
+    1100_sanity-tests reject the unsigned commit: the signature check runs
+    before the signing key is created, so a single ./derivative-maker run
+    cannot sign its own commit. The canonical CI signs first, then builds
+    (ci/dry-run.d/150_signing-key-create + 200_sign-and-tag -> 300).
+
+    - Add ci/github-build: runs inside the docker container, creates signing
+      material + signs/tags HEAD, then builds the kicksecure-cli raw image.
+      Signing and building share one container so home-dir state persists.
+      This removes the inline run: script from the workflow (no embedded
+      scripting) and enforces sq-git verification against a real signature
+      instead of --allow-unsigned. --allow-uncommitted / --allow-untagged
+      are kept, mirroring ci/dry-run.d/300 (still required after signing).
+    - build.yml: invoke it via docker-run --custom; route the arch through
+      env (not an inline ${{ }} in run:, per the CodeQL rule); add a
+      concurrency group and persist-credentials: false on checkout; spell
+      out the artifact path (/home/runner/binary_mnt) since upload-artifact
+      expands neither '~' nor env vars.
+
+    ## AI-Assisted
+
+commit ff62818814b27847ab560c38dff11f83bf7f59e6
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 08:22:16 2026 -0400
+
+    CI: drop --allow-* escape hatches, proper var init, root default fixes
+
+    - build.yml: remove --allow-unsigned / --allow-untagged / --allow-uncommitted.
+      The build self-signs: build-steps.d/1200_prepare-build-machine runs
+      signing-key-create (non-redistributable builds) and --sign-and-tag defaults
+      to true (help-steps/parse-cmd), so a fresh checkout is signed and tagged
+      during the build rather than waved through. See caveat below.
+    - docker/derivative-maker-docker-run: hoist DM_UID="$(id -u)" out of the
+      docker build arguments into its own assignment so errexit catches a failing
+      'id' instead of passing an empty --build-arg.
+    - docker/derivative-maker-docker-setup: initialise DM_UID once
+      ([ -v DM_UID ] || DM_UID=1000) before use instead of an inline
+      ${DM_UID:-1000} default at the point of use.
+    - help-steps/variables: fix a copy-paste bug in the CI/redistributable
+      default block - 'export dist_build_redistributable' was duplicated while
+      CI (defaulted just above) was never exported; export CI instead.
+    - help-steps/git_sanity_test: drop the now-unnecessary ${...:-false} guard on
+      dist_build_redistributable; the variable is unconditionally defaulted and
+      exported at its source (help-steps/variables), so the inline guard is
+      redundant.
+
+    Caveat: the canonical CI dry-run (ci/dry-run.d/300_run-derivative-maker) still
+    passes --allow-uncommitted and --allow-untagged even after signing, so one or
+    both may still be required at runtime here. Not verifiable locally; a live CI
+    run on this branch will confirm.
+
+    ## AI-Assisted
+
+commit 6e6d5a861a3444d42c523ed7f7028c22a7c3755f
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 08:05:14 2026 -0400
+
+    build.yml: SHA-pin actions, least-privilege token, robust artifact path
+
+    Address review findings on the CI workflow (follow-up to @Mycobee's two
+    commits, left intact):
+
+    - Pin actions to full commit SHAs (OpenSSF Scorecard / supply-chain):
+      actions/checkout      -> df4cb1c069e1874edd31b4311f1884172cec0e10 (v6.0.3)
+      actions/upload-artifact -> 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a (v7.0.1)
+    - Add a top-level least-privilege 'permissions: contents: read' block so
+      the job no longer inherits the repo-default GITHUB_TOKEN scope.
+    - Fix the artifact path: upload-artifact does not expand '~', so
+      'path: ~/binary_mnt/' would upload nothing. Resolve the host output dir
+      ($HOME/binary_mnt, the docker-run bind mount) into $GITHUB_ENV before the
+      build and reference it as env.BINARY_MNT, with if-no-files-found: warn.
+
+    Verified: valid YAML, ASCII-only. The nounset guard in git_sanity_test is
+    left as-is; dist_build_redistributable is already defaulted at its source
+    (help-steps/variables), so the guard is harmless defensive code.
+
+    ## AI-Assisted
+
+commit 5eb11f2d98f4f6a9530acaf194cee90ff0c2ebdf
+Author: Mycobee <41843577+Mycobee@users.noreply.github.com>
+Date:   Tue Jul 7 14:52:58 2026 -0600
+
+    Add github native CI for builds
+
+commit d36be0c977cc7029d597ec570ec06a41d03984bf
+Author: Mycobee <41843577+Mycobee@users.noreply.github.com>
+Date:   Tue Jul 7 14:26:30 2026 -0600
+
+    Remove automated builder
+
+commit 36a4a40453606f504149ad23669af0cd19f62b5d
+Merge: f0f29832d 7940cf896
+Author: assisted-by-ai (Bot Account) (Machine Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Wed Jul 8 04:21:45 2026 -0400
+
+    Merge pull request #51 from org-ai-assisted/ai/openssl-comment-still-open
+
+    pbuilder-chroot-script-virtualbox: note the OpenSSL/qemu bug is still open
+
+commit 7940cf896de7376310a04ad25aec50695b9b1097
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 04:21:19 2026 -0400
+
+    pbuilder-chroot-script-virtualbox: note the OpenSSL/qemu bug is still open
+
+    Verified (by building qemu from source and testing on the ppc64el host) that
+    the qemu-user x86_64 AES-GCM mis-emulation behind the OPENSSL_ia32cap=0
+    workaround still reproduces on qemu 10.0.8, 10.2.0, and git master. So, unlike
+    the related aarch64 'sq' panic that qemu 10.2.0 fixes, this workaround cannot
+    be removed by upgrading the build host's qemu. Comment-only change.
+
+    ## AI-Assisted
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit f0f29832da3b8cb04422f11ec7d33d6f0456322d
+Merge: 0f2f6edcc 993ce574d
+Author: assisted-by-ai (Bot Account) (Machine Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Wed Jul 8 03:36:01 2026 -0400
+
+    Merge pull request #50 from org-ai-assisted/ai/arm64-vbox-nonamd64-host
+
+    Enable cross-building arm64 VirtualBox images on non-amd64 hosts
+
+commit 993ce574d8308b2d61e13ac687e3d3d53cf41499
+Author: claude (dev56 7c768585-e4f3-4e54-907f-be83affd0cb1) <noreply@anthropic.com>
+Date:   Wed Jul 8 03:21:46 2026 -0400
+
+    Enable cross-building arm64 VirtualBox images on non-amd64 hosts
+
+    Building '--target virtualbox --arch arm64' on a non-amd64 host runs both
+    the amd64 VBoxManage chroot and the arm64 guest tooling under qemu-user
+    emulation, exposing three unrelated failures. All three are fixed here,
+    verified by a full kicksecure-cli arm64 .ova build on a ppc64el host:
+
+    - 30_dependencies.conf: drop 'proot'. It is an unused mmdebstrap
+      'Suggests' (proot mode is never selected; bootstrap runs as root) with
+      no installation candidate on some release architectures (e.g. ppc64el),
+      where it aborted dependency installation.
+
+    - pbuilder-chroot-script-virtualbox: run the VirtualBox installer with
+      OPENSSL_ia32cap=0 (kept across its internal sudo hop via a sudoers
+      env_keep). Under qemu-user the emulated amd64 OpenSSL miscomputes
+      AES-GCM TLS MACs ("bad record mac"), breaking HTTPS to
+      download.virtualbox.org; forcing software crypto fixes it and is
+      harmless on a native amd64 host.
+
+    - repo_download_chroot_script: make the informational 'sq inspect' /
+      'sq cert lint' calls best-effort. 'sq' panics ("capacity overflow")
+      under qemu-user aarch64 emulation (a qemu-user bug, fixed upstream in
+      qemu >= 10.2.0); apt's Release verification uses gpgv and is unaffected.
+
+    Setuid under qemu-user additionally needs the qemu-x86_64 binfmt_misc
+    'C' (credentials) flag on the build host so the installer's 'sudo' can
+    reach root; that is host binfmt configuration, described in the PR.
+
+    ## AI-Assisted
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 15851d7c6ab72fabd257b2dfd990d32aaa5f3cf4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 7 14:03:14 2026 +0000
+
+    bumped changelog version
+
 commit db07ba292302001bd8a652f665d7f0db5186bd3b
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Tue Jul 7 09:48:31 2026 -0400
