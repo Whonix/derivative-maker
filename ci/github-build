@@ -12,7 +12,7 @@
 ##
 ## Signs HEAD before building so build-steps.d/1100_sanity-tests' sq-git
 ## signature verification passes without the --allow-unsigned escape hatch,
-## then builds the kicksecure-cli raw image for the given architecture.
+## then builds the kicksecure-cli image for the given architecture.
 ##
 ## Signing and building run in a SINGLE container invocation (unlike
 ## ci/dry-run.d/{150,200,300}, which are separate steps in a persistent
@@ -68,7 +68,7 @@ cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 ## self-signed build, not maintainer provenance.
 ./derivative-maker \
    --flavor kicksecure-cli \
-   --target raw \
+   --target virtualbox \
    --type vm \
    --arch "${arch}" \
    --allow-uncommitted true \

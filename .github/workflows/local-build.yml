@@ -2,7 +2,7 @@
 name: Build
 
 ## Repo-private native build workflow (G-A-005 'local-' prefix): builds the
-## kicksecure-cli raw image for amd64 and arm64 on native runners. All build
+## kicksecure-cli image for amd64 and arm64 on native runners. All build
 ## logic lives in ci/github-build so the shell is lint-covered and runnable
 ## locally. See agents/github-actions-security.md for the required
 ## permissions / persist-credentials / fork-PR / SHA-pin patterns applied below.
@@ -82,7 +82,7 @@ jobs:
         if: steps.dmimg-cache.outputs.cache-hit == 'true'
         run: ./ci/dm-docker-image-cache load
 
-      - name: Build kicksecure-cli raw (${{ matrix.arch }})
+      - name: Build kicksecure-cli (${{ matrix.arch }})
         ## CI=true tells docker-run this is headless; ARCH is routed through env
         ## (rule 4: no ${{ }} interpolation into run:). All build logic lives in
         ## ci/github-build (rule 7).
@@ -103,7 +103,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: kicksecure-cli-raw-${{ matrix.arch }}
+          name: kicksecure-cli-${{ matrix.arch }}
           ## docker-run bind-mounts the build output at $HOME/binary_mnt; on
           ## GitHub-hosted runners $HOME is /home/runner. upload-artifact does
           ## not expand '~' or env vars, so the path is spelled out.
