@@ -64,8 +64,23 @@ jobs:
           path: ~/.approx-cache-sidecar
           key: ${{ runner.os }}-${{ matrix.arch }}-approx-${{ hashFiles('.github/workflows/local-build.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
 
+      ## Cache the derivative-maker docker image: its Dockerfile RUNs
+      ## docker-setup's apt-get install of build-host tools, which hits the
+      ## mirrors directly (not approx). A hit lets build_docker_image skip the
+      ## rebuild. Keyed on docker/**; no restore-keys (G-A-007).
+      - name: Restore docker image cache
+        id: dmimg-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.dm-docker-image
+          key: ${{ runner.os }}-${{ matrix.arch }}-dmimg-${{ hashFiles('docker/**') }}
+
       - name: Seed approx cache from sidecar
         run: ./ci/approx-cache-sidecar seed
+
+      - name: Load cached docker image
+        if: steps.dmimg-cache.outputs.cache-hit == 'true'
+        run: ./ci/dm-docker-image-cache load
 
       - name: Build kicksecure-cli raw (${{ matrix.arch }})
         ## CI=true tells docker-run this is headless; ARCH is routed through env
@@ -75,6 +90,10 @@ jobs:
           CI: "true"
           ARCH: ${{ matrix.arch }}
         run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}"
+
+      - name: Save docker image to cache
+        if: steps.dmimg-cache.outputs.cache-hit != 'true'
+        run: ./ci/dm-docker-image-cache save
 
       - name: Snapshot approx cache to sidecar
         if: always()
