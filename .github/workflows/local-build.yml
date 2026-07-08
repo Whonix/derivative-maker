@@ -60,7 +60,7 @@ jobs:
         env:
           CI: "true"
           ARCH: ${{ matrix.arch }}
-        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- "${ARCH}"
+        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}"
 
       - name: Upload build output + logs
         if: always()
