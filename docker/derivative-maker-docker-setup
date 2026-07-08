@@ -33,6 +33,7 @@ DEBIAN_FRONTEND=noninteractive \
     --no-install-recommends \
     --yes \
     sq sqv sqop sequoia-git sequoia-chameleon-gnupg gpg-agent \
+    signify-openbsd moreutils \
     dbus dbus-user-session ca-certificates git time curl lsb-release fakeroot \
     dpkg-dev fasttrack-archive-keyring safe-rm adduser sudo approx docker.io \
     docker-cli \
