@@ -38,8 +38,10 @@ cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
 ## --allow-uncommitted and --allow-untagged mirror ci/dry-run.d/300 (still
 ## required by the build after signing); --allow-unsigned is intentionally
-## omitted so the sq-git verification is enforced against the freshly signed
-## commit rather than skipped.
+## omitted so the sq-git verification runs against a real signature. Note the
+## key is a fresh CI key minted by signing-key-create, so a green check
+## exercises the signing/verification MECHANISM end to end -- it is a
+## self-signed build, not maintainer provenance.
 ./derivative-maker \
    --flavor kicksecure-cli \
    --target raw \
