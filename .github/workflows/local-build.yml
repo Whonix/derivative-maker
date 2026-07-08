@@ -53,6 +53,20 @@ jobs:
           ## the checkout token rather than leave it in .git/config.
           persist-credentials: false
 
+      ## Cache the build's apt package downloads across runs via a runner-owned
+      ## sidecar: approx's cache dir is 101:102-owned, so actions/cache cannot
+      ## tar it directly (the root-owned-dir case the developer-meta-files
+      ## apt-install-with-cache action documents). No restore-keys (G-A-007);
+      ## the hashFiles() key invalidates on a CI/package-config change.
+      - name: Restore approx package cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.approx-cache-sidecar
+          key: ${{ runner.os }}-${{ matrix.arch }}-approx-${{ hashFiles('.github/workflows/local-build.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
+
+      - name: Seed approx cache from sidecar
+        run: ./ci/approx-cache-sidecar seed
+
       - name: Build kicksecure-cli raw (${{ matrix.arch }})
         ## CI=true tells docker-run this is headless; ARCH is routed through env
         ## (rule 4: no ${{ }} interpolation into run:). All build logic lives in
@@ -61,6 +75,10 @@ jobs:
           CI: "true"
           ARCH: ${{ matrix.arch }}
         run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}"
+
+      - name: Snapshot approx cache to sidecar
+        if: always()
+        run: ./ci/approx-cache-sidecar snapshot
 
       - name: Upload build output + logs
         if: always()
