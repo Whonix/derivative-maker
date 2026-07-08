@@ -130,22 +130,32 @@ Attempting to gather debug output to diagnose the problem...${reset}"
    true "${bold}${cyan}INFO: Read output of apt-get-noninteractive trying to install '$*' into a \
 variable for debugging. This may take a while...${reset}"
 
-   apt_get_output="$( \
-      chroot_run \
-            apt-get-noninteractive \
-               "${DIST_APTGETOPT[@]}" \
-               $apt_sourcelist_empty \
-               $apt_sourceparts \
-               $apt_unattended_opts \
-               --yes \
-               --no-install-recommends \
-               install \
-               "$@" \
-               2>&1 \
-   )" || true
+   local apt_get_exit_code="0"
+   apt_get_output=" \
+         $( \
+            chroot_run \
+                  apt-get-noninteractive \
+                     "${DIST_APTGETOPT[@]}" \
+                     $apt_sourcelist_empty \
+                     $apt_sourceparts \
+                     $apt_unattended_opts \
+                     --yes \
+                     --no-install-recommends \
+                     install \
+                     "$@" \
+                     2>&1 \
+         ) \
+      " \
+      || { apt_get_exit_code="$?" ; true; };
 
    chroot_run sync
-   $SUDO_TO_ROOT sync
+   sync
+
+   if [ "${apt_get_exit_code:-}" = "0" ]; then
+      true "${bold}${red}ERROR: Second attempt installing '$*' did not fail?!?${reset}"
+      error "See above!"
+      return 0
+   fi
 
    true "${bold}${red}ERROR: As expected, failed again to install '$*'. \
 Trying to diagnose the problem using function apt_get_parse_unmet_dependency...${reset}"
