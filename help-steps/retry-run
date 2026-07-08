@@ -1,0 +1,88 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Sourced library: provides retry_run, used behind every apt-get / curl call
+## in derivative-maker so a transient upstream blip (a repo mid-publish 404, a
+## dropped connection, a 5xx, a hash-sum mismatch) does not abort the build.
+##
+## Kept standalone (no 'source' of its own) and dependency-minimal on purpose:
+## it needs only a pre-defined 'error' plus coreutils, so it works BOTH in the
+## normal build (sourced by help-steps/pre, which defines error) AND inside the
+## pbuilder/cowbuilder chroot (sourced by the pbuilder-chroot-script-*, which
+## define their own local error). help-steps/pre carries the heavy machinery
+## (colors, exception handlers, helper-scripts sources) that the chroot lacks,
+## which is why retry_run lives here rather than being copied along with pre.
+##
+## No strict-mode preamble: this file is only ever sourced, so 'set -o errexit'
+## etc. would leak into the sourcing shell (R-010 exempts sourced libraries).
+## style-ok: no-strict
+## 'rm' rather than 'safe-rm' for the mktemp tmpfile cleanup: safe-rm is not
+## installed in the pbuilder chroot where this also runs, and the path is an
+## mktemp temporary, not user input.
+## style-ok: no-safe-rm
+
+## retry_run [--tries N] [--delay S] -- CMD [ARG...]
+## Streams CMD's output live and also captures it to judge retryability.
+## Retries only TRANSIENT failures with linear backoff; a non-transient failure
+## (unmet dependencies, a real 4xx, a config error) returns immediately.
+## Returns CMD's exit code (0 on eventual success), so callers handle failure
+## exactly as they would the bare command.
+retry_run() {
+   local retry_run_tries=4 retry_run_delay=15
+   while [ "$#" -gt 0 ]; do
+      case "$1" in
+         --tries) retry_run_tries="$2" ; shift 2 ;;
+         --delay) retry_run_delay="$2" ; shift 2 ;;
+         --)      shift ; break ;;
+         *)       error "retry_run: unknown option: $1" ;;
+      esac
+   done
+   [ "$#" -ge 1 ] || error "retry_run: no command given"
+
+   ## Transient patterns shared by apt and curl. Deliberately does NOT match
+   ## 'unmet dependencies', 'held broken packages', a plain 4xx, etc.
+   local retry_run_transient_re='Failed to fetch|Unable to fetch some archives|Hash Sum mismatch|Temporary failure resolving|Could not resolve host|Could not connect|Failed to connect|Connection (refused|reset|timed out|failed)|reset by peer|Operation timed out|Empty reply from server|Recv failure|transfer closed|GnuTLS recv error|SSL_ERROR_SYSCALL|Received HTTP code 5[0-9][0-9]|HTTP/[0-9.]+ (408|429|50[0-9])|Undetermined Error'
+
+   ## The 'CMD | tee' pipeline below needs pipefail so the pipeline status (and
+   ## PIPESTATUS[0]) reflect CMD rather than tee. Enable it locally and restore
+   ## the caller's setting before returning, so retry_run is correct regardless
+   ## of the caller's shell options.
+   local retry_run_pipefail_was_off=0
+   [[ -o pipefail ]] || retry_run_pipefail_was_off=1
+   set -o pipefail
+
+   local retry_run_attempt retry_run_rc=0 retry_run_tmp
+   retry_run_tmp="$(mktemp)"
+   for (( retry_run_attempt=1 ; retry_run_attempt<=retry_run_tries ; retry_run_attempt++ )); do
+      ## Stream live (tee to stdout) AND capture (tmp) to judge retryability.
+      ## 'if <pipeline>' suppresses errexit for the attempt; PIPESTATUS[0] is
+      ## CMD's own exit code.
+      if "$@" 2>&1 | tee -- "$retry_run_tmp"; then
+         retry_run_rc=0
+      else
+         retry_run_rc="${PIPESTATUS[0]}"
+      fi
+
+      if [ "$retry_run_rc" = "0" ]; then
+         break
+      fi
+      if ! grep --quiet --extended-regexp -- "$retry_run_transient_re" "$retry_run_tmp"; then
+         printf '%s\n' "retry_run: '$1' failed (exit $retry_run_rc), non-transient; not retrying." >&2
+         break
+      fi
+      if [ "$retry_run_attempt" -lt "$retry_run_tries" ]; then
+         printf '%s\n' "retry_run: '$1' transient failure (exit $retry_run_rc), attempt $retry_run_attempt/$retry_run_tries; retry in $(( retry_run_attempt * retry_run_delay ))s..." >&2
+         sleep "$(( retry_run_attempt * retry_run_delay ))"
+      fi
+   done
+
+   rm --force -- "$retry_run_tmp" || true
+   if [ "$retry_run_pipefail_was_off" = "1" ]; then
+      set +o pipefail
+   fi
+   return "$retry_run_rc"
+}

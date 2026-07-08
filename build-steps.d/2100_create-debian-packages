@@ -316,7 +316,7 @@ is not included in available_architectures_for_download_only_list: $available_ar
 
          ## XXX
          ## help-steps/repo_download_chroot_script messes up APT downloaded sources
-         $SUDO_TO_ROOT apt-get "${DIST_APTGETOPT[@]}" update
+         retry_run --tries 4 --delay 15 -- $SUDO_TO_ROOT apt-get "${DIST_APTGETOPT[@]}" update
       fi
 
       $SUDO_TO_ROOT chown --recursive "$user_name:$user_name" "$temp_newer_packages"

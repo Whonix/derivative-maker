@@ -3,11 +3,18 @@
 ## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Static-analysis waiver: intentional word-splitting of apt option / package
+## variables ($apt_sourceparts, $apt_unattended_opts, $pkg_install_list, ...);
+## quoting them would pass a single argument and break the call.
+# shellcheck disable=SC2086
+
 set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -209,7 +216,7 @@ install-packages() {
    dist_chroot_mount_resolv_conf="0" "$dist_source_help_steps_folder/chroot-raw" "$@"
    "$dist_source_help_steps_folder/create-local-temp-apt-repo" "$@"
 
-   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts update
+   retry_run --tries 4 --delay 15 -- chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts update
 
 #    if [ "${dist_build_target_arch:-}" = "arm64" ]; then
 #       ## Install package helper-scripts first so pre.bsh and initramfs-debug-enable is available.
@@ -265,19 +272,19 @@ install-packages() {
    "$dist_source_help_steps_folder/create-local-temp-apt-repo" "$@"
 
    ## Reading Debian apt repository and local repository containing derivative packages.
-   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts update
+   retry_run --tries 4 --delay 15 -- chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts update
 
    ## Debugging.
    chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts clean
    chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts autoclean
-   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-broken --yes install
-   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-missing --yes install
-   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-broken --fix-missing --yes install
+   retry_run --tries 4 --delay 15 -- chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-broken --yes install
+   retry_run --tries 4 --delay 15 -- chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-missing --yes install
+   retry_run --tries 4 --delay 15 -- chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --fix-broken --fix-missing --yes install
    chroot_run dpkg --configure -a
    chroot_run dpkg --audit
 
    ## XXX: once installed a newer kernel, which then messed up /boot/grub/grub.cfg to then include root=/dev/mapper which will fail to boot.
-   chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --yes dist-upgrade
+   retry_run --tries 4 --delay 15 -- chroot_run apt-get-noninteractive "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts --yes dist-upgrade
 
    ## Debugging.
    chroot_run apt-cache "${DIST_APTGETOPT[@]}" $apt_sourcelist_empty $apt_sourceparts $apt_unattended_opts show nano || true

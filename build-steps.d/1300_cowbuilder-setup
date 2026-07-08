@@ -165,6 +165,9 @@ cowbuilder_setup_do() {
 
       $SUDO_TO_ROOT mkdir --parents -- "$base_folder/home/$user_name"
       $SUDO_TO_ROOT cp -- "$dist_build_pbuilder_config_file" "$base_folder/home/$user_name/pbuilder_config_file"
+      ## retry_run helper so the in-chroot pbuilder-chroot-script-* can wrap
+      ## their apt calls too (they cannot source help-steps/pre).
+      $SUDO_TO_ROOT cp -- "$dist_source_help_steps_folder/retry-run" "$base_folder/home/$user_name/retry-run"
 
       ## virtualbox-installer / dist-installer-cli
       dist_installer_cli_file_name="$(basename -- "$binary_image_installer_dist_source")"
