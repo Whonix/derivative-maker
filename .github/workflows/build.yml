@@ -9,6 +9,12 @@ on:
     tags:
       - '*'
 
+## Least privilege: the workflow only reads the repo and uploads artifacts
+## (artifacts use the Actions runtime backend, not GITHUB_TOKEN), so deny
+## everything else by default.
+permissions:
+  contents: read
+
 jobs:
   build:
     strategy:
@@ -23,7 +29,7 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Checkout (recursive submodules)
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: recursive
           fetch-depth: 0
@@ -32,6 +38,10 @@ jobs:
         env:
           CI: "true"
         run: |
+          ## Record the host output dir (docker-run bind-mounts $HOME/binary_mnt);
+          ## upload-artifact does not expand '~', so resolve it here for the
+          ## upload step. Written before the build so it survives a build failure.
+          echo "BINARY_MNT=$HOME/binary_mnt" >> "$GITHUB_ENV"
           ./docker/derivative-maker-docker-run -- \
             --flavor kicksecure-cli \
             --target raw \
@@ -46,8 +56,12 @@ jobs:
 
       - name: Upload build output + logs
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kicksecure-cli-raw-${{ matrix.arch }}
-          path: ~/binary_mnt/
+          path: ${{ env.BINARY_MNT }}/
+          ## 'warn' not 'error': this step also runs on build failure (always()),
+          ## where the output dir can legitimately be empty; a correct path (above)
+          ## is the real fix for silently-empty uploads.
+          if-no-files-found: warn
           retention-days: 7
