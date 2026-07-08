@@ -51,7 +51,16 @@ case "${1:-}" in
       ## Cache miss leaves no tar; nothing to load (build_docker_image will
       ## build the image itself).
       [ -f "${image_tar}" ] || exit 0
-      sudo --non-interactive -- docker load --input "${image_tar}"
+      ## A corrupted tar (partial write, disk/cache issue) must NOT block CI:
+      ## treat a docker-load failure as a cache miss and drop the bad tar, so
+      ## build_docker_image rebuilds the image instead of the job aborting.
+      ## 'rm' (not safe-rm): a GitHub-hosted runner has no safe-rm installed,
+      ## and the path is a fixed cache file, not user input.
+      ## style-ok: no-safe-rm
+      if ! sudo --non-interactive -- docker load --input "${image_tar}"; then
+         printf '%s\n' "${BASH_SOURCE[0]}: WARNING: docker load failed; cache tar may be corrupted. Rebuilding the image." >&2
+         rm --force -- "${image_tar}"
+      fi
       ;;
    save)
       mkdir --parents -- "${cache_dir}"
