@@ -1,6 +1,12 @@
 ---
 name: Build
 
+## Repo-private native build workflow (G-A-005 'local-' prefix): builds the
+## kicksecure-cli raw image for amd64 and arm64 on native runners. All build
+## logic lives in ci/github-build so the shell is lint-covered and runnable
+## locally. See agents/github-actions-security.md for the required
+## permissions / persist-credentials / fork-PR / SHA-pin patterns applied below.
+
 on:
   workflow_dispatch:
   push:
@@ -9,20 +15,24 @@ on:
     tags:
       - '*'
 
-## Least privilege: the workflow only reads the repo and uploads artifacts
-## (artifacts use the Actions runtime backend, not GITHUB_TOKEN), so deny
-## everything else by default.
+## Least privilege (github-actions-security.md rule 1): the workflow only reads
+## the repo and uploads artifacts (artifacts use the Actions runtime backend,
+## not GITHUB_TOKEN), so deny everything else by default.
 permissions:
   contents: read
 
-## Per-ref cancellation: a new push to the same branch/tag cancels the
-## in-flight build. github.ref is unique per branch and per tag.
+## Per-ref cancellation (G-A-006 cancellable): a new push to the same branch/tag
+## cancels the in-flight build. github.ref is unique per branch and per tag.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
+    ## Fork-PR guard (github-actions-security.md rule 3): a build-triggering job
+    ## must not run for a fork PR. Always true for the push / tag /
+    ## workflow_dispatch triggers this workflow actually uses.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -35,19 +45,18 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: Checkout (recursive submodules)
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: recursive
           fetch-depth: 0
-          ## The build only signs/tags locally and never pushes, so drop the
-          ## checkout token from .git/config rather than leave it readable by
-          ## the privileged build container.
+          ## rule 2: the build only signs/tags locally and never pushes, so drop
+          ## the checkout token rather than leave it in .git/config.
           persist-credentials: false
 
       - name: Build kicksecure-cli raw (${{ matrix.arch }})
         ## CI=true tells docker-run this is headless; ARCH is routed through env
-        ## (not inlined as ${{ }} in run:) per the CodeQL inline-expression rule.
-        ## All build logic lives in ci/github-build (no embedded script here).
+        ## (rule 4: no ${{ }} interpolation into run:). All build logic lives in
+        ## ci/github-build (rule 7).
         env:
           CI: "true"
           ARCH: ${{ matrix.arch }}
