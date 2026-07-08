@@ -44,8 +44,12 @@ DEBIAN_FRONTEND=noninteractive \
 ## (see 'help-steps/dm-build-official-one' CI branch) 'sudo' leaves
 ## 'USER=root' / 'HOME=/root', and creating user 'root' or a
 ## 'root ALL=(ALL) NOPASSWD:ALL' drop-in is pointless and confusing.
+## Default the build user's uid. The docker image sets DM_UID via ENV
+## (Dockerfile), and CI overrides it with --build-arg DM_UID=$(id -u) so the
+## container user matches the host runner; fall back to 1000 for local use.
+[ -v DM_UID ] || DM_UID=1000
 if [ "${USER}" != "root" ]; then
-   adduser --quiet --disabled-password --uid "${DM_UID:-1000}" --home "${HOME}" --gecos "${USER},,,," "${USER}"
+   adduser --quiet --disabled-password --uid "${DM_UID}" --home "${HOME}" --gecos "${USER},,,," "${USER}"
    printf '%s\n' "${USER} ALL=(ALL) NOPASSWD:ALL" | tee -- /etc/sudoers.d/passwordless_sudo >/dev/null
    chmod 440 -- /etc/sudoers.d/passwordless_sudo
 fi

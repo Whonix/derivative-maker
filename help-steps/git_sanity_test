@@ -204,7 +204,7 @@ sq_git_verify() {
    ## AI-driven / local builds), so skip the cryptographic signature
    ## authentication.
    if [ "${dist_build_ignore_unsigned}" = "true" ]; then
-      if [ "${dist_build_redistributable:-false}" = 'true' ]; then
+      if [ "${dist_build_redistributable}" = 'true' ]; then
          printf '%s\n' "${bold}${red}ERROR: --allow-unsigned set but 'dist_build_redistributable' is set to 'true'! These settings are mutually exclusive.${reset}" >&2
          return 1
       fi

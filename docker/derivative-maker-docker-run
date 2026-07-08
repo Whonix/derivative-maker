@@ -76,6 +76,10 @@ volume_prepare() {
 }
 
 build_docker_image() {
+  ## Hoist the subshell out of the command arguments so 'set -o errexit'
+  ## catches a failing 'id' instead of silently passing an empty --build-arg.
+  local dm_uid
+  dm_uid="$(id -u)"
   if [ -z "$(docker images --quiet -- "${IMG}" 2> /dev/null)" ]; then
     sudo \
     "${sudo_options_maybe[@]}" \
@@ -83,7 +87,7 @@ build_docker_image() {
       docker \
         build \
         --build-arg \
-        DM_UID="$(id -u)" \
+        DM_UID="${dm_uid}" \
         --tag \
         "${IMG}:latest" \
         "${DOCKER_DIR}"

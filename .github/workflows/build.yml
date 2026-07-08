@@ -47,9 +47,6 @@ jobs:
             --target raw \
             --type vm \
             --arch ${{ matrix.arch }} \
-            --allow-untagged true \
-            --allow-uncommitted true \
-            --allow-unsigned true \
             --freedom false \
             --repo true \
             --remote-derivative-packages true
