@@ -3,6 +3,13 @@
 ## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Static-analysis waivers: intentional word-splitting of a few command
+## variables; '$SUDO_TO_ROOT rm' of specific known runtime files (not user
+## paths). The deliberate 'set +o errexit' toggle (pre's retry/exception mode,
+## documented below) has no waiver mechanism and stays flagged by R-011.
+# shellcheck disable=SC2086,SC2004
+## style-ok: no-safe-rm
+
 ## ERR path:
 ##   exception_handler_general | exception_handler_unchroot_unmount | exception_handler_unmount
 ##   -> exception_handler_process_shared -> function_trace -> process_backtrace -> exception_handler_shell -> exception_handler_retry -> exception_handler_maybe_exit
@@ -23,6 +30,7 @@ set -o errtrace
 ## any effect while errexit itself is on; in pre's default (retry)
 ## mode errexit is disabled further down anyway.
 shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "${BASH_SOURCE[0]} INFO: begin"
 
@@ -163,6 +171,15 @@ error() {
    error_ "See above! (There should be a bold, red message surrounded by blue hashtags (#).)"
    true
 }
+
+## retry_run (transient-failure retry wrapper for apt-get / curl calls) lives
+## in a standalone, dependency-minimal file so the pbuilder-chroot-script-*
+## can source it too; they cannot source this whole file (it needs colors,
+## exception handlers and helper-scripts sources absent in the chroot).
+## Sourced relative to this file's own directory (same idiom as
+## HELPER_SCRIPTS_PATH above).
+# shellcheck source=help-steps/retry-run
+source "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )/retry-run"
 
 ## function_trace and process_backtrace are sourced from
 ## helper-scripts (trace.bsh) at the top of this file. They print

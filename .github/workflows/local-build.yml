@@ -1,0 +1,114 @@
+---
+name: Build
+
+## Repo-private native build workflow (G-A-005 'local-' prefix): builds the
+## kicksecure-cli raw image for amd64 and arm64 on native runners. All build
+## logic lives in ci/github-build so the shell is lint-covered and runnable
+## locally. See agents/github-actions-security.md for the required
+## permissions / persist-credentials / fork-PR / SHA-pin patterns applied below.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**ci**'
+    tags:
+      - '*'
+
+## Least privilege (github-actions-security.md rule 1): the workflow only reads
+## the repo and uploads artifacts (artifacts use the Actions runtime backend,
+## not GITHUB_TOKEN), so deny everything else by default.
+permissions:
+  contents: read
+
+## Per-ref cancellation (G-A-006 cancellable): a new push to the same branch/tag
+## cancels the in-flight build. github.ref is unique per branch and per tag.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    ## Fork-PR guard (github-actions-security.md rule 3): a build-triggering job
+    ## must not run for a fork PR. Always true for the push / tag /
+    ## workflow_dispatch triggers this workflow actually uses.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    steps:
+      - name: Checkout (recursive submodules)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          ## rule 2: the build only signs/tags locally and never pushes, so drop
+          ## the checkout token rather than leave it in .git/config.
+          persist-credentials: false
+
+      ## Cache the build's apt package downloads across runs via a runner-owned
+      ## sidecar: approx's cache dir is 101:102-owned, so actions/cache cannot
+      ## tar it directly (the root-owned-dir case the developer-meta-files
+      ## apt-install-with-cache action documents). No restore-keys (G-A-007);
+      ## the hashFiles() key invalidates on a CI/package-config change.
+      - name: Restore approx package cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.approx-cache-sidecar
+          key: ${{ runner.os }}-${{ matrix.arch }}-approx-${{ hashFiles('.github/workflows/local-build.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
+
+      ## Cache the derivative-maker docker image: its Dockerfile RUNs
+      ## docker-setup's apt-get install of build-host tools, which hits the
+      ## mirrors directly (not approx). A hit lets build_docker_image skip the
+      ## rebuild. Keyed on docker/**; no restore-keys (G-A-007).
+      - name: Restore docker image cache
+        id: dmimg-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.dm-docker-image
+          key: ${{ runner.os }}-${{ matrix.arch }}-dmimg-${{ hashFiles('docker/**') }}
+
+      - name: Seed approx cache from sidecar
+        run: ./ci/approx-cache-sidecar seed
+
+      - name: Load cached docker image
+        if: steps.dmimg-cache.outputs.cache-hit == 'true'
+        run: ./ci/dm-docker-image-cache load
+
+      - name: Build kicksecure-cli raw (${{ matrix.arch }})
+        ## CI=true tells docker-run this is headless; ARCH is routed through env
+        ## (rule 4: no ${{ }} interpolation into run:). All build logic lives in
+        ## ci/github-build (rule 7).
+        env:
+          CI: "true"
+          ARCH: ${{ matrix.arch }}
+        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}"
+
+      - name: Save docker image to cache
+        if: steps.dmimg-cache.outputs.cache-hit != 'true'
+        run: ./ci/dm-docker-image-cache save
+
+      - name: Snapshot approx cache to sidecar
+        if: always()
+        run: ./ci/approx-cache-sidecar snapshot
+
+      - name: Upload build output + logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kicksecure-cli-raw-${{ matrix.arch }}
+          ## docker-run bind-mounts the build output at $HOME/binary_mnt; on
+          ## GitHub-hosted runners $HOME is /home/runner. upload-artifact does
+          ## not expand '~' or env vars, so the path is spelled out.
+          path: /home/runner/binary_mnt/
+          ## 'warn' not 'error': this step also runs on build failure (always()),
+          ## where the output dir can legitimately be empty.
+          if-no-files-found: warn
+          retention-days: 7

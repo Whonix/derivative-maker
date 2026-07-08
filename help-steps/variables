@@ -307,7 +307,7 @@ export build_remote_derivative_pkgs
 ## with 'dist_build_ignore_unsigned' further below.
 export dist_build_redistributable
 [ -n "${CI:-}" ]                         || CI="false"
-export dist_build_redistributable
+export CI
 
 ## Configuration precedence (lowest -> highest):
 ##   1. Code defaults (this file)

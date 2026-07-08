@@ -3,11 +3,17 @@
 ## Copyright (C) 2017 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Static-analysis waiver: intentional word-splitting of $apt_unattended_opts
+## (quoting would pass a single argument and break the apt call).
+# shellcheck disable=SC2086
+
 set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 ## colors is not available in the pbuilder chroot where this
 ## script runs, so plain (uncolored) log messages.
@@ -28,6 +34,16 @@ fi
 cat -- "/home/$user_name/pbuilder_config_file"
 
 source "/home/$user_name/pbuilder_config_file"
+
+## help-steps/pre (colors, exception handlers, helper-scripts sources) is not
+## available in the pbuilder chroot, so define a minimal error and source just
+## the standalone retry_run helper (copied in by *_cowbuilder-setup).
+error() {
+   printf '%s\n' "ERROR: $*" >&2
+   exit 1
+}
+# shellcheck source=help-steps/retry-run
+source "/home/$user_name/retry-run"
 
 ## Debugging.
 true "apt_unattended_opts: $apt_unattended_opts"
@@ -87,7 +103,7 @@ fi
 #  apt-get "${DIST_APTGETOPT[@]}" $apt_unattended_opts --yes --target-release=bookworm-backports install debhelper
 #fi
 
-apt-get "${DIST_APTGETOPT[@]}" $apt_unattended_opts --yes dist-upgrade
+retry_run --tries 4 --delay 15 -- apt-get "${DIST_APTGETOPT[@]}" $apt_unattended_opts --yes dist-upgrade
 
 adduser --quiet --group --system --home "/home/$user_name" "$user_name"
 

@@ -11,6 +11,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 ## TODO: root check or use sudo
 
@@ -31,9 +33,11 @@ DEBIAN_FRONTEND=noninteractive \
     --no-install-recommends \
     --yes \
     sq sqv sqop sequoia-git sequoia-chameleon-gnupg gpg-agent \
+    signify-openbsd moreutils \
     dbus dbus-user-session ca-certificates git time curl lsb-release fakeroot \
     dpkg-dev fasttrack-archive-keyring safe-rm adduser sudo approx docker.io \
-    docker-cli
+    docker-cli \
+    python3 python3-yaml
 
 ## Create the derivative account + passwordless sudo drop-in only when
 ## this script runs inside the docker image (where 'USER=user' and
@@ -43,8 +47,12 @@ DEBIAN_FRONTEND=noninteractive \
 ## (see 'help-steps/dm-build-official-one' CI branch) 'sudo' leaves
 ## 'USER=root' / 'HOME=/root', and creating user 'root' or a
 ## 'root ALL=(ALL) NOPASSWD:ALL' drop-in is pointless and confusing.
+## Default the build user's uid. The docker image sets DM_UID via ENV
+## (Dockerfile), and CI overrides it with --build-arg DM_UID=$(id -u) so the
+## container user matches the host runner; fall back to 1000 for local use.
+[ -v DM_UID ] || DM_UID=1000
 if [ "${USER}" != "root" ]; then
-   adduser --quiet --disabled-password --home "${HOME}" --gecos "${USER},,,," "${USER}"
+   adduser --quiet --disabled-password --uid "${DM_UID}" --home "${HOME}" --gecos "${USER},,,," "${USER}"
    printf '%s\n' "${USER} ALL=(ALL) NOPASSWD:ALL" | tee -- /etc/sudoers.d/passwordless_sudo >/dev/null
    chmod 440 -- /etc/sudoers.d/passwordless_sudo
 fi
