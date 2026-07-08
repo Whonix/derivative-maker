@@ -35,13 +35,20 @@ retry_run() {
    local retry_run_tries=4 retry_run_delay=15
    while [ "$#" -gt 0 ]; do
       case "$1" in
-         --tries) retry_run_tries="$2" ; shift 2 ;;
-         --delay) retry_run_delay="$2" ; shift 2 ;;
+         --tries) [ "$#" -ge 2 ] || error "retry_run: --tries requires a value" ; retry_run_tries="$2" ; shift 2 ;;
+         --delay) [ "$#" -ge 2 ] || error "retry_run: --delay requires a value" ; retry_run_delay="$2" ; shift 2 ;;
          --)      shift ; break ;;
          *)       error "retry_run: unknown option: $1" ;;
       esac
    done
    [ "$#" -ge 1 ] || error "retry_run: no command given"
+   ## Validate the counters: a non-integer would break the arithmetic below and
+   ## '--tries 0' would return success WITHOUT running the command. This also
+   ## guarantees nothing in the loop triggers errexit, so the pipefail restore
+   ## at the end is always reached.
+   case "$retry_run_tries" in ''|*[!0-9]*) error "retry_run: --tries must be a positive integer, got '$retry_run_tries'" ;; esac
+   [ "$retry_run_tries" -ge 1 ] || error "retry_run: --tries must be >= 1, got '$retry_run_tries'"
+   case "$retry_run_delay" in ''|*[!0-9]*) error "retry_run: --delay must be a non-negative integer, got '$retry_run_delay'" ;; esac
 
    ## Transient patterns shared by apt and curl. Deliberately does NOT match
    ## 'unmet dependencies', 'held broken packages', a plain 4xx, etc.
