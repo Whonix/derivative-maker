@@ -37,7 +37,8 @@ cd -- "${saved_cwd}"
 # shellcheck source=help-steps/verify-ref
 source "${repo_root}/help-steps/verify-ref"
 
-context_label="${1:?context label arg required}"
+context_label="${1:-}"
+[ -n "${context_label}" ] || error "context label arg required"
 
 ## Phase 1: sign HEAD if unsigned.
 if verify_ref HEAD commit "${context_label} HEAD"; then
