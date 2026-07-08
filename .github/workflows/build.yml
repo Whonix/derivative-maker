@@ -15,6 +15,12 @@ on:
 permissions:
   contents: read
 
+## Per-ref cancellation: a new push to the same branch/tag cancels the
+## in-flight build. github.ref is unique per branch and per tag.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
@@ -33,32 +39,30 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+          ## The build only signs/tags locally and never pushes, so drop the
+          ## checkout token from .git/config rather than leave it readable by
+          ## the privileged build container.
+          persist-credentials: false
 
       - name: Build kicksecure-cli raw (${{ matrix.arch }})
+        ## CI=true tells docker-run this is headless; ARCH is routed through env
+        ## (not inlined as ${{ }} in run:) per the CodeQL inline-expression rule.
+        ## All build logic lives in ci/github-build (no embedded script here).
         env:
           CI: "true"
-        run: |
-          ## Record the host output dir (docker-run bind-mounts $HOME/binary_mnt);
-          ## upload-artifact does not expand '~', so resolve it here for the
-          ## upload step. Written before the build so it survives a build failure.
-          echo "BINARY_MNT=$HOME/binary_mnt" >> "$GITHUB_ENV"
-          ./docker/derivative-maker-docker-run -- \
-            --flavor kicksecure-cli \
-            --target raw \
-            --type vm \
-            --arch ${{ matrix.arch }} \
-            --freedom false \
-            --repo true \
-            --remote-derivative-packages true
+          ARCH: ${{ matrix.arch }}
+        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- "${ARCH}"
 
       - name: Upload build output + logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kicksecure-cli-raw-${{ matrix.arch }}
-          path: ${{ env.BINARY_MNT }}/
+          ## docker-run bind-mounts the build output at $HOME/binary_mnt; on
+          ## GitHub-hosted runners $HOME is /home/runner. upload-artifact does
+          ## not expand '~' or env vars, so the path is spelled out.
+          path: /home/runner/binary_mnt/
           ## 'warn' not 'error': this step also runs on build failure (always()),
-          ## where the output dir can legitimately be empty; a correct path (above)
-          ## is the real fix for silently-empty uploads.
+          ## where the output dir can legitimately be empty.
           if-no-files-found: warn
           retention-days: 7
