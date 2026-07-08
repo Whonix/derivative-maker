@@ -157,7 +157,7 @@ variable for debugging. This may take a while...${reset}"
       return 0
    fi
 
-   true "${bold}${red}ERROR: As expected, failed again to install '$*'. \
+   true "${bold}${red}ERROR: As expected, failed again to install '$*'. (apt_get_exit_code: $apt_get_exit_code) \
 Trying to diagnose the problem using function apt_get_parse_unmet_dependency...${reset}"
 
    apt_get_parse_unmet_dependency "$@"
