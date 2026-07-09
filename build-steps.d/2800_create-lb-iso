@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -68,30 +70,19 @@ create-live-build-image() {
       true "${green}INFO: dist_build_target_arch=${dist_build_target_arch}${reset}"
       true "${green}INFO: host_architecture=${host_architecture}${reset}"
       true "${green}INFO: Host architecture and target architecture do not match. Therefore, cross-building...${reset}"
-      live_build_cross_arch_qemu=''
-      case "${dist_build_target_arch}" in
-         ## Both 32-bit ARM variants use the same emulator
-         'armel'   ) live_build_cross_arch_qemu='arm';;
-         'armhf'   ) live_build_cross_arch_qemu='arm';;
-         'arm64'   ) live_build_cross_arch_qemu='aarch64';;
-         'i386'    ) live_build_cross_arch_qemu='i386';;
-         'amd64'   ) live_build_cross_arch_qemu='x86_64';;
-         'mipsel'  ) live_build_cross_arch_qemu='mipsel';;
-         'mips64el') live_build_cross_arch_qemu='mips64el';;
-         ## Yes, the emulator for ppc64el really is ppc64le. This is not a typo.
-         'ppc64el' ) live_build_cross_arch_qemu='ppc64le';;
-         'riscv64' ) live_build_cross_arch_qemu='riscv64';;
-         's390x'   ) live_build_cross_arch_qemu='s390x';;
-      esac
+      live_build_cross_arch_qemu="$(dist_build_arch_to_qemu_machine "${dist_build_target_arch}")" || live_build_cross_arch_qemu=''
       live_build_cross_arch_config="--bootstrap-qemu-arch ${dist_build_target_arch} \\
    --bootstrap-qemu-static /usr/bin/qemu-${live_build_cross_arch_qemu}-static \\"
    fi
 
    live_build_arch_specific_config=''
    case "${dist_build_target_arch}" in
-      i386|amd64) live_build_arch_specific_config="--bootloaders 'grub-pc grub-efi' \\";;
-      armel|armhf|arm64|riscv64) live_build_arch_specific_config="--bootloaders 'grub-efi' \\";;
-      *) true "${red}WARNING: Don't specify a bootloader at all, leave live-build to figure it out, if it can.${reset}";;
+      i386|amd64) live_build_arch_specific_config="--bootloaders 'grub-pc grub-efi' \\"
+         ;;
+      armel|armhf|arm64|riscv64) live_build_arch_specific_config="--bootloaders 'grub-efi' \\"
+         ;;
+      *) true "${red}WARNING: Don't specify a bootloader at all, leave live-build to figure it out, if it can.${reset}"
+         ;;
    esac
 
    live_build_initramfs_type=''
@@ -549,6 +540,9 @@ Not running any chroot scripts.${reset}"
    ## example KERNELVER:
    ## 6.1.0-9-amd64
 
+   ## INITRD_GENERATOR_OPTS is an intentionally word-split option list (may be
+   ## empty or several dracut flags); quoting it would pass one empty/combined arg.
+   # shellcheck disable=SC2086
    chroot_run \
       dracut \
          --no-hostonly \

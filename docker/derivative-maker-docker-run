@@ -30,6 +30,13 @@ BINARY_VOLUME="$HOME/binary_mnt"
 CACHER_VOLUME="$HOME/approx_cache_mnt"
 KEY_VOLUME="$HOME/.key_mnt"
 IMG="Kicksecure/derivative-maker-docker"
+## Arch-qualify the image tag so an amd64 and an arm64 image can never collide
+## in a shared docker store or image cache. The image is built natively on the
+## runner, so its architecture is the host's; 'uname --machine' (e.g. x86_64 /
+## aarch64) names it unambiguously. ci/dm-docker-image-cache derives the same
+## reference.
+image_arch="$(uname --machine)"
+image_ref="${IMG}:${image_arch}"
 [[ -v CI ]] || CI=""
 
 if [ "${CI:-}" = "true" ]; then
@@ -82,7 +89,7 @@ build_docker_image() {
   ## catches a failing 'id' instead of silently passing an empty --build-arg.
   local dm_uid
   dm_uid="$(id -u)"
-  if [ -z "$(docker images --quiet -- "${IMG}" 2> /dev/null)" ]; then
+  if [ -z "$(docker images --quiet -- "${image_ref}" 2> /dev/null)" ]; then
     sudo \
     "${sudo_options_maybe[@]}" \
     -- \
@@ -91,7 +98,7 @@ build_docker_image() {
         --build-arg \
         DM_UID="${dm_uid}" \
         --tag \
-        "${IMG}:latest" \
+        "${image_ref}" \
         "${DOCKER_DIR}"
   fi
 }
@@ -188,7 +195,7 @@ sudo \
       --volume "${BINARY_VOLUME}:/home/${DOCKER_USER}/derivative-binary" \
       --volume "${CACHER_VOLUME}:/var/cache/approx-derivative-maker" \
       --volume "${KEY_VOLUME}:/home/${DOCKER_USER}/.gnupg" \
-      "${IMG}" \
+      "${image_ref}" \
         sudo \
           --non-interactive \
           --preserve-env \

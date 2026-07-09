@@ -1515,6 +1515,30 @@ export make_cross_build_platform_list
 [ -v cowbuilder_cache_dir ] || cowbuilder_cache_dir="/var/cache/pbuilder"
 export cowbuilder_cache_dir
 
+## Translate a Debian architecture (dpkg --print-architecture style, e.g. the
+## values in make_cross_build_platform_list / dist_build_target_arch) to the
+## matching qemu-user / kernel machine name (uname -m style). Used for
+## binfmt_misc handler names ('qemu-<machine>') and cross-build emulation.
+## Prints the machine name on stdout; returns non-zero for an unmapped
+## architecture.
+dist_build_arch_to_qemu_machine() {
+   case "${1}" in
+      amd64)    printf '%s' "x86_64" ;;
+      arm64)    printf '%s' "aarch64" ;;
+      ## Both 32-bit ARM variants use the same emulator.
+      armel)    printf '%s' "arm" ;;
+      armhf)    printf '%s' "arm" ;;
+      i386)     printf '%s' "i386" ;;
+      mipsel)   printf '%s' "mipsel" ;;
+      mips64el) printf '%s' "mips64el" ;;
+      ## The emulator for ppc64el really is ppc64le. This is not a typo.
+      ppc64el)  printf '%s' "ppc64le" ;;
+      riscv64)  printf '%s' "riscv64" ;;
+      s390x)    printf '%s' "s390x" ;;
+      *)        return 1 ;;
+   esac
+}
+
 set_cowbuilder_folders() {
    cow_folder="$cowbuilder_cache_dir/cow.cow_${dist_build_multiarch_package_item}"
    base_folder="$cowbuilder_cache_dir/base.cow_${dist_build_multiarch_package_item}"

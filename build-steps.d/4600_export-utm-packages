@@ -9,6 +9,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -39,11 +41,10 @@ export_utm_packages() {
    ## Fill in correct architecture and target in UTM template files.
    local utm_arch
    local utm_target
+   utm_arch="$(dist_build_arch_to_qemu_machine "${dist_build_target_arch}")"
    if [ "${dist_build_target_arch:-}" = "arm64" ]; then
-      utm_arch="aarch64"
       utm_target="virt"
    else
-      utm_arch="x86_64"
       utm_target="q35"
    fi
 

@@ -82,6 +82,12 @@ cowbuilder_setup_do() {
 
    make_cross_build_platform_list_including_host_architecture+=" $make_cross_build_platform_list "
 
+   ## VirtualBox on Linux ships an amd64 build only; there is no VirtualBox for
+   ## Linux/arm64 (ARM64 VirtualBox exists solely on macOS). So an '--arch arm64
+   ## --target virtualbox' build cannot install VirtualBox into an arm64 chroot
+   ## and must build an additional amd64 chroot to produce the VirtualBox image.
+   ## On an arm64 host that amd64 chroot is emulated (qemu-user); see the
+   ## foreign-architecture handling in the per-architecture loop below.
    if [ "${dist_build_virtualbox:-}" = "true" ]; then
       if [ "${dist_build_target_arch:-}" = "arm64" ]; then
          true "${cyan}INFO: '--target virtualbox' and '--arch arm64', therefore also building a AMD64 chroot, because at time of writing VirtualBox is available only on ARM64 macOS but not for ARM64 Linux.${reset}"
@@ -98,6 +104,38 @@ cowbuilder_setup_do() {
    for dist_build_multiarch_package_item in $make_cross_build_platform_list_including_host_architecture ; do
       true "dist_build_multiarch_package_item: $dist_build_multiarch_package_item"
       export dist_build_multiarch_package_item
+
+      ## Foreign-architecture chroot: qemu-user emulation and setuid.
+      ##
+      ## When the chroot architecture differs from the build host architecture
+      ## (for example the amd64 VirtualBox chroot on an arm64 host, see above),
+      ## its binaries run under qemu-user emulation via binfmt_misc. setuid
+      ## binaries such as 'sudo' only gain root under emulation when the qemu
+      ## handler carries the 'C' (credentials) flag; without it the kernel
+      ## derives credentials from the unprivileged qemu interpreter rather than
+      ## the setuid target, and 'sudo' fails later, deep inside
+      ## dist-installer-cli's get_su_cmd, with a misleading 'sudo: effective uid
+      ## is not 0 ... nosuid' error.
+      ##
+      ## This affects any cross-architecture build (CI and developer hosts
+      ## alike): the build installs 'qemu-user-binfmt', whose systemd-binfmt
+      ## registration ships flags 'OPF' (no credentials). Rather than abort and
+      ## ask the operator to reconfigure binfmt_misc by hand, add the flag
+      ## automatically via help-steps/binfmt-credential-setup (an /etc/binfmt.d
+      ## override reusing the vendor spec, re-applied with systemd-binfmt). Runs
+      ## after the qemu-user-binfmt install in 1100_sanity-tests and before this
+      ## chroot is bootstrapped.
+      if [ "${dist_build_multiarch_package_item}" != "${host_architecture}" ]; then
+         ## '|| true' so an unmapped architecture (function returns non-zero,
+         ## empty output) does not trip errexit; handled by the check below.
+         qemu_emulation_machine="$(dist_build_arch_to_qemu_machine "${dist_build_multiarch_package_item}")" || true
+         if [ -n "${qemu_emulation_machine}" ]; then
+            true "${cyan}INFO: Foreign-architecture chroot '${dist_build_multiarch_package_item}' on host '${host_architecture}' runs under qemu-user emulation; ensuring the qemu binfmt handler carries the 'C' (credentials) flag so setuid (sudo) works inside it.${reset}"
+            $SUDO_TO_ROOT "$dist_source_help_steps_folder/binfmt-credential-setup" "qemu-${qemu_emulation_machine}"
+         else
+            true "${cyan}INFO: No qemu machine mapping for architecture '${dist_build_multiarch_package_item}'; skipping binfmt credentials setup.${reset}"
+         fi
+      fi
 
       ## Implemented in help-steps/variables.
       ## sets:
