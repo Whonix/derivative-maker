@@ -68,21 +68,7 @@ create-live-build-image() {
       true "${green}INFO: dist_build_target_arch=${dist_build_target_arch}${reset}"
       true "${green}INFO: host_architecture=${host_architecture}${reset}"
       true "${green}INFO: Host architecture and target architecture do not match. Therefore, cross-building...${reset}"
-      live_build_cross_arch_qemu=''
-      case "${dist_build_target_arch}" in
-         ## Both 32-bit ARM variants use the same emulator
-         'armel'   ) live_build_cross_arch_qemu='arm';;
-         'armhf'   ) live_build_cross_arch_qemu='arm';;
-         'arm64'   ) live_build_cross_arch_qemu='aarch64';;
-         'i386'    ) live_build_cross_arch_qemu='i386';;
-         'amd64'   ) live_build_cross_arch_qemu='x86_64';;
-         'mipsel'  ) live_build_cross_arch_qemu='mipsel';;
-         'mips64el') live_build_cross_arch_qemu='mips64el';;
-         ## Yes, the emulator for ppc64el really is ppc64le. This is not a typo.
-         'ppc64el' ) live_build_cross_arch_qemu='ppc64le';;
-         'riscv64' ) live_build_cross_arch_qemu='riscv64';;
-         's390x'   ) live_build_cross_arch_qemu='s390x';;
-      esac
+      live_build_cross_arch_qemu="$(dist_build_arch_to_qemu_machine "${dist_build_target_arch}")" || live_build_cross_arch_qemu=''
       live_build_cross_arch_config="--bootstrap-qemu-arch ${dist_build_target_arch} \\
    --bootstrap-qemu-static /usr/bin/qemu-${live_build_cross_arch_qemu}-static \\"
    fi

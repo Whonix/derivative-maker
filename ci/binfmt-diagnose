@@ -1,0 +1,36 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## TEMPORARY diagnostic. Dumps how qemu-user emulation is registered on the
+## build host, so the binfmt 'C' (credentials) flag fix for cross-architecture
+## builds can be designed against the runner's real state rather than guessed.
+## Runs read-only; every probe is non-fatal. Remove once the fix has landed.
+
+set -o nounset
+set -o pipefail
+
+probe() {
+   printf '\n===== %s =====\n' "$*"
+   "$@" 2>&1 || printf '(exit code %s)\n' "$?"
+}
+
+printf 'uname --machine: %s\n' "$(uname --machine)"
+printf 'dpkg architecture: %s\n' "$(dpkg --print-architecture 2>/dev/null || true)"
+
+probe update-binfmts --version
+probe ls -l -a /proc/sys/fs/binfmt_misc/
+probe cat -- /proc/sys/fs/binfmt_misc/status
+probe cat -- /proc/sys/fs/binfmt_misc/qemu-x86_64
+probe update-binfmts --display qemu-x86_64
+probe update-binfmts --display
+probe ls -l -a /var/lib/binfmts/
+probe ls -l -a /usr/share/binfmts/
+probe ls -l -a /etc/binfmt.d/
+probe ls -l -a /usr/lib/binfmt.d/
+probe ls -l -a /usr/libexec/qemu-binfmt/
+probe systemctl status systemd-binfmt.service --no-pager --full
+probe dpkg-query --show qemu-user-static qemu-user-binfmt binfmt-support

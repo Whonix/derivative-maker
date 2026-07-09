@@ -128,16 +128,14 @@ cowbuilder_setup_do() {
       ## bootstrap ('qemu-<arch> not in database ... can neither be executed
       ## natively nor via qemu user emulation').
       if [ "${dist_build_multiarch_package_item}" != "${host_architecture}" ]; then
-         qemu_emulation_machine=""
-         case "${dist_build_multiarch_package_item}" in
-            amd64) qemu_emulation_machine="x86_64" ;;
-            arm64) qemu_emulation_machine="aarch64" ;;
-            armhf|armel) qemu_emulation_machine="arm" ;;
-            i386) qemu_emulation_machine="i386" ;;
-         esac
+         ## '|| true' so an unmapped architecture (function returns non-zero,
+         ## empty output) does not trip errexit; handled by the check below.
+         qemu_emulation_machine="$(dist_build_arch_to_qemu_machine "${dist_build_multiarch_package_item}")" || true
          if [ -n "${qemu_emulation_machine}" ]; then
             true "${cyan}INFO: Foreign-architecture chroot '${dist_build_multiarch_package_item}' on host '${host_architecture}' runs under qemu-user emulation; ensuring the qemu binfmt handler carries the 'C' (credentials) flag so setuid (sudo) works inside it.${reset}"
             $SUDO_TO_ROOT "$dist_source_help_steps_folder/binfmt-credential-setup" "qemu-${qemu_emulation_machine}"
+         else
+            true "${cyan}INFO: No qemu machine mapping for architecture '${dist_build_multiarch_package_item}'; skipping binfmt credentials setup.${reset}"
          fi
       fi
 
