@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -75,9 +77,12 @@ create-live-build-image() {
 
    live_build_arch_specific_config=''
    case "${dist_build_target_arch}" in
-      i386|amd64) live_build_arch_specific_config="--bootloaders 'grub-pc grub-efi' \\";;
-      armel|armhf|arm64|riscv64) live_build_arch_specific_config="--bootloaders 'grub-efi' \\";;
-      *) true "${red}WARNING: Don't specify a bootloader at all, leave live-build to figure it out, if it can.${reset}";;
+      i386|amd64) live_build_arch_specific_config="--bootloaders 'grub-pc grub-efi' \\"
+         ;;
+      armel|armhf|arm64|riscv64) live_build_arch_specific_config="--bootloaders 'grub-efi' \\"
+         ;;
+      *) true "${red}WARNING: Don't specify a bootloader at all, leave live-build to figure it out, if it can.${reset}"
+         ;;
    esac
 
    live_build_initramfs_type=''
@@ -535,6 +540,9 @@ Not running any chroot scripts.${reset}"
    ## example KERNELVER:
    ## 6.1.0-9-amd64
 
+   ## INITRD_GENERATOR_OPTS is an intentionally word-split option list (may be
+   ## empty or several dracut flags); quoting it would pass one empty/combined arg.
+   # shellcheck disable=SC2086
    chroot_run \
       dracut \
          --no-hostonly \
