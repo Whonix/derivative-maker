@@ -295,9 +295,6 @@ main() {
   fi
   true "INFO: Script running as non-root, ok."
 
-  ## TODO: Is this obsolete?
-  #command -v "$git_bin" >/dev/null
-
   update_repo "$@"
 }
 
