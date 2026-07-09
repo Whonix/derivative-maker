@@ -172,7 +172,9 @@ export HELPER_SCRIPTS_PATH
 ## 'dpkg-architecture', 'sources.list' Architectures= field). It is not
 ## a typo and it is not shadowing the bash 'source' builtin because
 ## 'architecture_all_list' is an array.
-[ -n "${architecture_all_list:-}" ] || architecture_all_list=( amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source )
+## 'i386' intentionally omitted: Debian Trixie and higher dropped support for
+## full i386 installations, so it is no longer a supported build target.
+[ -n "${architecture_all_list:-}" ] || architecture_all_list=( amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source )
 
 ## NOTE: This 'cd' is by design. Sourcing 'variables' intentionally
 ## changes the caller's working directory to 'source_code_folder_dist'.
@@ -768,8 +770,8 @@ if [ "${dist_build_unsafe_io:-}" = "true" ]; then
    aptgetopt_conf_add "Dpkg::Options:: \"--force-unsafe-io\";"
    ## Resolve the host multiarch triplet deterministically rather than
    ## globbing '/usr/lib/*-linux-gnu/libeatmydata.so'. On a multiarch host
-   ## (e.g. amd64 with i386 foreign), the glob returns both paths; the
-   ## first is chosen by alphabetic order which can be the wrong ABI,
+   ## (e.g. amd64 with a foreign architecture enabled), the glob returns both
+   ## paths; the first is chosen by alphabetic order which can be the wrong ABI,
    ## causing ld.so to reject the preload or silently skip it.
    libeatmydata_multiarch=""
    if command -v dpkg-architecture >/dev/null 2>&1 ; then
@@ -833,13 +835,6 @@ if [ "${APPROX_PROXY_ENABLE}" = "yes" ]; then
    ## apt config file must be with quotes
    ## apt config file must be without equals sign
    ## apt config file must be trailing colon sign
-
-   ## Obsolete now that we're using approx.
-   #aptgetopt_add "Acquire::http::Proxy=${REPO_PROXY}"
-   #aptgetopt_conf_add "Acquire::http::Proxy \"${REPO_PROXY}\";"
-
-   #aptgetopt_add "Acquire::https::Proxy=${REPO_PROXY}"
-   #aptgetopt_conf_add "Acquire::https::Proxy \"${REPO_PROXY}\";"
 
    ## https://forums.whonix.org/t/derivative-maker-fails-with-onion-sources/20200/8
    #aptgetopt_add "Acquire::tor::Proxy=${REPO_PROXY}"
@@ -1356,7 +1351,6 @@ if [ -z "${openpgp_policy_file_resolved:-}" ]; then
    # > openpgp_cert_candidate: '/home/user/derivative-maker/buildconfig.d/openpgp-cert.pem'
    # > openpgp_cert_candidate: '/etc/buildconfig-dist.d/openpgp-cert.pem'
    # > openpgp_cert_candidate: '/home/user/buildconfig.d/openpgp-cert.pem'
-   ## TODO: What code to check to verify this?
 fi
 
 ## ${sq_git_policy_file} precedence:
@@ -1505,7 +1499,7 @@ set_dist_build_reprepro_folder_options() {
 export host_architecture
 
 [ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="$dist_build_target_arch"
-#[ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="i386 amd64"
+#[ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="amd64 arm64"
 export make_cross_build_platform_list
 
 ## Parent folder holding the cowbuilder 'base.cow_<arch>' / 'cow.cow_<arch>'
@@ -1528,7 +1522,6 @@ dist_build_arch_to_qemu_machine() {
       ## Both 32-bit ARM variants use the same emulator.
       armel)    printf '%s' "arm" ;;
       armhf)    printf '%s' "arm" ;;
-      i386)     printf '%s' "i386" ;;
       mipsel)   printf '%s' "mipsel" ;;
       mips64el) printf '%s' "mips64el" ;;
       ## The emulator for ppc64el really is ppc64le. This is not a typo.

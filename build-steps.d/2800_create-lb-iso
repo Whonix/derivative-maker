@@ -77,7 +77,7 @@ create-live-build-image() {
 
    live_build_arch_specific_config=''
    case "${dist_build_target_arch}" in
-      i386|amd64) live_build_arch_specific_config="--bootloaders 'grub-pc grub-efi' \\"
+      amd64) live_build_arch_specific_config="--bootloaders 'grub-pc grub-efi' \\"
          ;;
       armel|armhf|arm64|riscv64) live_build_arch_specific_config="--bootloaders 'grub-efi' \\"
          ;;
@@ -284,20 +284,6 @@ Pin-Priority: 900"
          sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
          sed -i 's/XXX_SHIM_SIGNED_XXX/shim-signed/' package-lists/z-kicksecure.list.chroot
          sed -i 's/XXX_GRUB_EFI_SIGNED_XXX/grub-efi-arm64-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-      i386)
-         ## TODO: Full i386 installations are officially unsupported on Debian Trixie and higher, remove this architecture?
-         ##       Quote https://www.debian.org/releases/bookworm/i386/release-notes/ch-information.en.html
-         ##       > Debian's support for 32-bit PC (known as the Debian architecture i386) now no longer covers any i586 processor.
-         ##       > The new minimum requirement is i686.
-         ## has grub-pc
-         ## has shim-signed
-         ## has signed grub-efi for 32-bit systems
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX/grub-pc-bin/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX/shim-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX/grub-efi-ia32-signed/' package-lists/z-kicksecure.list.chroot
          sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
          ;;
       amd64)

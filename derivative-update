@@ -237,6 +237,17 @@ update_repo() {
         || abort_update \
           'Getting upstream branch name failed!' \
           "${dist_build_current_git_head}" "${branch_reset_commit}"
+      ## Verify the remote branch tip BEFORE merging it, so untrusted commits
+      ## are rejected before they are ever checked out into the working tree.
+      ## The post-merge verification below is kept as well: it re-checks the
+      ## locally updated branch, guarding against tampering during the merge.
+      ## NOTE: Using 'refs/remotes/' here to verify the remote tip, not the
+      ## local branch.
+      "${git_sanity_test}" --mode ref --ref "refs/remotes/${upstream_branch}" --ref-type commit \
+        || abort_update \
+          'Remote branch verification failed before merge!' \
+          "${dist_build_current_git_head}" "${branch_reset_commit}"
+
       ## NOTE: Using 'refs/remotes/' here to avoid any possible ambiguity.
       ## This is valid here.
       git merge --ff-only "refs/remotes/${upstream_branch}" \
@@ -294,9 +305,6 @@ main() {
     exit 1
   fi
   true "INFO: Script running as non-root, ok."
-
-  ## TODO: Is this obsolete?
-  #command -v "$git_bin" >/dev/null
 
   update_repo "$@"
 }

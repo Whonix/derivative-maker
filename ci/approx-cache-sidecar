@@ -45,7 +45,10 @@ fi
 ## leaving the seeded contents in place for the in-container approx.
 approx_dir="${HOME}/approx_cache_mnt"
 sidecar_dir="${HOME}/.approx-cache-sidecar"
-approx_uid_gid="101:102" ## TODO: Autodetect to avoid future breakage?
+## Pinned at image build: docker-setup pre-creates the 'approx' user/group
+## with these fixed ids before installing the approx package, so this literal
+## is guaranteed correct rather than dependent on dynamic system-uid allocation.
+approx_uid_gid="101:102"
 approx_mode="770"
 
 runner_uid_gid="$(id -u):$(id -g)"

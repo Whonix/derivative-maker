@@ -26,8 +26,25 @@ apt-get update
 ## dependencies like 'sudo' are already installed. 'ca-certificates' may also
 ## be required before packages can be installed in some configurations.
 ## TODO: Debian forky: gpg-from-sq gpgv-from-sq
-## TODO: Package 'docker-cli' as of Debian trixie ships '/usr/bin/docker' - Is package 'docker.io'
-##       still required?
+## Docker is only used on the HOST: derivative-maker-docker-run drives the
+## container from outside; nothing inside the build image ever invokes docker.
+## So the docker engine + client are installed only in the host context (see
+## the 'USER = root' block below), not when building the image (USER=user via
+## the Dockerfile ENV), keeping the image slim. On trixie both packages are
+## needed: 'docker-cli' ships the client (/usr/bin/docker) and 'docker.io' the
+## daemon (dockerd); with '--no-install-recommends' neither pulls the other.
+
+## Pin the 'approx' system user/group to fixed ids BEFORE installing the
+## 'approx' package (its postinst reuses a pre-existing 'approx' account), so
+## the apt-cache bind-mount chown target stays correct regardless of Debian's
+## dynamic system-uid allocation order. These ids must match the '101:102'
+## chown in 'derivative-maker-docker-run' (volume_prepare) and
+## 'ci/approx-cache-sidecar'. Uses 'groupadd'/'useradd' from the base image's
+## 'passwd' package because 'adduser' is installed in the apt-get call below.
+getent group approx >/dev/null || groupadd --system --gid 102 approx
+getent passwd approx >/dev/null \
+  || useradd --system --gid 102 --uid 101 --no-create-home --home-dir /var/lib/approx --shell /usr/sbin/nologin approx
+
 DEBIAN_FRONTEND=noninteractive \
   apt-get install \
     --no-install-recommends \
@@ -35,23 +52,28 @@ DEBIAN_FRONTEND=noninteractive \
     sq sqv sqop sequoia-git sequoia-chameleon-gnupg gpg-agent \
     signify-openbsd moreutils \
     dbus dbus-user-session ca-certificates git time curl lsb-release fakeroot \
-    dpkg-dev fasttrack-archive-keyring safe-rm adduser sudo approx docker.io \
-    docker-cli \
+    dpkg-dev fasttrack-archive-keyring safe-rm adduser sudo approx \
     python3 python3-yaml
 
-## Create the derivative account + passwordless sudo drop-in only when
-## this script runs inside the docker image (where 'USER=user' and
-## 'HOME=/home/user' come from 'Dockerfile' ENV). When the same script
-## is executed on the host via
-##   'sudo --non-interactive -- ./docker/derivative-maker-docker-setup'
-## (see 'help-steps/dm-build-official-one' CI branch) 'sudo' leaves
-## 'USER=root' / 'HOME=/root', and creating user 'root' or a
-## 'root ALL=(ALL) NOPASSWD:ALL' drop-in is pointless and confusing.
-## Default the build user's uid. The docker image sets DM_UID via ENV
-## (Dockerfile), and CI overrides it with --build-arg DM_UID=$(id -u) so the
-## container user matches the host runner; fall back to 1000 for local use.
-[ -v DM_UID ] || DM_UID=1000
-if [ "${USER}" != "root" ]; then
+## Branch on the run context: docker is only used on the HOST, while the build
+## user only exists in the IMAGE. 'sudo' resets USER to 'root' on the host (see
+## 'help-steps/dm-build-official-one' CI branch); the Dockerfile ENV sets
+## USER=user during the image build.
+if [ "${USER}" = "root" ]; then
+   ## Host: install the docker engine + client (see the comment above the
+   ## apt-get call). Never needed inside the image.
+   DEBIAN_FRONTEND=noninteractive \
+      apt-get install \
+         --no-install-recommends \
+         --yes \
+         docker.io docker-cli
+else
+   ## Image: create the derivative build account + passwordless sudo drop-in.
+   ## Creating user 'root' or a 'root ALL=(ALL) NOPASSWD:ALL' drop-in on the
+   ## host would be pointless and confusing. The image sets DM_UID via ENV
+   ## (Dockerfile); CI overrides it with --build-arg DM_UID=$(id -u) so the
+   ## container user matches the host runner; fall back to 1000 for local use.
+   [ -v DM_UID ] || DM_UID=1000
    adduser --quiet --disabled-password --uid "${DM_UID}" --home "${HOME}" --gecos "${USER},,,," "${USER}"
    printf '%s\n' "${USER} ALL=(ALL) NOPASSWD:ALL" | tee -- /etc/sudoers.d/passwordless_sudo >/dev/null
    chmod 440 -- /etc/sudoers.d/passwordless_sudo

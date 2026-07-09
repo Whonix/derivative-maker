@@ -20,10 +20,11 @@ if [ $# -eq 0 ]; then
 fi
 
 ## A TTY is only required for interactive use (e.g. "bash", "journalctl -f").
-## Headless CI runs deliberately omit "docker run --tty" and set CI=true.
-##
-## FIXME: This isn't true though, see derivative-maker-docker-run. --tty is
-## intentionally set in CI builds, but --interactive is dropped.
+## Headless CI runs still pass "docker run --tty" (it allocates a pty so the
+## systemd entrypoint service streams build output to docker stdout for live
+## logs); they drop "--interactive" and set CI=true instead. See the
+## "--tty --env CI=true" branch in derivative-maker-docker-run. Hence the
+## CI=true check below is what suppresses the error on those headless runs.
 if [ ! -t 0 ] && [ "${CI:-}" != "true" ]; then
   printf '%s\n' 'ERROR: TTY needs to be enabled ("docker run -t ...").' >&2
   exit 1
