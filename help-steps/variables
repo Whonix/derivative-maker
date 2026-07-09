@@ -770,8 +770,8 @@ if [ "${dist_build_unsafe_io:-}" = "true" ]; then
    aptgetopt_conf_add "Dpkg::Options:: \"--force-unsafe-io\";"
    ## Resolve the host multiarch triplet deterministically rather than
    ## globbing '/usr/lib/*-linux-gnu/libeatmydata.so'. On a multiarch host
-   ## (e.g. amd64 with i386 foreign), the glob returns both paths; the
-   ## first is chosen by alphabetic order which can be the wrong ABI,
+   ## (e.g. amd64 with a foreign architecture enabled), the glob returns both
+   ## paths; the first is chosen by alphabetic order which can be the wrong ABI,
    ## causing ld.so to reject the preload or silently skip it.
    libeatmydata_multiarch=""
    if command -v dpkg-architecture >/dev/null 2>&1 ; then
@@ -1506,7 +1506,7 @@ set_dist_build_reprepro_folder_options() {
 export host_architecture
 
 [ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="$dist_build_target_arch"
-#[ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="i386 amd64"
+#[ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="amd64 arm64"
 export make_cross_build_platform_list
 
 ## Parent folder holding the cowbuilder 'base.cow_<arch>' / 'cow.cow_<arch>'
@@ -1529,7 +1529,6 @@ dist_build_arch_to_qemu_machine() {
       ## Both 32-bit ARM variants use the same emulator.
       armel)    printf '%s' "arm" ;;
       armhf)    printf '%s' "arm" ;;
-      i386)     printf '%s' "i386" ;;
       mipsel)   printf '%s' "mipsel" ;;
       mips64el) printf '%s' "mips64el" ;;
       ## The emulator for ppc64el really is ppc64le. This is not a typo.

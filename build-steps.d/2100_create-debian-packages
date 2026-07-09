@@ -45,7 +45,7 @@ cd ..
 
 download_tpo_packages() {
    ## https://forums.whonix.org/t/tor-integration-in-whonix/10593/2
-   available_architectures_for_download_only_list="i386 amd64 arm64"
+   available_architectures_for_download_only_list="amd64 arm64"
    dist_build_special_packages_chroot_script="$dist_source_help_steps_folder/repo_download_chroot_script"
    repo_signing_key="$source_code_folder_dist/packages/kicksecure/anon-shared-build-apt-sources-tpo/usr/share/anon-shared-build-apt-sources-tpo/tpoarchive-keys.d/torprojectarchive.asc"
    repo_sources_list="$dist_build_sources_list_torproject"
@@ -73,14 +73,14 @@ download_virtualbox_packages_virtualbox_org() {
    error "Function download_virtualbox_packages_virtualbox_org is currently not needed and incomplete."
    return 0
 
-   ## XXX: Better set to "i386 amd64" which are the only actually available platforms for this repo_sources_list?
+   ## XXX: Better set to "amd64" which is the only actually available platform for this repo_sources_list?
    ## Or better set available_architectures_for_download_only_list="all" to make the build process fail early?
    ## But does not matter since this code is only processed when using '--target virtualbox'.
-   ## Only platforms i386 amd64 are available from this repo_sources_list.
+   ## Only platform amd64 is available from this repo_sources_list.
    ## (Even packages.debian.org having amd64 only https://packages.debian.org/sid/virtualbox at time of writing.)
    ## Creating '--target virtualbox' on platforms other than amd64 such as arm64 would fail anyhow since
    ## nobody is providing packages for these platforms. At time of writing, nobody reported trying that either.
-   available_architectures_for_download_only_list="i386 amd64"
+   available_architectures_for_download_only_list="amd64"
    dist_build_special_packages_chroot_script="$dist_source_help_steps_folder/repo_download_chroot_script"
    repo_signing_key="$source_code_folder_dist/build_sources/oracle_vbox_2016.asc"
    ## TODO: repo_sources_list - low priority - currently not needed
@@ -153,7 +153,7 @@ download_packages_from_debian_sid() {
       ## We package Guest Additions ourselves now.
       #newer_package_list="virtualbox-guest-additions-iso"
 
-      #if [ "${dist_build_target_arch:-}" = "amd64" ] || [ "${dist_build_target_arch:-}" = "i386" ]; then
+      #if [ "${dist_build_target_arch:-}" = "amd64" ]; then
          ## These packages are no longer needed for installed systems. We
          ## install Guest Additions from virtualbox-guest-additions-iso now.
          #newer_package_list+=" virtualbox-guest-utils "

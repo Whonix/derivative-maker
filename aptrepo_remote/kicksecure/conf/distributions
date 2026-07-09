@@ -4,7 +4,7 @@
 Origin: whonix
 Label: Whonix
 Codename: bullseye
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure bullseye APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -14,7 +14,7 @@ ValidFor: 1m
 Origin: whonix
 Label: Whonix
 Codename: bullseye-proposed-updates
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure stable fixes testing APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -24,7 +24,7 @@ ValidFor: 1m
 Origin: whonix
 Label: Whonix
 Codename: bullseye-testers
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure bullseye Testers APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -34,7 +34,7 @@ ValidFor: 1m
 Origin: whonix
 Label: Whonix
 Codename: bullseye-developers
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure Developers APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -44,7 +44,7 @@ ValidFor: 1m
 Origin: whonix
 Label: Whonix
 Codename: bookworm
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure bookworm APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -54,7 +54,7 @@ ValidFor: 1m
 Origin: whonix
 Label: Whonix
 Codename: bookworm-proposed-updates
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure stable fixes testing APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -64,7 +64,7 @@ ValidFor: 1m
 Origin: whonix
 Label: Whonix
 Codename: bookworm-testers
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure bookworm Testers APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -74,7 +74,7 @@ ValidFor: 1m
 Origin: whonix
 Label: Whonix
 Codename: bookworm-developers
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure Developers APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -84,7 +84,7 @@ ValidFor: 1m
 Origin: kicksecure
 Label: Kicksecure
 Codename: trixie
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure trixie stable APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -94,7 +94,7 @@ ValidFor: 1m
 Origin: kicksecure
 Label: Kicksecure
 Codename: trixie-proposed-updates
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure proposed-updates testing APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -104,7 +104,7 @@ ValidFor: 1m
 Origin: kicksecure
 Label: Kicksecure
 Codename: trixie-testers
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure trixie Testers APT Repository
 SignWith: 0x8D66066A2EEACCDA
@@ -114,7 +114,7 @@ ValidFor: 1m
 Origin: kicksecure
 Label: Kicksecure
 Codename: trixie-developers
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure Developers APT Repository
 SignWith: 0x8D66066A2EEACCDA
