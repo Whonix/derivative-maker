@@ -118,15 +118,13 @@ cowbuilder_setup_do() {
       ## is not 0 ... nosuid' error.
       ##
       ## This affects any cross-architecture build (CI and developer hosts
-      ## alike). Rather than abort and ask the operator to reconfigure
-      ## binfmt_misc by hand, add the credentials flag automatically via
-      ## 'update-binfmts' (see help-steps/binfmt-credential-setup). The handler
-      ## must be updated THROUGH update-binfmts, not by a raw
-      ## /proc/sys/fs/binfmt_misc/register write: mmdebstrap (which bootstraps
-      ## the foreign chroot) gates on 'update-binfmts --display' succeeding, so a
-      ## raw write desynchronises update-binfmts' database and breaks the
-      ## bootstrap ('qemu-<arch> not in database ... can neither be executed
-      ## natively nor via qemu user emulation').
+      ## alike): the build installs 'qemu-user-binfmt', whose systemd-binfmt
+      ## registration ships flags 'OPF' (no credentials). Rather than abort and
+      ## ask the operator to reconfigure binfmt_misc by hand, add the flag
+      ## automatically via help-steps/binfmt-credential-setup (an /etc/binfmt.d
+      ## override reusing the vendor spec, re-applied with systemd-binfmt). Runs
+      ## after the qemu-user-binfmt install in 1100_sanity-tests and before this
+      ## chroot is bootstrapped.
       if [ "${dist_build_multiarch_package_item}" != "${host_architecture}" ]; then
          ## '|| true' so an unmapped architecture (function returns non-zero,
          ## empty output) does not trip errexit; handled by the check below.
