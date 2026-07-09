@@ -26,8 +26,13 @@ apt-get update
 ## dependencies like 'sudo' are already installed. 'ca-certificates' may also
 ## be required before packages can be installed in some configurations.
 ## TODO: Debian forky: gpg-from-sq gpgv-from-sq
-## TODO: Package 'docker-cli' as of Debian trixie ships '/usr/bin/docker' - Is package 'docker.io'
-##       still required?
+## Debian trixie split the docker packaging: 'docker-cli' ships the client
+## (/usr/bin/docker) while 'docker.io' ships the daemon (dockerd, docker-proxy,
+## docker-init) and only Recommends (not Depends on) 'docker-cli'. With
+## '--no-install-recommends' below neither package pulls the other, so both are
+## listed explicitly: the host docker path (dm-build-official-one ->
+## derivative-maker-docker-run) needs the client to issue commands and the
+## daemon to run the container.
 
 ## Pin the 'approx' system user/group to fixed ids BEFORE installing the
 ## 'approx' package (its postinst reuses a pre-existing 'approx' account), so
