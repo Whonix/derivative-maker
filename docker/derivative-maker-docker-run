@@ -64,6 +64,9 @@ EOF
 volume_prepare() {
   declare -a -- VOLUMES
 
+  ## CACHER_VOLUME is owned by the in-container 'approx' user; its uid:gid is
+  ## pinned to 101:102 at image build (derivative-maker-docker-setup) so this
+  ## literal stays correct. Kept in sync with ci/approx-cache-sidecar.
   VOLUMES=(
     "${CACHER_VOLUME}" "101:102" "770"
     "${BINARY_VOLUME}" "${HOST_USER}:${HOST_USER}" "770"

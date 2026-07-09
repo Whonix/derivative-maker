@@ -28,6 +28,18 @@ apt-get update
 ## TODO: Debian forky: gpg-from-sq gpgv-from-sq
 ## TODO: Package 'docker-cli' as of Debian trixie ships '/usr/bin/docker' - Is package 'docker.io'
 ##       still required?
+
+## Pin the 'approx' system user/group to fixed ids BEFORE installing the
+## 'approx' package (its postinst reuses a pre-existing 'approx' account), so
+## the apt-cache bind-mount chown target stays correct regardless of Debian's
+## dynamic system-uid allocation order. These ids must match the '101:102'
+## chown in 'derivative-maker-docker-run' (volume_prepare) and
+## 'ci/approx-cache-sidecar'. Uses 'groupadd'/'useradd' from the base image's
+## 'passwd' package because 'adduser' is installed in the apt-get call below.
+getent group approx >/dev/null || groupadd --system --gid 102 approx
+getent passwd approx >/dev/null \
+  || useradd --system --gid 102 --uid 101 --no-create-home --home-dir /var/lib/approx --shell /usr/sbin/nologin approx
+
 DEBIAN_FRONTEND=noninteractive \
   apt-get install \
     --no-install-recommends \
