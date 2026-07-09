@@ -261,7 +261,6 @@ is not included in available_architectures_for_download_only_list: $available_ar
          cow_folder="$binary_build_folder_dist/no-pbuilder/cow"
          if_no_pbuilder_base_folder="${base_folder}"
       fi
-      ## TODO: if_no_pbuilder_base_folder still useful?
       export if_no_pbuilder_base_folder
 
       $SUDO_TO_ROOT mkdir --parents -- "${base_folder}/var/cache/derivative-maker/temporary-repository"
@@ -277,9 +276,6 @@ is not included in available_architectures_for_download_only_list: $available_ar
       else
          $SUDO_TO_ROOT cp -- "$repo_sources_list" "${base_folder}/var/cache/derivative-maker/temporary-repository/newer.sources"
       fi
-
-      ## TODO: Not required?
-      #$SUDO_TO_ROOT cp -- "$dist_build_pbuilder_config_file" "${base_folder}/var/cache/derivative-maker/temporary-repository"
 
       local benchmark_time_start benchmark_took_time
       benchmark_time_start="$SECONDS"

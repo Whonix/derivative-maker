@@ -836,13 +836,6 @@ if [ "${APPROX_PROXY_ENABLE}" = "yes" ]; then
    ## apt config file must be without equals sign
    ## apt config file must be trailing colon sign
 
-   ## Obsolete now that we're using approx.
-   #aptgetopt_add "Acquire::http::Proxy=${REPO_PROXY}"
-   #aptgetopt_conf_add "Acquire::http::Proxy \"${REPO_PROXY}\";"
-
-   #aptgetopt_add "Acquire::https::Proxy=${REPO_PROXY}"
-   #aptgetopt_conf_add "Acquire::https::Proxy \"${REPO_PROXY}\";"
-
    ## https://forums.whonix.org/t/derivative-maker-fails-with-onion-sources/20200/8
    #aptgetopt_add "Acquire::tor::Proxy=${REPO_PROXY}"
    #aptgetopt_conf_add "Acquire::tor::Proxy \"${REPO_PROXY}\";"
