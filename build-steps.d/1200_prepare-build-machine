@@ -48,35 +48,6 @@ build_machine_setup() {
       exit 0
    fi
 
-   ## {{ users and groups
-
-   ## TODO: Still needed?
-   ## Check if user "$user_name" already exists.
-#    if id "$user_name" >/dev/null 2>&1; then
-#       true "${cyan}INFO: Not creating user \"$user_name\" with password \"changeme\", because it already exists.${reset}"
-#    else
-#       true 'INFO: Creating user "$user_name" with password "changeme", because some things have to be run as "$user_name".'
-#       if command -v qubesdb-read >/dev/null 2>&1 ; then
-#          password=""
-#       else
-#          ## setting password of user clearnet to changeme
-#          ##
-#          ## How this password was created:
-#          ## sudo apt-get install whois
-#          ## mkpasswd
-#          ## changeme
-#          ## Resulted in: aTayYxVyw5kDo
-#          password="aTayYxVyw5kDo"
-#       fi
-#       $SUDO_TO_ROOT useradd --password "$password" --user-group --create-home --shell /bin/bash "$user_name"
-#    fi
-
-   ## Add user to sudo group.
-   ## TODO: Still needed?
-#    $SUDO_TO_ROOT adduser "$user_name" sudo
-
-   ## }}
-
    ## Debugging.
    true "INFO: Benchmarking \"$SUDO_TO_ROOT printf '%s\\n' 'This is a test printf.'\" using \"time\"..."
    time $SUDO_TO_ROOT printf '%s\n' "This is a test printf."

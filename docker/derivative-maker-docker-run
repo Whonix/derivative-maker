@@ -141,9 +141,10 @@ while true; do
   esac
 done
 
-## TODO: Should docker do this?
-## fetch/merge git submodules
-#"${SOURCE_VOLUME}/derivative-update" --update-only
+## The container intentionally does NOT run derivative-update to fetch/merge
+## git submodules. It builds the source tree exactly as bind-mounted from the
+## host (SOURCE_VOLUME); keeping that checkout current is the host's
+## responsibility.
 
 build_docker_image
 
