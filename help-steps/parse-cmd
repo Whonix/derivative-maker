@@ -83,7 +83,7 @@ parse_cmd_freedom_versus_nonfreedom_firmware_choice_check() {
    elif [ "${build_freedom_only:-}" = "false" ]; then
       true "${BASH_SOURCE[0]} INFO: --freedom false, therefore adding package firmware-nonfreedom, ok. See also: https://www.kicksecure.com/wiki/Dev/nonfree"
    else
-      error "${red}${bold}When building '--arch amd64' (or 'i386'), you must select firmware. Add either '--freedom true' or '--freedom false'!${reset}"
+      error "${red}${bold}When building '--arch amd64', you must select firmware. Add either '--freedom true' or '--freedom false'!${reset}"
    fi
 }
 
@@ -871,7 +871,12 @@ ${bold}--arch arm64${reset}
 ${reset}"
       fi
    elif [ "${dist_build_target_arch:-}" = "i386" ]; then
-      [ -n "${virtualbox_supported_architecture:-}" ] || virtualbox_supported_architecture="true"
+      error "\
+${red}${bold}Architecture 'i386' is no longer supported!
+
+Debian Trixie and higher dropped support for full i386 installations.
+See: https://www.debian.org/releases/bookworm/i386/release-notes/ch-information.en.html
+Build for '--arch amd64' or '--arch arm64' instead.${reset}"
    elif [ "${dist_build_target_arch:-}" = "amd64" ]; then
       [ -n "${virtualbox_supported_architecture:-}" ] || virtualbox_supported_architecture="true"
    elif [ "${dist_build_target_arch:-}" = "arm64" ]; then
@@ -885,10 +890,10 @@ ${reset}"
          error "\
 ${red}${bold}VirtualBox architecture support test failed!
 virtualbox_supported_architecture: '$virtualbox_supported_architecture'
-dist_build_target_arch is not 'i386', 'amd64' or 'arm64'.
+dist_build_target_arch is not 'amd64' or 'arm64'.
 dist_build_target_arch is '${dist_build_target_arch:-}'.
-You cannot build '--target virtualbox' if not using '--arch i386', '--arch amd64' or '--arch arm64'.
-This is because at time of writing this check, VirtualBox supports 'i386', 'amd64' and 'arm64' only.
+You cannot build '--target virtualbox' if not using '--arch amd64' or '--arch arm64'.
+This is because at time of writing this check, VirtualBox supports 'amd64' and 'arm64' only.
 Should VirtualBox meanwhile support other architectures such as 'ppc64el', then this check can simply be removed in the source code.${reset}"
       fi
    fi
@@ -996,9 +1001,7 @@ ${reset}"
    fi
 
    if [ "${dist_build_iso:-}" = "true" ]; then
-      if [ "${dist_build_target_arch:-}" = "i386" ]; then
-         parse_cmd_freedom_versus_nonfreedom_firmware_choice_check
-      elif [ "${dist_build_target_arch:-}" = "amd64" ]; then
+      if [ "${dist_build_target_arch:-}" = "amd64" ]; then
          parse_cmd_freedom_versus_nonfreedom_firmware_choice_check
       fi
    fi

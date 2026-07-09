@@ -172,7 +172,9 @@ export HELPER_SCRIPTS_PATH
 ## 'dpkg-architecture', 'sources.list' Architectures= field). It is not
 ## a typo and it is not shadowing the bash 'source' builtin because
 ## 'architecture_all_list' is an array.
-[ -n "${architecture_all_list:-}" ] || architecture_all_list=( amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source )
+## 'i386' intentionally omitted: Debian Trixie and higher dropped support for
+## full i386 installations, so it is no longer a supported build target.
+[ -n "${architecture_all_list:-}" ] || architecture_all_list=( amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source )
 
 ## NOTE: This 'cd' is by design. Sourcing 'variables' intentionally
 ## changes the caller's working directory to 'source_code_folder_dist'.

@@ -154,11 +154,6 @@ build_machine_setup() {
          packages_to_be_installed+=" grub-efi-amd64-signed "
          packages_to_be_installed+=" shim-unsigned shim-signed shim-signed-common "
          packages_to_be_installed+=" shim-helpers-amd64-signed "
-      elif [ "${host_architecture}" = "i386" ]; then
-         packages_to_be_installed+=" grub-efi-amd64-bin grub-pc-bin grub-coreboot-bin grub-efi-ia32-bin grub-xen-bin grub-ieee1275-bin "
-         packages_to_be_installed+=" grub-efi-ia32-signed "
-         packages_to_be_installed+=" shim-unsigned shim-signed shim-signed-common "
-         packages_to_be_installed+=" shim-helpers-i386-signed "
       elif [ "${host_architecture}" = "ppc64el" ]; then
          packages_to_be_installed+=" grub-ieee1275-bin  "
       elif [ "${host_architecture}" = "ppc64" ]; then
