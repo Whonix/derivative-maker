@@ -45,7 +45,7 @@ fi
 ## leaving the seeded contents in place for the in-container approx.
 approx_dir="${HOME}/approx_cache_mnt"
 sidecar_dir="${HOME}/.approx-cache-sidecar"
-approx_uid_gid="101:102"
+approx_uid_gid="101:102" ## TODO: Autodetect to avoid future breakage?
 approx_mode="770"
 
 runner_uid_gid="$(id -u):$(id -g)"

@@ -134,6 +134,9 @@ success="true"
 ## 10.0.8, 10.2.0 and git master (built from source and tested), so -- unlike
 ## the related aarch64 'sq' panic that qemu 10.2.0 fixes -- this workaround is
 ## not removable by upgrading the build host's qemu.
+##
+## TODO: Could not find any bug reports about this on QEMU's bug tracker. Can
+## we make detailed reproduction steps so someone can report this upstream?
 if ! sudo --non-interactive -u "dm-vbox-temp" OPENSSL_ia32cap=0 DIST_APTGETOPT_SERIALIZED="$DIST_APTGETOPT_SERIALIZED" bash -x /usr/bin/dist-installer-cli-standalone "${dist_installer_cli_arguments[@]}" ; then
   success=false
 fi

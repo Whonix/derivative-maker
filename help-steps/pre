@@ -178,7 +178,7 @@ error() {
 ## exception handlers and helper-scripts sources absent in the chroot).
 ## Sourced relative to this file's own directory (same idiom as
 ## HELPER_SCRIPTS_PATH above).
-# shellcheck source=help-steps/retry-run
+# shellcheck source=./retry-run
 source "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )/retry-run"
 
 ## function_trace and process_backtrace are sourced from

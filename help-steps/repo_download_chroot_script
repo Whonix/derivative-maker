@@ -65,7 +65,7 @@ if [ -f "${if_no_pbuilder_base_folder}/var/cache/derivative-maker/temporary-repo
    ## informational calls must never abort the build when cross-building
    ## arm64 on a non-arm64 host. This is a qemu-user bug (fixed upstream in
    ## qemu >= 10.2.0), not an sq or derivative-maker bug. apt's own Release
-   ## verification uses gpgv (C) and is unaffected.
+   ## verification uses gpgv and is unaffected.
    sq inspect -- "/etc/apt/trusted.gpg.d/newer.asc" || true
    sq cert lint --cert-file "/etc/apt/trusted.gpg.d/newer.asc" || true
 fi
