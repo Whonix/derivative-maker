@@ -82,6 +82,12 @@ cowbuilder_setup_do() {
 
    make_cross_build_platform_list_including_host_architecture+=" $make_cross_build_platform_list "
 
+   ## VirtualBox on Linux ships an amd64 build only; there is no VirtualBox for
+   ## Linux/arm64 (ARM64 VirtualBox exists solely on macOS). So an '--arch arm64
+   ## --target virtualbox' build cannot install VirtualBox into an arm64 chroot
+   ## and must build an additional amd64 chroot to produce the VirtualBox image.
+   ## On an arm64 host that amd64 chroot is emulated (qemu-user); see the
+   ## foreign-architecture handling in the per-architecture loop below.
    if [ "${dist_build_virtualbox:-}" = "true" ]; then
       if [ "${dist_build_target_arch:-}" = "arm64" ]; then
          true "${cyan}INFO: '--target virtualbox' and '--arch arm64', therefore also building a AMD64 chroot, because at time of writing VirtualBox is available only on ARM64 macOS but not for ARM64 Linux.${reset}"
@@ -98,6 +104,73 @@ cowbuilder_setup_do() {
    for dist_build_multiarch_package_item in $make_cross_build_platform_list_including_host_architecture ; do
       true "dist_build_multiarch_package_item: $dist_build_multiarch_package_item"
       export dist_build_multiarch_package_item
+
+      ## Foreign-architecture chroot: qemu-user emulation and setuid.
+      ##
+      ## When the chroot architecture differs from the build host architecture
+      ## (for example the amd64 VirtualBox chroot on an arm64 host, see above),
+      ## its binaries run under qemu-user emulation via binfmt_misc. setuid
+      ## binaries such as 'sudo' only gain root under emulation when the qemu
+      ## handler carries the 'C' (credentials) flag; without it the kernel
+      ## derives credentials from the unprivileged qemu interpreter rather than
+      ## the setuid target, and 'sudo' fails later, deep inside
+      ## dist-installer-cli's get_su_cmd, with a misleading 'sudo: effective uid
+      ## is not 0 ... nosuid' error.
+      ##
+      ## This affects any cross-architecture build (CI and developer hosts
+      ## alike). Rather than abort and ask the operator to reconfigure
+      ## binfmt_misc by hand, re-register the existing handler with the
+      ## credentials flag automatically. The re-registration preserves the
+      ## handler's own interpreter/offset/magic/mask (read back from the running
+      ## registration, so nothing is hardcoded) and adds the flags O (keep the
+      ## interpreter fd open, implied by C), C (credentials from the target
+      ## binary, so setuid is honoured) and F (fix-binary, so the interpreter is
+      ## resolved at registration time and keeps working inside the chroot).
+      if [ "${dist_build_multiarch_package_item}" != "${host_architecture}" ]; then
+         qemu_emulation_machine=""
+         case "${dist_build_multiarch_package_item}" in
+            amd64) qemu_emulation_machine="x86_64" ;;
+            arm64) qemu_emulation_machine="aarch64" ;;
+            armhf|armel) qemu_emulation_machine="arm" ;;
+            i386) qemu_emulation_machine="i386" ;;
+         esac
+         if [ -n "${qemu_emulation_machine}" ]; then
+            qemu_binfmt_handler="/proc/sys/fs/binfmt_misc/qemu-${qemu_emulation_machine}"
+            if [ ! -e "${qemu_binfmt_handler}" ]; then
+               true "${cyan}INFO: Foreign-architecture chroot '${dist_build_multiarch_package_item}' requested but no qemu binfmt handler '${qemu_binfmt_handler}' is present; assuming emulation is provided by other means.${reset}"
+            elif grep --quiet -- "^flags:.*C" "${qemu_binfmt_handler}"; then
+               true "INFO: qemu binfmt handler '${qemu_binfmt_handler}' already carries the 'C' (credentials) flag."
+            else
+               true "${cyan}INFO: Foreign-architecture chroot '${dist_build_multiarch_package_item}' on host architecture '${host_architecture}' runs under qemu-user emulation, but the qemu binfmt handler '${qemu_binfmt_handler}' lacks the 'C' (credentials) flag, so setuid binaries such as 'sudo' would not gain root inside the chroot. Re-registering the handler with the credentials flag now.${reset}"
+
+               ## awk is not '--'-safe (it treats a post-program '--' as a
+               ## filename); the handler path is a fixed /proc path, not input.
+               qemu_interpreter="$(awk '/^interpreter / { print $2 }' "${qemu_binfmt_handler}")"
+               qemu_offset="$(awk '/^offset / { print $2 }' "${qemu_binfmt_handler}")"
+               qemu_magic="$(awk '/^magic / { print $2 }' "${qemu_binfmt_handler}" | sed -- 's/../\\x&/g')"
+               qemu_mask="$(awk '/^mask / { print $2 }' "${qemu_binfmt_handler}" | sed -- 's/../\\x&/g')"
+
+               ## Remove the current registration, then re-register with the
+               ## credentials flag. printf '%s' keeps the '\xNN' escapes literal
+               ## (the kernel decodes them); printf must not interpret them.
+               ## '|| true' so a rejected write does not trip errexit before the
+               ## verification below reports a specific, actionable error.
+               printf -- '%s\n' "-1" | $SUDO_TO_ROOT tee -- "${qemu_binfmt_handler}" >/dev/null || true
+               printf -- ':qemu-%s:M:%s:%s:%s:%s:OCF\n' \
+                  "${qemu_emulation_machine}" \
+                  "${qemu_offset}" \
+                  "${qemu_magic}" \
+                  "${qemu_mask}" \
+                  "${qemu_interpreter}" \
+                  | $SUDO_TO_ROOT tee -- "/proc/sys/fs/binfmt_misc/register" >/dev/null || true
+
+               if ! grep --quiet -- "^flags:.*C" "${qemu_binfmt_handler}"; then
+                  error "Failed to re-register the qemu binfmt handler '${qemu_binfmt_handler}' with the 'C' (credentials) flag; setuid binaries would not gain root inside the emulated '${dist_build_multiarch_package_item}' chroot."
+               fi
+               true "${cyan}INFO: qemu binfmt handler '${qemu_binfmt_handler}' re-registered with the credentials flag.${reset}"
+            fi
+         fi
+      fi
 
       ## Implemented in help-steps/variables.
       ## sets:
