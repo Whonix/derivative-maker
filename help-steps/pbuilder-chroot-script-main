@@ -35,14 +35,14 @@ cat -- "/home/$user_name/pbuilder_config_file"
 
 source "/home/$user_name/pbuilder_config_file"
 
-## help-steps/pre (colors, exception handlers, helper-scripts sources) is not
-## available in the pbuilder chroot, so define a minimal error and source just
-## the standalone retry_run helper (copied in by *_cowbuilder-setup).
+## help-steps/pre is not available in the pbuilder chroot, so define a minimal
+## error handler and source just the standalone retry_run helper (copied in by
+## *_cowbuilder-setup).
 error() {
    printf '%s\n' "ERROR: $*" >&2
    exit 1
 }
-# shellcheck source=help-steps/retry-run
+# shellcheck source=./retry-run
 source "/home/$user_name/retry-run"
 
 ## Debugging.

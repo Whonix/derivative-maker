@@ -152,7 +152,7 @@ variable for debugging. This may take a while...${reset}"
    sync
 
    if [ "${apt_get_exit_code:-}" = "0" ]; then
-      true "${bold}${red}ERROR: Second attempt installing '$*' did not fail?!?${reset}"
+      true "${bold}${red}ERROR: Last attempt installing '$*' did not fail???${reset}"
       error "See above!"
       return 0
    fi
