@@ -46,9 +46,6 @@ fi
 
 sudo "${sudo_options_maybe[@]}" test -d /usr
 
-declare orig_ref exit_code
-orig_ref=""
-exit_code=""
 
 print_usage() {
   cat -- << EOF
@@ -140,19 +137,6 @@ while true; do
       ;;
   esac
 done
-
-## "Update" the repository to the current ref without pulling any additional
-## remote code. This acts as a sanity check, and as a trust-on-first-use
-## mechanism.
-exit_code='0'
-
-# orig_ref="$(git symbolic-ref HEAD)" || exit_code="$?"
-# if [ "${exit_code}" != '0' ]; then
-#   orig_ref="$(git rev-parse HEAD)" || error 'Cannot get head commit ID!'
-# else
-#   # shellcheck disable=SC2001
-#   orig_ref="$(sed 's?^refs/heads/??' <<< "${orig_ref}")"
-# fi
 
 ## TODO: Should docker do this?
 ## fetch/merge git submodules
