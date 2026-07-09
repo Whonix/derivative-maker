@@ -877,9 +877,7 @@ ${red}${bold}Architecture 'i386' is no longer supported!
 Debian Trixie and higher dropped support for full i386 installations.
 See: https://www.debian.org/releases/bookworm/i386/release-notes/ch-information.en.html
 Build for '--arch amd64' or '--arch arm64' instead.${reset}"
-   elif [ "${dist_build_target_arch:-}" = "amd64" ]; then
-      [ -n "${virtualbox_supported_architecture:-}" ] || virtualbox_supported_architecture="true"
-   elif [ "${dist_build_target_arch:-}" = "arm64" ]; then
+   elif [ "${dist_build_target_arch:-}" = "amd64" ] || [ "${dist_build_target_arch:-}" = "arm64" ]; then
       [ -n "${virtualbox_supported_architecture:-}" ] || virtualbox_supported_architecture="true"
    else
       [ -n "${virtualbox_supported_architecture:-}" ] || virtualbox_supported_architecture="false"
