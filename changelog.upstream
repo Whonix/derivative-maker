@@ -1,3 +1,58 @@
+commit 29831012df0be11e413ca447e4c2d759a721c60b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 11:26:21 2026 -0400
+
+    .
+
+commit 418c27742ce2cb2305fe035b981bedb671e27ee1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 11:23:43 2026 -0400
+
+    .
+
+commit d08930936defddd21df1c8049d5fc4c61a20a76a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 11:20:26 2026 -0400
+
+    .
+
+commit f4b559622e81d6faeb067ae24e027c1b710e3711
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 11:16:43 2026 -0400
+
+    .
+
+commit 93a18d66e0f77c0c5911c35b81a61a3d7434fdf6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 10:54:15 2026 -0400
+
+    comment
+
+commit 828a2e18e8c3b68ee8509c52e4100399dd1983ce
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 10:54:09 2026 -0400
+
+    .
+
+commit a0be3a092c606e9b2e946b444c03677abc47b76c
+Merge: 20377baa2 9f0191ffa
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 10:52:59 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit 9f0191ffa647128d08577e1e47ad1ac418399335
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Jul 9 00:01:25 2026 -0400
+
+    Minor fixes, TODO, FIXME
+
+commit 20377baa2ad75969c0abed446a312e2785901ead
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 8 22:24:12 2026 +0000
+
+    bumped changelog version
+
 commit 411125dcb4b00d495469df4632c60e174609daa9
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Wed Jul 8 18:24:04 2026 -0400
