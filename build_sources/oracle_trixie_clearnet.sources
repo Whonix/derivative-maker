@@ -1,0 +1,9 @@
+## Used by
+## developer-meta-files/usr/bin/dm-virtualbox-guest-additions-iso-update.
+
+Types: deb
+URIs: http://127.0.0.1:9977/oracle
+Suites: trixie
+Components: contrib
+Enabled: yes
+Signed-By: /usr/share/keyrings/oracle_vbox_2016.asc

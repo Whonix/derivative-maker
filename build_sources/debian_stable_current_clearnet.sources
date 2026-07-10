@@ -50,12 +50,3 @@ Suites: trixie-fasttrack trixie-backports-staging
 Components: main contrib non-free
 Enabled: no
 Signed-By: /usr/share/keyrings/fasttrack-archive-keyring.gpg
-
-## TODO: remove after porting to Debian trixie
-#Types: deb
-#URIs: http://127.0.0.1:9977/qubes
-#Suites: trixie
-#Components: main
-#Architectures: amd64
-#Enabled: yes
-#Signed-By: /usr/share/keyrings/qubes-archive-keyring-4.2.gpg
