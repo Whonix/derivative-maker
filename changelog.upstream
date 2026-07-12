@@ -1,3 +1,374 @@
+commit 245758918187aba3fd96e85858bee56fdbfd6694
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 14:02:19 2026 -0400
+
+    .
+
+commit 20ad818c1f49d92e569198614655fcdb397c4f81
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 13:59:56 2026 -0400
+
+    .
+
+commit d263582ee2cfed83ba5b63018634628966eff7f4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 13:47:32 2026 -0400
+
+    .
+
+commit 2378f1c7286b636ab43b6f55cfc89f7423e26e4f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 13:40:58 2026 -0400
+
+    .
+
+commit 0e3a63c2aa68bb85db8d0310e08889f8c09b8e69
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 13:35:12 2026 -0400
+
+    .
+
+commit 4bc8894a58389b7e20b2798f91753f1df4cf6e85
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 13:20:24 2026 -0400
+
+    .
+
+commit 1ca7aec944a0b97a1e4be4fab569843737178db3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 13:08:15 2026 -0400
+
+    .
+
+commit 5b0381d61dc0f12f9847958da1df877d258bf0c2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 12:47:40 2026 -0400
+
+    .
+
+commit 3b8f9603d70d016a3d0068111b60c1e6eae29419
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 12:29:40 2026 -0400
+
+    .
+
+commit 48aa1d6dc6a618cff68fda225ab5c6c73dc1386d
+Merge: 1b84b341f 5aa2d36f4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 12:29:26 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit 1b84b341fb7ef7cdee39df75c84e5c048a2faa65
+Merge: c95cd2f8b 6fb70de48
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 11:54:15 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit c95cd2f8bf86c34f8abc0f6cf63400698af45721
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Jul 12 11:44:35 2026 -0400
+
+    .
+
+commit 6fb70de487a66e07b380c85579bb5dc5c47c9eaf
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Jul 9 20:05:03 2026 -0400
+
+    Cleanup, add bits needed for dm-virtualbox-guest-additions-iso-update to work
+
+commit 5aa2d36f44c4f9a363bb1cf5521a01a41849895d
+Merge: 3b7b029a6 995fcd4a4
+Author: assisted-by-ai (Bot Account) (Machine Account) <228987186+assisted-by-ai@users.noreply.github.com>
+Date:   Thu Jul 9 15:26:46 2026 -0400
+
+    Merge PR #54: arraybolt3 TODO/FIXME cleanup, i386 removal, docker slimming
+
+    Resolve the recent arraybolt3 TODO/FIXME notes, drop i386 as a build target (Debian Trixie), verify remote branch before merge in derivative-update, pin the approx uid/gid and slim docker out of the build image, and remove dead commented code. amd64 CI build validated green.
+
+commit 995fcd4a46f39cce5e8ce9e62baba30a599c7d8e
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 14:39:20 2026 -0400
+
+    parse-cmd: collapse identical amd64/arm64 VirtualBox-support branches
+
+    After dropping the i386 branch, the amd64 and arm64 arms of the
+    virtualbox_supported_architecture chain had identical bodies. Merge them into a
+    single condition to remove the duplication.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 4d394fd54ad82d7b73b8284f8bdb7b3e8ea6902a
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 14:37:25 2026 -0400
+
+    docker-setup: install docker only on the host, slim the image
+
+    Docker is only ever used on the host (derivative-maker-docker-run drives the
+    container from outside); nothing inside the build image invokes docker. Stop
+    baking the docker engine + client (docker.io, docker-cli, and their containerd/
+    runc/tini deps) into the image: install them only in the host context.
+
+    Merge the two opposite USER-context checks (docker-install vs build-user
+    creation) into one if/else so the host/image branch is detected once:
+    - USER=root (host, sudo resets USER): install docker.io + docker-cli.
+    - else (image, USER=user via Dockerfile ENV): create the build user + sudo
+      drop-in.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 4a9d1c22cff618d474a3f3921f76147e3be7b525
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 14:27:03 2026 -0400
+
+    docker-setup: document why both docker.io and docker-cli are installed
+
+    Resolve the "is docker.io still required?" TODO. Verified on Debian trixie:
+    docker-cli ships the client (/usr/bin/docker); docker.io ships the daemon
+    (dockerd, docker-proxy, docker-init) and only Recommends docker-cli. Since the
+    install uses --no-install-recommends, neither package pulls the other, so both
+    are required for the host docker path and both must be listed. Reframe the
+    stale TODO into an explanatory comment; no package change.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 2a35f74bd1668ae2783525a830e80eaefb59cf45
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 14:18:43 2026 -0400
+
+    remove dead commented code and resolved TODOs
+
+    - help-steps/variables: drop the obsolete commented-out http/https
+      Acquire::*::Proxy lines (dead since the approx proxy switch); the active
+      BlockDotOnion config and the tor-proxy reference note are kept.
+    - 2100_create-debian-packages: drop the "if_no_pbuilder_base_folder still
+      useful?" TODO (it is still used, by help-steps/repo_download_chroot_script)
+      and the dead commented "cp pbuilder config" line with its "Not required?" TODO.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 8f449268744fe882a38af3bcc507c5cb859bcba7
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 13:47:07 2026 -0400
+
+    1200: delete dead user-creation block; docker-run: reframe submodule note
+
+    - build-steps.d/1200_prepare-build-machine: remove the fully commented-out
+      "users and groups" block (user creation with a hardcoded 'changeme' password,
+      sudo-group add) and its two "Still needed?" TODOs. Dead for a long time;
+      Qubes/docker builds do not use it.
+    - docker/derivative-maker-docker-run: reframe the "Should docker do this?" TODO
+      into a statement of actual behavior: the container intentionally does not run
+      derivative-update; it builds the host-mounted source tree as-is.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit b4fa1d958813cfc63fc5f15c145388b88ae1ef67
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 13:46:05 2026 -0400
+
+    approx cache: pin the approx uid/gid at image build (resolve autodetect TODO)
+
+    The apt-cache bind-mount is chowned to the in-container approx user's uid:gid
+    (101:102) in two host-side places (derivative-maker-docker-run volume_prepare
+    and ci/approx-cache-sidecar). Those were hardcoded literals that would silently
+    break if Debian's dynamic system-uid allocation ever gave approx a different
+    id. Autodetection is not workable: the CI-critical consumer (the sidecar) runs
+    before the image is built, so there is no image to query.
+
+    Instead, make the value correct by construction: derivative-maker-docker-setup
+    now pre-creates the 'approx' system user/group with fixed ids (101:102) BEFORE
+    installing the approx package (its postinst reuses the pre-existing account).
+    Uses groupadd/useradd from the base image's passwd package (adduser is only
+    installed later in the same apt-get call). The two hardcoded literals are now
+    guaranteed correct; comments updated and the "Autodetect?" TODO resolved.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit a140984219d65c0a8bbb8764e1e141bfe410a114
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 13:44:19 2026 -0400
+
+    i386: remove remaining references (repo metadata, comments, qemu map)
+
+    Follow-up to dropping i386 as a build target: remove the previously-kept i386
+    remnants too.
+
+    - aptrepo_{local,remote}/{kicksecure,whonix}/conf/distributions: drop the
+      standalone 'i386' architecture from the reprepro Architectures lists (the
+      'hurd-i386'/'kfreebsd-i386' arches are unrelated and kept).
+    - 2100_create-debian-packages: drop i386 from
+      available_architectures_for_download_only_list (tpo + the unreachable vbox
+      path) and the associated comments.
+    - help-steps/variables: remove the 'i386' entry from
+      dist_build_arch_to_qemu_machine (no caller passes i386 anymore); reword the
+      multiarch libeatmydata comment and the commented make_cross example to not
+      reference i386.
+    - 1300_cowbuilder-setup, help-steps/binfmt-credential-setup: drop i386 from the
+      commented cross-build example and the foreign-arch illustration.
+
+    Only the explicit '--arch i386' rejection (parse-cmd) and its architecture_all_list
+    note remain, by design.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 1c060ae6ecb8fced4dc7a2220121d2a0bef7cd1f
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 13:09:59 2026 -0400
+
+    drop i386 as a supported build target (Debian Trixie unsupports full i386)
+
+    Debian Trixie and higher dropped support for full i386 installations, so i386
+    is no longer a viable build target. Remove it as a selectable architecture:
+
+    - help-steps/parse-cmd: reject '--arch i386' early with a clear message
+      pointing at amd64/arm64; drop i386 from the VirtualBox-supported list and
+      its error text, and from the ISO firmware-choice branch.
+    - help-steps/variables: remove 'i386' from architecture_all_list (the
+      acceptable --arch set) with a note; the 'amd64 with i386 foreign' and the
+      qemu-machine 'i386' mapping are intentionally KEPT, as i386 remains a valid
+      Debian architecture for multiarch/foreign packages in amd64/arm64 builds.
+    - build-steps.d/2800_create-lb-iso: drop the i386 live-build case; fold the
+      'i386|amd64' bootloader case to amd64.
+    - build-steps.d/1200_prepare-build-machine: drop the i386 host grub/shim branch.
+    - help-steps/pbuilder-chroot-script-create-vbox-vm: drop the i386 createvm case.
+    - help-steps/dm-build-official-one, buildconfig.d/30_target_arch.conf: update
+      i386 comment/example references to amd64/arm64.
+
+    Deliberately left untouched: the reprepro 'distributions' Architectures lists
+    (repo metadata, separate concern) and 2100_create-debian-packages'
+    available_architectures_for_download_only_list (third-party package mirroring
+    arches, partly in unreachable code), to avoid unrelated blast radius.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 01e88338180909907b6caa7491f53683a5c6823b
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 13:09:42 2026 -0400
+
+    docker/buildconfig/3500: remove dead code and stale TODO scaffolding
+
+    - docker/derivative-maker-docker-run: remove the dead commented-out orig_ref
+      block and its now-orphaned exit_code/orig_ref declarations; nothing read them.
+    - buildconfig.d/30_dependencies.conf: drop the dead commented cross-build
+      dependency lines (binfmt-support/qemu-user-static marked "duplicate", qemu
+      gone since Debian bookworm) and the stale qemu TODO.
+    - build-steps.d/3500_install-packages: keep the grub-mkconfig debug (sh -xv)
+      path as-is but drop the "comment in"/"comment out"/"enable verbose" TODO
+      scaffolding and the paired dead "#chroot_run update-grub" line.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit cc75ce9336108a046859d9f8a4f4356fb43893c4
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 12:44:10 2026 -0400
+
+    derivative-update: verify remote branch before merge; drop stale variables TODO
+
+    - derivative-update: in the branch-update path, verify the remote branch tip
+      with git_sanity_test BEFORE the ff-only merge, not only after. Previously an
+      untrusted remote commit was checked out into the working tree at merge time
+      and only rejected by the post-merge verification, leaving a window of
+      unverified code (and a possible compromised local branch if the rollback
+      itself failed, as the surrounding comment notes). The pre-merge check rejects
+      a bad remote tip before it is ever merged; the post-merge check is retained to
+      guard against tampering during the merge. Resolves the "why not verify the
+      remote branch before merging" TODO.
+    - help-steps/variables: remove the vague "What code to check to verify this?"
+      TODO on the openpgp cert resolution block; it was an unactionable self-note.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 52dfbb2a1711261140279ad3291872a159b9cf2f
+Author: claude (dev71 12818519-5ca8-4b5a-b2c9-1f2da6c63ba1) <noreply@anthropic.com>
+Date:   Thu Jul 9 12:32:01 2026 -0400
+
+    resolve arraybolt3 TODO/FIXME comment notes (docs + dead-code cleanup)
+
+    Address the recently-added self-authored TODO/FIXME notes, none of which
+    were functional bugs:
+
+    - docker/entrypoint.sh: the FIXME correctly flagged the comment as false.
+      Headless CI does NOT omit "docker run --tty"; docker-run keeps --tty
+      (for a pty so build output streams to docker stdout) and drops
+      --interactive, setting CI=true. Rewrite the comment to match reality;
+      the CI=true guard itself was already correct.
+    - pbuilder-chroot-script-export-vbox-vm: rewrite the dense temp.ova
+      failure-diagnostic comment for readability; fix the garbled
+      "leave no empty work folder behind" wording to state that
+      "unregistervm --delete" leaves the empty work folder, hence the
+      explicit safe-rm; answer "why mtime 2015?" (deterministic timestamp
+      for reproducible .ova archives; the date is an arbitrary constant).
+    - derivative-update: drop the obsolete commented-out
+      "command -v git_bin" probe and its "Is this obsolete?" TODO; git_bin
+      is used unconditionally throughout, so the guard is redundant.
+
+    Comment/doc-only, except the derivative-update dead-line removal.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 3b7b029a6cbb79ffe455befbf14305597a87d437
+Merge: 8cb606c7e 8d005ffd3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 12:31:18 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/ci-arm64-qemu-credential-flag'
+
+commit 8cb606c7e1787fa5e2b31ecf13661ae442b4676f
+Merge: 25656ad3e f199eecc7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 12:27:31 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/ci-arm64-qemu-credential-flag'
+
+commit 25656ad3e0709632f7cd598ad061f7927eefda4a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 9 16:06:44 2026 +0000
+
+    bumped changelog version
+
+commit 8d005ffd3f6af73efddee1b9fefc3247faead55c
+Author: claude (dev66 1155a1b3-dd98-468f-ad20-42c9d74b92de) <noreply@anthropic.com>
+Date:   Thu Jul 9 11:44:59 2026 -0400
+
+    binfmt-credential-setup: skip native-family targets; fix swallowed diagnostic
+
+    AI review (Codex + fresh-context third pass):
+    - Codex [P2]: 1300 invoked binfmt-credential-setup for any target arch != host,
+      breaking a supported native-family cross-build (e.g. an i386 chroot on an
+      amd64 host): i386 runs natively, has no qemu-i386 handler or vendor conf, so
+      the helper aborted on the missing conf before cowbuilder could run. Now a
+      missing vendor conf with no registered handler is treated as native execution
+      (no-op); only a handler registered with no conf to re-flag is an error.
+    - Fresh-context pass: 'set -o errexit' aborted the grep assignment on a no-match
+      before the 'no :-form line' guard could report it (dead diagnostic). Guarded
+      the substitution with '|| true'.
+
+    CodeRabbit: no findings.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit f199eecc7fbf412c10c4590e661b4a55bef016b3
+Author: claude (dev66 1155a1b3-dd98-468f-ad20-42c9d74b92de) <noreply@anthropic.com>
+Date:   Thu Jul 9 11:33:33 2026 -0400
+
+    2800/4600: clear pre-existing static-gate debt in touched files
+
+    Bring the two build steps the arch-map dedup touched to a fully green
+    pre-push-static gate:
+    - add the missing R-010 strict-mode lines (shopt -s inherit_errexit,
+      shopt -s shift_verbose) to 2800 and 4600.
+    - 2800: move case ';;' terminators to their own line (R-070).
+    - 2800: mark the intentionally word-split $INITRD_GENERATOR_OPTS dracut
+      option list with a scoped 'shellcheck disable=SC2086' (matches the
+      COWBUILDER_PREFIX idiom).
+
+    No behavior change intended beyond the stricter errexit inheritance the
+    R-010 preamble mandates.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
 commit 29831012df0be11e413ca447e4c2d759a721c60b
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Thu Jul 9 11:26:21 2026 -0400
@@ -40,6 +411,104 @@ Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Thu Jul 9 10:52:59 2026 -0400
 
     Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit a4476610ac1018d4f22c0e0f5f5111e7b2cc4405
+Author: claude (dev66 1155a1b3-dd98-468f-ad20-42c9d74b92de) <noreply@anthropic.com>
+Date:   Thu Jul 9 10:26:43 2026 -0400
+
+    binfmt: add credentials flag idiomatically via systemd-binfmt /etc override
+
+    qemu-user-binfmt (installed by 1100_sanity-tests inside the build container)
+    registers qemu-x86_64 via systemd-binfmt from /usr/lib/binfmt.d/qemu-x86_64.conf
+    with flags 'OPF' -- no 'C' (credentials) -- so setuid sudo cannot elevate inside
+    the emulated amd64 chroot. Confirmed on the arm64 runner: qemu is not on the
+    host at all; it is registered inside the container by that package install.
+
+    Rewrite help-steps/binfmt-credential-setup to the idiomatic path: reuse the
+    vendor binfmt.d conf verbatim, append 'C' to its trailing flags field via an
+    /etc/binfmt.d override (an /etc drop-in wins over the /usr/lib vendor file),
+    then re-apply with systemd-binfmt (which re-registers an already-present handler
+    in place, and runs standalone in a container without systemd as PID 1). This
+    drops the fragile 'update-binfmts --display | awk | tr' spec reconstruction
+    entirely -- no magic/mask parsing.
+
+    Remove the temporary ci/binfmt-diagnose step now that the runner's binfmt setup
+    is known.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 4cecc5b2b3b4a28cd30c1368a2c1d4071e496778
+Author: claude (dev66 1155a1b3-dd98-468f-ad20-42c9d74b92de) <noreply@anthropic.com>
+Date:   Thu Jul 9 10:07:47 2026 -0400
+
+    1300/binfmt: centralize arch->qemu-machine map; fix helper; add host binfmt diagnostic
+
+    - help-steps/variables: add dist_build_arch_to_qemu_machine(), a single source
+      for the Debian-arch -> qemu/uname-machine mapping; use it in
+      1300_cowbuilder-setup, 2800_create-lb-iso and 4600_export-utm-packages
+      (dedup three copies).
+    - help-steps/binfmt-credential-setup: reuse the magic/mask from
+      'update-binfmts --display' verbatim (already \xNN-escaped); the previous sed
+      re-escaping doubled them into '\x\x\x7f...'.
+    - 1300: assign the qemu machine on its own line before the if (readable
+      xtrace), not inside the condition.
+    - ci/binfmt-diagnose + workflow step (arm64, TEMPORARY): dump the runner host's
+      qemu/binfmt registration so the credentials-flag fix can be designed against
+      the runner's real state rather than guessed. To be removed once the fix lands.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit 9b442a96f0b2334d1d8b6c3c21c2f9d45c150020
+Author: claude <noreply@anthropic.com>
+Date:   Thu Jul 9 07:10:59 2026 -0400
+
+    1300: add qemu binfmt 'C' flag via update-binfmts, not raw /proc
+
+    Correct the foreign-arch credentials fix. The first attempt wrote the
+    qemu handler directly to /proc/sys/fs/binfmt_misc/register, which
+    desynchronised update-binfmts' database: mmdebstrap (which bootstraps the
+    foreign-arch chroot) gates on 'update-binfmts --display <name>'
+    succeeding, so the raw write broke the bootstrap itself with
+    'qemu-x86_64 not in database ... amd64 can neither be executed natively
+    nor via qemu user emulation'.
+
+    Move the logic into help-steps/binfmt-credential-setup, which adds the
+    'C' (credentials) flag THROUGH update-binfmts: it reads the current
+    registration from 'update-binfmts --display', then --remove and
+    --install with --credential yes, preserving the package, interpreter,
+    magic, mask, offset and the P (preserve-argv0) and F (fix-binary) flags.
+    This keeps update-binfmts' database consistent so mmdebstrap still
+    bootstraps, while setuid (sudo) now elevates inside the emulated chroot.
+    The helper is idempotent and prints the registration for diagnostics.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+commit e9df4489b61709e2032eabe9d3197efe3dce2524
+Author: claude (dev66 8bd92be9-9ef9-445b-84c0-4c454d528432) <noreply@anthropic.com>
+Date:   Thu Jul 9 06:46:56 2026 -0400
+
+    1300: auto-enable qemu binfmt 'C' flag for foreign-arch chroots
+
+    An '--arch arm64 --target virtualbox' build also builds an amd64 chroot
+    (VirtualBox has no Linux/arm64 build). On an arm64 host that amd64 chroot
+    runs under qemu-user emulation, where setuid binaries only gain root when
+    the qemu binfmt handler carries the 'C' (credentials) flag. Without it,
+    dist-installer-cli's get_su_cmd fails with a misleading 'sudo: effective
+    uid is not 0 ... nosuid' error and the build aborts. Observed on the arm64
+    GitHub CI leg; the amd64 leg builds the amd64 chroot natively and passes
+    the identical sanity test.
+
+    Detect the foreign-architecture chroot in 1300_cowbuilder-setup and, when
+    the qemu handler lacks the 'C' flag, re-register it with the credentials
+    flag automatically, preserving the interpreter/offset/magic/mask read back
+    from the running registration. This covers CI and developer hosts alike,
+    so cross-architecture builds no longer need manual binfmt_misc setup.
+
+    Also arch-qualify the derivative-maker-docker image tag (uname --machine
+    instead of :latest) so amd64 and arm64 images cannot collide in a shared
+    docker store or image cache.
+
+    Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 
 commit 9f0191ffa647128d08577e1e47ad1ac418399335
 Author: Aaron Rainbolt <arraybolt3@gmail.com>
