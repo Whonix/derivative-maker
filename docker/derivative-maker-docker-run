@@ -46,9 +46,6 @@ fi
 
 sudo "${sudo_options_maybe[@]}" test -d /usr
 
-declare orig_ref exit_code
-orig_ref=""
-exit_code=""
 
 print_usage() {
   cat -- << EOF
@@ -67,6 +64,9 @@ EOF
 volume_prepare() {
   declare -a -- VOLUMES
 
+  ## CACHER_VOLUME is owned by the in-container 'approx' user; its uid:gid is
+  ## pinned to 101:102 at image build (derivative-maker-docker-setup) so this
+  ## literal stays correct. Kept in sync with ci/approx-cache-sidecar.
   VOLUMES=(
     "${CACHER_VOLUME}" "101:102" "770"
     "${BINARY_VOLUME}" "${HOST_USER}:${HOST_USER}" "770"
@@ -141,22 +141,10 @@ while true; do
   esac
 done
 
-## "Update" the repository to the current ref without pulling any additional
-## remote code. This acts as a sanity check, and as a trust-on-first-use
-## mechanism.
-exit_code='0'
-
-# orig_ref="$(git symbolic-ref HEAD)" || exit_code="$?"
-# if [ "${exit_code}" != '0' ]; then
-#   orig_ref="$(git rev-parse HEAD)" || error 'Cannot get head commit ID!'
-# else
-#   # shellcheck disable=SC2001
-#   orig_ref="$(sed 's?^refs/heads/??' <<< "${orig_ref}")"
-# fi
-
-## TODO: Should docker do this?
-## fetch/merge git submodules
-#"${SOURCE_VOLUME}/derivative-update" --update-only
+## The container intentionally does NOT run derivative-update to fetch/merge
+## git submodules. It builds the source tree exactly as bind-mounted from the
+## host (SOURCE_VOLUME); keeping that checkout current is the host's
+## responsibility.
 
 build_docker_image
 

@@ -98,7 +98,7 @@ if [ "${dist_build_redistributable:-}" = "true" ]; then
   build_args+=(--repo true)
   build_args+=(--tb closed)
   ## Install package 'firmware-nonfreedom' by default.
-  ## - Applicable to '--arch' 'amd64' (and 'i386') only
+  ## - Applicable to '--arch' 'amd64' only
   ## - Applicable to for ISO builds only.
   ## See also:
   ## https://www.kicksecure.com/wiki/Dev/nonfree

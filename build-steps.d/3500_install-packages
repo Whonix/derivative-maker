@@ -574,19 +574,12 @@ $dist_build_script_skip_package_install${reset}"
    ## root=/dev/mapper/loop0p2
    ## which then results in an unbootable system.
 
-   ## TODO: comment in
-   #chroot_run update-grub
-
-   ## TODO: comment out
    ## Debugging.
    ## update-grub is a wrapper that essentially runs:
    ## grub-mkconfig -o /boot/grub/grub.cfg
    ## Run grub-mkconfig with sh xtrace enabled for debug output.
    ## Full path to /usr/sbin/grub-mkconfig required because using sh -xv.
    chroot_run sh -xv /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg
-   ## TODO: enable verbose output during execution of /etc/grub.d/10_linux somehow.
-   ##       It is being executed by grub-mkconfig. Needed to investigate where the
-   ##       root=/dev/mapper issue is coming from
 
    ## Debugging.
    true "/boot/grub/grub.cfg root= :"

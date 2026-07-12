@@ -147,10 +147,6 @@ general_setup() {
    ## match it, so select both from '$dist_build_target_arch' with an exact
    ## 'case' (a substring test for '64' would misfile 'arm64' as x86-64).
    case "$dist_build_target_arch" in
-      i386)
-         $SUDO_TO_VBOX_TEMP VBoxManage createvm --name "$VMNAME" --register
-         $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --ostype Debian
-         ;;
       amd64)
          $SUDO_TO_VBOX_TEMP VBoxManage createvm --name "$VMNAME" --register
          $SUDO_TO_VBOX_TEMP VBoxManage modifyvm "$VMNAME" --ostype Debian_64

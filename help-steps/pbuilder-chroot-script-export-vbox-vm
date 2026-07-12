@@ -99,7 +99,9 @@ export_vbox_vm() {
    ## https://forums.whonix.org/t/allow-us-to-download-the-vm-files-in-a-compressed-format-like-zip-7z-gzip-etc/14210/6
    ## tar parses TAR_OPTIONS itself, so the embedded single quotes around
    ## the --mtime value are intentional.
-   ## TODO: Why are we setting mtime to sometime in 2015?
+   ## The fixed --mtime pins every archive member to one deterministic
+   ## timestamp so the exported '.ova' is reproducible (byte-identical across
+   ## builds); the specific 2015 date is an arbitrary constant epoch.
    # shellcheck disable=SC2089
    TAR_OPTIONS="\
       ${TAR_OPTIONS:-}
@@ -173,16 +175,19 @@ export_vbox_vm() {
 
    ## The export is stable when run in isolation, so a missing '.ova' here
    ## points at pipeline / copy-on-write state rather than the export command.
-   ## On the failure path only (no cost on success), dump diagnostics that
-   ## distinguish the two failure modes: 'VBoxManage' ran via
-   ## '$SUDO_TO_VBOX_TEMP' (sudo -u dm-vbox-temp), whose env_reset drops
-   ## cowbuilder's cowdancer 'LD_PRELOAD' / 'COWDANCER_ILISTFILE' while this
-   ## shell runs under cowdancer -- so compare the dm-vbox-temp (no-cowdancer)
-   ## and root (cowdancer) views, and search the chroot's own fs, to tell a
-   ## genuinely-absent file (e.g. a concurrent base rebuild) from one merely
-   ## invisible to a single view.
+   ## On the failure path only (no cost on success), dump diagnostics.
    ##
-   ## TODO: Make this comment easier to read.
+   ## Two views of the filesystem can disagree here. 'VBoxManage' runs via
+   ## '$SUDO_TO_VBOX_TEMP' (sudo -u dm-vbox-temp), and sudo's env_reset drops
+   ## cowbuilder's cowdancer variables ('LD_PRELOAD' / 'COWDANCER_ILISTFILE').
+   ## This shell, however, still runs under cowdancer. So the dm-vbox-temp
+   ## process and this shell can see the same directory differently.
+   ##
+   ## The diagnostics therefore print both views (dm-vbox-temp without
+   ## cowdancer, root with cowdancer) and also search the chroot filesystem.
+   ## That distinguishes a file that is genuinely absent (e.g. wiped by a
+   ## concurrent base rebuild) from one that merely does not appear in one
+   ## of the two views.
    if [ ! -r "${HOMEVAR_VBOX_TEMP}/temp.ova" ]; then
       true "ERROR-DIAG: temp.ova absent right after 'Successfully exported'."
       true "ERROR-DIAG: expected --output: ${HOMEVAR_VBOX_TEMP}/temp.ova"
@@ -267,10 +272,9 @@ export_vbox_vm() {
       safe-rm -r -f -- "$HOMEVAR_VBOX_TEMP/VirtualBox VMs/$vm_name_to_be_deleted"
       ## The VM disk lives on the bind-mounted host build folder (see
       ## 'binary_image_vdi_dir' in 'help-steps/variables'), not the
-      ## 'dm-vbox-temp' home; 'unregistervm --delete' removes the '.vdi' itself
-      ## but leave no empty work folder behind.
-      ## TODO: "leave no empty work folder behind"? What does that mean?
-      ## Should it be "leaves an empty work folder behind"?
+      ## 'dm-vbox-temp' home. 'unregistervm --delete' removes the '.vdi' file
+      ## itself but leaves the now-empty per-VM work folder behind, so remove
+      ## that folder explicitly here.
       safe-rm -r -f -- "$binary_image_vdi_dir/$vm_name_to_be_deleted"
    done
 }

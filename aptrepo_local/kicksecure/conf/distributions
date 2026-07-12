@@ -4,7 +4,7 @@
 Origin: kicksecure
 Label: Kicksecure
 Codename: local
-Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
+Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source
 Components: main contrib non-free
 Description: Kicksecure local APT Repository for building from source code
 Contents:
