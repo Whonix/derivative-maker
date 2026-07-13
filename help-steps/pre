@@ -6,7 +6,7 @@
 ## Static-analysis waivers: intentional word-splitting of a few command
 ## variables; '$SUDO_TO_ROOT rm' of specific known runtime files (not user
 ## paths). The deliberate 'set +o errexit' toggle (pre's retry/exception mode,
-## documented below) has no waiver mechanism and stays flagged by R-011.
+## documented below) carries the R-011 waiver at the toggle itself.
 # shellcheck disable=SC2086,SC2004
 ## style-ok: no-safe-rm
 
@@ -162,7 +162,10 @@ args=()
 ## Needs CAP_SYS_ADMIN: call sites run it under '$SUDO_TO_ROOT' (the CI
 ## container is '--privileged', see 'docker/derivative-maker-docker-run').
 ## Overridable ('[ -v ]'): set to the empty string to run without a private
-## PID namespace (e.g. in an unprivileged environment).
+## PID namespace (e.g. in an unprivileged environment). At 'sudo' call
+## sites that pass 'VAR=val' words, the expansion must come AFTER those:
+## sudo consumes them as environment assignments only while they precede
+## the command; 'unshare' itself would not accept them.
 [ -v UNSHARE_PID_NS ] || UNSHARE_PID_NS="unshare --pid --fork --kill-child --"
 export UNSHARE_PID_NS
 

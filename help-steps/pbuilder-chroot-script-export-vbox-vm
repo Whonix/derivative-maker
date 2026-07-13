@@ -48,15 +48,10 @@ for required_var in \
    fi
 done
 
-## Shared chroot-session plumbing (SUDO_TO_ROOT handling, 'error', failure
-## diagnostics + ERR trap, VirtualBox daemon shutdown / stale-IPC cleanup,
-## 'dm-vbox-temp' sudoers setup) lives in a single sourced file. pbuilder
-## COPIES this script into the chroot as '/runscript', so
-## '${BASH_SOURCE[0]}' does NOT point at 'help-steps' there; resolve the
-## library through the bind-mounted source tree instead
-## ('$dist_source_help_steps_folder' arrives via the environment
-## allowlist, see '$env_vars_keep_list' in 'help-steps/variables'). The
-## BASH_SOURCE fallback keeps direct (non-cowbuilder) execution working.
+## Shared chroot-session plumbing; see the header of
+## 'help-steps/vbox-chroot-shared' (including why resolution goes through
+## the bind-mounted source tree, not '${BASH_SOURCE[0]}'). The BASH_SOURCE
+## fallback keeps direct (non-cowbuilder) execution working.
 if [ -v dist_source_help_steps_folder ]; then
    vbox_chroot_shared_file="${dist_source_help_steps_folder}/vbox-chroot-shared"
 else
@@ -275,22 +270,14 @@ main() {
       return 0
    fi
 
-   ## Baseline diagnostics (disk space in particular) for comparison with a
-   ## potential ERR-trap dump below.
    diagnostics_dump
 
-   ## Start hermetic: drop IPC state inherited from a previous VBox chroot
-   ## session before the first 'VBoxManage' call.
    vbox_stale_ipc_cleanup
 
    setup_vbox_temp_sudo
 
    export_vbox_vm
 
-   ## Unlink the VirtualBox IPC state so '--save-after-login' persists a
-   ## clean 'base.cow'; lingering daemons are reaped by the host wrapper's
-   ## private PID namespace (see 'vbox_stale_ipc_cleanup' in
-   ## 'vbox-chroot-shared' for the full rationale).
    vbox_stale_ipc_cleanup
 
    sync
