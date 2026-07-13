@@ -46,8 +46,8 @@ jobs:
             runner: ubuntu-24.04-arm
             target: virtualbox
             flavor: kicksecure-cli
-          ## Native amd64 lxqt ISO lane; real (non-dry-run) build permitted
-          ## by the native-ISO exception in help-steps/parse-cmd's CI gate.
+          ## Native amd64 lxqt ISO lane; real (non-dry-run) build because
+          ## help-steps/parse-cmd's CI gate only dry-runs CROSS-builds.
           - arch: amd64
             runner: ubuntu-24.04
             target: iso
