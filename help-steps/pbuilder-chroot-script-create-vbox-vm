@@ -57,6 +57,51 @@ error() {
    exit 1
 }
 
+## Dump chroot state that past failures needed: disk space (a full disk can
+## make 'VBoxSVC' fail to start with only 'Failed to create the VirtualBox
+## object!' as the symptom), memory, stale VirtualBox XPCOM IPC state in
+## '/tmp' (persisted into 'base.cow' by a previous VBox chroot session via
+## '--save-after-login' and hardlink-copied into this one), any VirtualBox
+## processes still alive from that previous session, and the 'VBoxSVC.log'
+## of the 'dm-vbox-temp' account. Called once at startup (baseline for
+## comparing a failed run against a green one) and again from the ERR trap
+## at the moment of failure. Every command is '|| true'-guarded: diagnostics
+## must never turn into the failure themselves. Kept in sync with
+## 'pbuilder-chroot-script-export-vbox-vm'.
+diagnostics_dump() {
+   true "INFO: diagnostics: disk space (all filesystems visible inside the chroot):"
+   df --human-readable || true
+   df --inodes || true
+
+   true "INFO: diagnostics: memory:"
+   head --lines=5 -- /proc/meminfo || true
+
+   true "INFO: diagnostics: VirtualBox XPCOM IPC state under '/tmp':"
+   find /tmp/ -mindepth 1 -maxdepth 2 -path '/tmp/.vbox*' -exec ls -l -a -d -- {} \; || true
+
+   true "INFO: diagnostics: VirtualBox processes (chroot shares the host PID namespace):"
+   pgrep --list-full -- "[Vv][Bb]ox" || true
+
+   true "INFO: diagnostics: '${HOMEVAR_VBOX_TEMP}/.config/VirtualBox':"
+   ls -l -a -- "${HOMEVAR_VBOX_TEMP}/.config/VirtualBox/" || true
+   tail --lines=100 -- "${HOMEVAR_VBOX_TEMP}/.config/VirtualBox/VBoxSVC.log" || true
+}
+
+diagnostics_on_error() {
+   ## The ERR trap re-fires while a failure propagates up through function
+   ## calls under 'errtrace'; dump only once.
+   if [ "${diagnostics_on_error_done}" = "true" ]; then
+      return 0
+   fi
+   diagnostics_on_error_done=true
+
+   true "ERROR-DIAG: a command failed; dumping chroot diagnostics."
+   diagnostics_dump
+}
+
+diagnostics_on_error_done=false
+trap diagnostics_on_error ERR
+
 setup_vbox_temp_sudo() {
    ## '$SUDO_TO_VBOX_TEMP' runs 'sudo --chdir' (-D), which sudo refuses
    ## unless the policy permits 'runcwd'. On the build host that rule is
@@ -506,6 +551,10 @@ main() {
       printf '%s\n' "INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_virtualbox is not set to 'true'."
       return 0
    fi
+
+   ## Baseline diagnostics (disk space in particular) for comparison with a
+   ## potential ERR-trap dump below.
+   diagnostics_dump
 
    setup_vbox_temp_sudo
 
