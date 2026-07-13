@@ -1005,16 +1005,29 @@ ${reset}"
    fi
 
    if [ "${CI:-}" = "true" ]; then
-      if ! [ "${dist_build_flavor:-}" = "kicksecure-cli" ]; then
+      ci_host_architecture="$(dpkg --print-architecture)"
+      if [ "${dist_build_flavor:-}" = "kicksecure-cli" ]; then
+         true "${BASH_SOURCE[0]} INFO: CI='${CI:-}' and dist_build_flavor='${dist_build_flavor:-}': real build."
+      elif [ "${dist_build_flavor:-}" = "kicksecure-lxqt" ] \
+         && [ "${dist_build_iso:-}" = "true" ] \
+         && [ "${dist_build_target_arch:-}" = "${ci_host_architecture}" ]; then
+         ## NATIVE lxqt ISO CI lane. The dry-run gate below exists because
+         ## CROSS-builds (AMD64 building ARM64) hit the GitHub 6 hours
+         ## maximum time; a NATIVE lxqt ISO build does not cross-build
+         ## anything, so it runs for real. ISO builds are policy-restricted
+         ## to the kicksecure-lxqt flavor (see 'dm-build-official-one').
+         true "${BASH_SOURCE[0]} INFO: CI='${CI:-}', native '--target iso' '--flavor kicksecure-lxqt': real build."
+      else
          ## TODO: cross-building is too slow. Hits GitHub 6 hours maximum time.
          ## Therefore, build fewer flavors on CI to save build time.
-         ## At this time, build flavor 'kicksecure-cli' only on CI.
+         ## At this time, build flavor 'kicksecure-cli' (any target) and the
+         ## native kicksecure-lxqt ISO only on CI.
          ## - Specifically cross-builds (using AMD64 to build ARM64) is hitting GitHub CI timeout.
          ## - It is unlikely that building an LXQt flavor would succeed while the CLI flavor would fail.
          ## equivalent of '--dry-run true'
          build_dry_run="true"
          export build_dry_run
-         true "${BASH_SOURCE[0]} INFO: CI='${CI:-}' and dist_build_flavor='${dist_build_flavor:-}' is NOT kicksecure-cli, therefore setting: build_dry_run='${build_dry_run:-}'"
+         true "${BASH_SOURCE[0]} INFO: CI='${CI:-}' and dist_build_flavor='${dist_build_flavor:-}' is NOT a real-build CI lane, therefore setting: build_dry_run='${build_dry_run:-}'"
       fi
    fi
 }
