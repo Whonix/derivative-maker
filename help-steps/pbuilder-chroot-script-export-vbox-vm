@@ -88,7 +88,7 @@ diagnostics_dump() {
    true "INFO: diagnostics: VirtualBox XPCOM IPC state under '/tmp':"
    find /tmp/ -mindepth 1 -maxdepth 2 -path '/tmp/.vbox*' -exec ls -l -a -d -- {} \; || true
 
-   true "INFO: diagnostics: VirtualBox processes (chroot shares the host PID namespace):"
+   true "INFO: diagnostics: VirtualBox processes (as visible in this PID namespace):"
    pgrep --list-full -- "[Vv][Bb]ox" || true
 
    true "INFO: diagnostics: '${HOMEVAR_VBOX_TEMP}/.config/VirtualBox':"
@@ -117,11 +117,14 @@ diagnostics_on_error_done=false
 trap diagnostics_on_error ERR
 
 ## Print the PIDs of the VirtualBox XPCOM daemons ('VBoxSVC',
-## 'VBoxXPCOMIPCD') whose process root is THIS chroot. The chroot shares the
-## host PID namespace, so a bare name match could hit VirtualBox daemons of
-## the build host or of a previous (already moved-to-'base.cow') chroot
-## session; comparing '/proc/<pid>/root' against '/' by device:inode scopes
-## the match to daemons started from this very session.
+## 'VBoxXPCOMIPCD') whose process root is THIS chroot. The chroot shares
+## its PID namespace with the invoking build step (a private one: the host
+## wrapper runs cowbuilder under 'unshare --pid --fork'), so a bare name
+## match could still hit VirtualBox processes outside the chroot (e.g.
+## cowbuilder-side helpers, or everything on the host if the wrapper ever
+## runs without 'unshare'); comparing '/proc/<pid>/root' against '/' by
+## device:inode scopes the match to daemons started from this very
+## session.
 vbox_daemon_pid_list() {
    local chroot_root_id pgrep_output daemon_pid proc_root_id
 

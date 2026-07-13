@@ -142,6 +142,27 @@ fi
 ## parse-cmd still wins.
 args=()
 
+## Wrapper that runs a command as the init process of a private PID
+## namespace: when the command exits, the kernel SIGKILLs every process
+## still alive in the namespace. Used by the VBox cowbuilder call sites
+## ('build-steps.d/*_create-vbox-vm', 'dm-prepare-release' in
+## developer-meta-files) to guarantee that nothing started inside a chroot
+## session (a lingering 'VBoxSVC', a stray daemon) outlives the build step;
+## upstream pbuilder deliberately has no process reaper (its unmount handler
+## asks the operator to "check and kill these processes manually"). The
+## SIGKILL is unclean by design, so call sites pair this backstop with a
+## clean in-chroot daemon shutdown ('vboxsvc_shutdown' in the
+## 'pbuilder-chroot-script-*-vbox-vm' scripts, which runs first). Correct
+## in-namespace '/proc' is guaranteed because pbuilder mounts a fresh 'proc'
+## instance from inside the namespace ('mount -t proc' in pbuilder-modules
+## 'mountproc'); the environment passes through 'unshare' unchanged.
+## Needs CAP_SYS_ADMIN: call sites run it under '$SUDO_TO_ROOT' (the CI
+## container is '--privileged', see 'docker/derivative-maker-docker-run').
+## Overridable ('[ -v ]'): set to the empty string to run without a private
+## PID namespace (e.g. in an unprivileged environment).
+[ -v UNSHARE_PID_NS ] || UNSHARE_PID_NS="unshare --pid --fork --kill-child --"
+export UNSHARE_PID_NS
+
 ## output_cmd_set is sourced from helper-scripts (xtrace.bsh) at the
 ## top of this file.
 

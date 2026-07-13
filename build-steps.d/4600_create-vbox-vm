@@ -108,9 +108,15 @@ main() {
 
    ## '--preserve-env' carries the variables exported above through cowbuilder
    ## into the chroot script's environment; no env file is passed.
+   ##
+   ## '$UNSHARE_PID_NS' (see 'help-steps/pre') runs cowbuilder as the init
+   ## of a private PID namespace so nothing started inside the chroot
+   ## session can outlive this build step; the clean daemon shutdown is
+   ## 'vboxsvc_shutdown' in the chroot script, which runs first.
    $SUDO_TO_ROOT \
       --preserve-env \
          ${COWBUILDER_PREFIX:-} \
+            ${UNSHARE_PID_NS:-} \
             cowbuilder \
                --host-arch "$host_architecture" \
                --architecture "$dist_build_multiarch_package_item" \
