@@ -224,10 +224,20 @@ aptgetopt_conf_add () {
 ## Avoiding "perl: warning: Setting locale failed." as suggested on
 ## https://wiki.ubuntu.com/DebootstrapChroot and
 ## https://lists.debian.org/debian-amd64/2005/08/msg00249.html.
-LANG="C"
+## 'C.UTF-8' ships with glibc (no locale generation needed, available in
+## every chroot) and keeps tool output deterministic English while staying
+## UTF-8-clean. 'LANGUAGE' is the gettext override list and must be 'C' as
+## well, otherwise it can override 'LC_MESSAGES' with a translated locale.
+## All three are passed into the cowbuilder chroots via
+## '$env_vars_keep_list'; the VBox chroot scripts additionally carry them
+## across their internal 'sudo' 'env_reset' boundary via an 'env_keep'
+## sudoers rule (see 'setup_vbox_temp_sudo').
+LANG="C.UTF-8"
 export LANG
-LC_ALL="C"
+LC_ALL="C.UTF-8"
 export LC_ALL
+LANGUAGE="C"
+export LANGUAGE
 
 ## Deterministic.
 TZ=UTC
@@ -1667,6 +1677,8 @@ env_vars_keep_list="
    user_name
    LD_PRELOAD
    LC_ALL
+   LANG
+   LANGUAGE
    TZ
    DEBDEBUG
    XZ_OPT

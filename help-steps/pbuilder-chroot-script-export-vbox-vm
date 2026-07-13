@@ -34,10 +34,14 @@ true "INFO: Currently running chroot script: ${BASH_SOURCE[0]}"
 ## TODO: Not all required variables are listed here, and some of the omitted
 ## ones are only required in some instances. Consider adding checks later on
 ## for those variables.
+## The locale trio ('help-steps/variables' sets LC_ALL=C.UTF-8,
+## LANG=C.UTF-8, LANGUAGE=C) travels the same route; checking it here makes
+## a silent locale passthrough regression fail loud instead of surfacing as
+## unparseable translated 'VBoxManage' output.
 for required_var in \
    VMNAME vm_names_to_be_exported vm_multiple HOMEVAR_VBOX_TEMP \
    SUDO_TO_VBOX_TEMP binary_image_ova_file binary_image_vdi_dir \
-   eulafile_user producturl ; do
+   eulafile_user producturl LC_ALL LANG LANGUAGE ; do
    if [ ! -v "$required_var" ]; then
       printf '%s\n' "ERROR: required variable '$required_var' not present in the chroot environment." >&2
       exit 1
@@ -71,6 +75,8 @@ error() {
 ## at the moment of failure. Every command is '|| true'-guarded: diagnostics
 ## must never turn into the failure themselves.
 diagnostics_dump() {
+   true "INFO: diagnostics: locale: LC_ALL='${LC_ALL:-}' LANG='${LANG:-}' LANGUAGE='${LANGUAGE:-}'"
+
    true "INFO: diagnostics: disk space (all filesystems visible inside the chroot):"
    df --human-readable || true
    df --inodes || true
@@ -99,10 +105,90 @@ diagnostics_on_error() {
 
    true "ERROR-DIAG: a command failed; dumping chroot diagnostics."
    diagnostics_dump
+
+   ## '--save-after-login' persists this chroot into 'base.cow' even when the
+   ## session fails; shut the VirtualBox daemons down cleanly so a retry does
+   ## not inherit stale runtime state on top of the failure.
+   vboxsvc_shutdown
 }
 
 diagnostics_on_error_done=false
 trap diagnostics_on_error ERR
+
+## Print the PIDs of the VirtualBox XPCOM daemons ('VBoxSVC',
+## 'VBoxXPCOMIPCD') whose process root is THIS chroot. The chroot shares the
+## host PID namespace, so a bare name match could hit VirtualBox daemons of
+## the build host or of a previous (already moved-to-'base.cow') chroot
+## session; comparing '/proc/<pid>/root' against '/' by device:inode scopes
+## the match to daemons started from this very session.
+vbox_daemon_pid_list() {
+   local chroot_root_id pgrep_output daemon_pid proc_root_id
+
+   chroot_root_id="$(stat --format "%d:%i" -- /)"
+   pgrep_output="$(pgrep --full -- "VBoxSVC|VBoxXPCOMIPCD")" || pgrep_output=""
+   for daemon_pid in ${pgrep_output}; do
+      ## The daemon may exit between 'pgrep' and 'stat'; skip it then.
+      ## '--dereference' is required: '/proc/<pid>/root' is a (magic)
+      ## symlink, and by default 'stat' reports the symlink inode itself,
+      ## not the root directory it points to.
+      proc_root_id="$(stat --dereference --format "%d:%i" -- "/proc/${daemon_pid}/root" 2>/dev/null)" || continue
+      if [ "${proc_root_id}" = "${chroot_root_id}" ]; then
+         printf '%s\n' "${daemon_pid}"
+      fi
+   done
+}
+
+## Remove VirtualBox XPCOM IPC runtime state ('/tmp/.vbox-<user>-ipc' of both
+## 'dm-vbox-temp' and root, the latter created by 'VBoxManage import
+## --dry-run'). Called at session start (state a previous session persisted
+## into 'base.cow' via '--save-after-login' arrives here as 'cp --link'
+## hardlinks; unlinking detaches this session from the shared socket inode
+## even if the previous session's daemon is somehow still alive) and at
+## session end (so nothing stale is persisted for the NEXT session).
+vbox_stale_ipc_cleanup() {
+   safe-rm --recursive --force -- /tmp/.vbox-*-ipc
+}
+
+## Cleanly shut down this chroot session's VirtualBox XPCOM daemons before
+## the cowbuilder session ends. 'VBoxSVC' lingers for around 5 seconds after
+## its last client exits; if it is still alive during cowbuilder teardown it
+## dies uncleanly (or keeps running against the moved directory) and
+## '--save-after-login' persists its stale IPC socket and lock into
+## 'base.cow' -- a suspected cause of the intermittent 'VBoxManage: error:
+## Failed to create the VirtualBox object!' CI failure. SIGTERM is the clean
+## path ('VBoxSVC' flushes its registry and removes its IPC socket); SIGKILL
+## is a last resort. The IPC cleanup afterwards leaves 'base.cow' clean
+## either way.
+vboxsvc_shutdown() {
+   local daemon_pid_list wait_counter
+
+   daemon_pid_list="$(vbox_daemon_pid_list)"
+   if [ -n "${daemon_pid_list}" ]; then
+      true "INFO: Shutting down VirtualBox daemons cleanly (SIGTERM): ${daemon_pid_list}"
+      ## Word-splitting of '$daemon_pid_list' is intentional (one PID per line).
+      # shellcheck disable=SC2086
+      kill -s TERM -- ${daemon_pid_list} || true
+
+      wait_counter=0
+      while [ -n "$(vbox_daemon_pid_list)" ]; do
+         wait_counter=$((wait_counter + 1))
+         if [ "${wait_counter}" -gt 15 ]; then
+            break
+         fi
+         sleep 1
+      done
+   fi
+
+   daemon_pid_list="$(vbox_daemon_pid_list)"
+   if [ -n "${daemon_pid_list}" ]; then
+      printf '%s\n' "WARNING: VirtualBox daemons survived SIGTERM, sending SIGKILL: ${daemon_pid_list}" >&2
+      # shellcheck disable=SC2086
+      kill -s KILL -- ${daemon_pid_list} || true
+      sleep 1
+   fi
+
+   vbox_stale_ipc_cleanup
+}
 
 setup_vbox_temp_sudo() {
    ## '$SUDO_TO_VBOX_TEMP' runs 'sudo --chdir' (-D), which sudo refuses
@@ -113,7 +199,12 @@ setup_vbox_temp_sudo() {
    ## 'Defaults runcwd=*' is the matching rule. 'sponge' (used on the host)
    ## may be absent in the chroot, so use 'tee' (as
    ## 'pbuilder-chroot-script-virtualbox' does).
-   printf '%s\n' "Defaults runcwd=*" \
+   ##
+   ## The 'env_keep' rule lets the deterministic locale trio passed in from
+   ## 'help-steps/variables' (LC_ALL, LANG, LANGUAGE) survive sudo's
+   ## 'env_reset' into the 'dm-vbox-temp' commands (default sudo strips all
+   ## three).
+   printf '%s\n' "Defaults runcwd=*" 'Defaults env_keep += "LC_ALL LANG LANGUAGE"' \
       | SUDO_EDITOR="" VISUAL="" EDITOR=tee visudo -f /etc/sudoers.d/dm-vbox-temp-runcwd >/dev/null
 
    ## Sanity test.
@@ -334,9 +425,15 @@ main() {
    ## potential ERR-trap dump below.
    diagnostics_dump
 
+   ## Start hermetic: drop IPC state inherited from a previous VBox chroot
+   ## session before the first 'VBoxManage' call.
+   vbox_stale_ipc_cleanup
+
    setup_vbox_temp_sudo
 
    export_vbox_vm
+
+   vboxsvc_shutdown
 
    sync
 }
