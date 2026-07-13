@@ -61,7 +61,14 @@ create-live-build-image() {
    true "INFO: sudo test"
    $SUDO_TO_ROOT test -d /usr
 
-   $SUDO_TO_ROOT lb clean # In case there's a leftover build tree present.
+   ## '${UNSHARE_PID_NS:-}': private PID namespace, see 'help-steps/pre'.
+   ## Applied to every root-run 'lb' phase (clean, bootstrap, chroot,
+   ## binary): each phase is a self-contained chroot session, so nothing it
+   ## starts (the classic live-build leak is a chroot 'gpg-agent') may
+   ## outlive it. The unprivileged 'lb config' calls generate config files
+   ## only and stay unwrapped ('unshare --pid' needs root).
+   # shellcheck disable=SC2086
+   $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb clean # In case there's a leftover build tree present.
 
    mkdir --parents -- auto
 
@@ -353,7 +360,8 @@ Pin-Priority: 900"
    fi
 
    ## Build ISO bootstrap
-   if ! $SUDO_TO_ROOT lb bootstrap --verbose --debug; then
+   # shellcheck disable=SC2086
+   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb bootstrap --verbose --debug; then
       error "${bold}${red}ERROR: Live build bootstrap stage failed!${reset}"
    fi
 
@@ -389,7 +397,8 @@ Pin-Priority: 900"
    $SUDO_TO_ROOT cp --verbose -- "$source_dracut_disable_config_snippet" "$target_dracut_disable_config_snippet"
 
    ## Build ISO chroot
-   if ! $SUDO_TO_ROOT lb chroot --verbose --debug; then
+   # shellcheck disable=SC2086
+   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb chroot --verbose --debug; then
       error "${bold}${red}ERROR: Live build chroot stage failed!${reset}"
    fi
 
@@ -567,7 +576,8 @@ Not running any chroot scripts.${reset}"
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/run"
 
    ## Package into an ISO
-   if ! $SUDO_TO_ROOT lb binary --verbose --debug; then
+   # shellcheck disable=SC2086
+   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb binary --verbose --debug; then
       error "${bold}${red}ERROR: Live build binary stage failed!${reset}"
    fi
 
