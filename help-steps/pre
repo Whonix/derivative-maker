@@ -144,10 +144,13 @@ args=()
 
 ## Wrapper that runs a command as the init process of a private PID
 ## namespace: when the command exits, the kernel SIGKILLs every process
-## still alive in the namespace. Used by the VBox cowbuilder call sites
-## ('build-steps.d/*_create-vbox-vm', 'dm-prepare-release' in
-## developer-meta-files) to guarantee that nothing started inside a chroot
-## session (a lingering 'VBoxSVC', a stray daemon) outlives the build step;
+## still alive in the namespace. Used by ALL cowbuilder call sites
+## ('build-steps.d/*_cowbuilder-setup', '*_create-debian-packages',
+## '*_create-vbox-vm'; 'dm-prepare-release', 'dm-tor-update-repository' and
+## 'dm-virtualbox-guest-additions-iso-update' in developer-meta-files;
+## 'make-helper-one.bsh' in genmkfile via the exported environment) to
+## guarantee that nothing started inside a chroot session (a lingering
+## 'VBoxSVC', a stray 'gpg-agent', any daemon) outlives the build step;
 ## upstream pbuilder deliberately has no process reaper (its unmount handler
 ## asks the operator to "check and kill these processes manually"). The
 ## SIGKILL is unclean by design, so call sites pair this backstop with a
