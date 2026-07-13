@@ -80,6 +80,18 @@ case "${target}" in
       ;;
 esac
 
+## Fail fast on an unknown flavor: parse-cmd's CI gate silently degrades an
+## unrecognized real-build combination to a dry-run, which would look green
+## while building nothing.
+case "${flavor}" in
+   kicksecure-cli | kicksecure-lxqt)
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --flavor <kicksecure-cli|kicksecure-lxqt> is required (got: '${flavor}')" >&2
+      exit 1
+      ;;
+esac
+
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
 ## Create signing material (idempotent; signing-key-create never overwrites an
