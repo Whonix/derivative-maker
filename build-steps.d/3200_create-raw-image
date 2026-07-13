@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -213,6 +215,11 @@ create-debian-raw-image() {
    ## bootstrap chroot (the classic leak is 'gpg-agent') can outlive this
    ## build step. It must come AFTER the 'VAR=val' words: sudo consumes
    ## those as environment assignments only while they precede the command.
+   ##
+   ## '$DEBOOTSTRAP_PREFIX', '$UNSHARE_PID_NS' and '$use_vmefi_maybe' are
+   ## intentionally unquoted: each holds zero or more words that must split
+   ## into separate argv slots.
+   # shellcheck disable=SC2086
    $SUDO_TO_ROOT \
       --preserve-env \
          PATH="${new_path}" \
