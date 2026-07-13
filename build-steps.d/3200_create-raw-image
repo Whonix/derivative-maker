@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -208,11 +210,19 @@ create-debian-raw-image() {
    ## Sanity test.
    test -n "${dist_build_hostname}"
 
+   ## '${UNSHARE_PID_NS:-}': private PID namespace, see 'help-steps/pre'
+   ## (also for its placement after the 'VAR=val' words).
+   ##
+   ## '$DEBOOTSTRAP_PREFIX', '$UNSHARE_PID_NS' and '$use_vmefi_maybe' are
+   ## intentionally unquoted: each holds zero or more words that must split
+   ## into separate argv slots.
+   # shellcheck disable=SC2086
    $SUDO_TO_ROOT \
       --preserve-env \
          PATH="${new_path}" \
          $DEBOOTSTRAP_PREFIX \
          dist_build_multiarch_package_item="$dist_build_target_arch" \
+            ${UNSHARE_PID_NS:-} \
             bash -x -e \
                "$dist_build_grml_bin" \
                   --arch "$dist_build_target_arch" \

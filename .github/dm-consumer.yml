@@ -1,0 +1,13 @@
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Per-repo configuration for the developer-meta-files reusable CI
+## workflows; read by reusable-dist-ai-tests.yml via
+## dist-ai/ci/dist-ai-tests-ci-config.sh.
+
+dist-ai-tests:
+  ## Default stack plus: procps (umount_kill.sh 'ps' kill-report) and
+  ## safe-rm (dm-help-steps-tests scratch cleanup).
+  apt-packages: "python3 python3-pytest python3-hypothesis procps safe-rm"

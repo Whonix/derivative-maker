@@ -224,10 +224,20 @@ aptgetopt_conf_add () {
 ## Avoiding "perl: warning: Setting locale failed." as suggested on
 ## https://wiki.ubuntu.com/DebootstrapChroot and
 ## https://lists.debian.org/debian-amd64/2005/08/msg00249.html.
-LANG="C"
+## 'C.UTF-8' ships with glibc (no locale generation needed, available in
+## every chroot) and keeps tool output deterministic English while staying
+## UTF-8-clean. 'LANGUAGE' is the gettext override list and must be 'C' as
+## well, otherwise it can override 'LC_MESSAGES' with a translated locale.
+## All three are passed into the cowbuilder chroots via
+## '$env_vars_keep_list'; the VBox chroot scripts additionally carry them
+## across their internal 'sudo' 'env_reset' boundary via an 'env_keep'
+## sudoers rule (see 'setup_vbox_temp_sudo').
+LANG="C.UTF-8"
 export LANG
-LC_ALL="C"
+LC_ALL="C.UTF-8"
 export LC_ALL
+LANGUAGE="C"
+export LANGUAGE
 
 ## Deterministic.
 TZ=UTC
@@ -1587,6 +1597,19 @@ export APTCACHEHARDLINK
 PBUILDERSATISFYDEPENDSCMD=/usr/lib/pbuilder/pbuilder-satisfydepends-apt
 export PBUILDERSATISFYDEPENDSCMD
 
+## pbuilder hard-exports 'LANG=C' and 'LC_ALL=C' when 'pbuilder-checkparams'
+## sources 'pbuilder-modules', clobbering the locale passed in through the
+## environment. This configfile is sourced AFTER that (at '--configfile'
+## argument parsing, also in 'pbuilder-checkparams'), so re-exporting here
+## restores the build's deterministic locale for everything pbuilder runs,
+## the 'pbuilder-chroot-script-*' included. The values are interpolated at
+## generation time from the assignments earlier in 'help-steps/variables'
+## (the single source of truth). 'LANGUAGE' is not touched by pbuilder but
+## is re-exported for consistency.
+export LANG=\"$LANG\"
+export LC_ALL=\"$LC_ALL\"
+export LANGUAGE=\"$LANGUAGE\"
+
 ## End of: '$dist_build_pbuilder_config_file'
 " | \
    tee -- "$dist_build_pbuilder_config_file" >/dev/null
@@ -1667,6 +1690,8 @@ env_vars_keep_list="
    user_name
    LD_PRELOAD
    LC_ALL
+   LANG
+   LANGUAGE
    TZ
    DEBDEBUG
    XZ_OPT

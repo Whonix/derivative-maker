@@ -286,12 +286,16 @@ is not included in available_architectures_for_download_only_list: $available_ar
          ## $COWBUILDER_PREFIX is intentionally unquoted: it is set to
          ## something like 'env http_proxy=... foo=bar' that must split
          ## into multiple argv slots.
+         ##
+         ## '${UNSHARE_PID_NS:-}': private PID namespace, see 'help-steps/pre'
+         ## (also for its placement after the 'VAR=val' words).
          # shellcheck disable=SC2086
          $SUDO_TO_ROOT \
             --preserve-env \
                ${COWBUILDER_PREFIX:-} \
                newer_package_list="$newer_package_list" \
                temp_newer_packages="$temp_newer_packages" \
+                  ${UNSHARE_PID_NS:-} \
                   cowbuilder \
                      --host-arch "$host_architecture" \
                      --architecture "$dist_build_target_arch" \

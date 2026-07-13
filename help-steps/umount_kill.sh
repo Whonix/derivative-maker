@@ -36,6 +36,15 @@ fi
 
 real_path=$(realpath -- "$file_system_object") || true
 
+## Hard guard: with an empty '$real_path' the prefix patterns below
+## ('"${real_path}"/*') would degenerate to '/*' and match EVERY process on
+## the system; with '/' they would too (and '/' is already rejected above
+## for '$file_system_object').
+if [ "${real_path:-}" = "" ] || [ "${real_path:-}" = "/" ]; then
+   printf '%s\n' "$0: ERROR: could not canonicalize file_system_object '$file_system_object' (realpath returned '${real_path:-}')." >&2
+   exit 1
+fi
+
 if [ "${file_system_object:-}" = "$real_path" ]; then
    true "INFO: file_system_object = real_path, ok."
 else
@@ -64,18 +73,86 @@ done
 
 true "INFO: Checking if there are any processes still running in file_system_object: '$file_system_object'"
 
-## Debugging.
-# true "--------------------------------------------------------------------------------"
-# ## Overwrite with '|| true' because if no processes are running, lsof exists non-zero.
-# lsof -- "$file_system_object" || true
-# true "--------------------------------------------------------------------------------"
+## Print the PIDs of every process still using '$real_path': chrooted into
+## it, cwd inside it, executing a binary from it, holding any open file
+## descriptor under it, or mmap-ing a file under it.
+##
+## Detection is /proc-based and dependency-free. The previous implementation
+## ran a single 'lsof -- <dir>', which matches a directory ARGUMENT by that
+## one inode only: a process whose open files merely live UNDER the
+## directory (a lingering chroot daemon's log file, socket, cwd in a
+## subdirectory, ...) was missed, and a missing 'lsof' binary degraded into
+## a silent "no pids" verdict ('2>/dev/null' plus '|| true' swallowed the
+## command-not-found). Scanning '/proc/<pid>/{root,cwd,exe,fd/*}' via
+## 'readlink' catches everything 'lsof' caught for this use case plus the
+## under-the-tree cases; the '/proc/<pid>/maps' grep covers mmap-only users.
+## The kernel keeps these link targets current across a rename of the tree
+## (pbuilder's move of the cowbuilder work directory onto 'base.cow'), so a
+## prefix comparison against the canonical path stays correct even after
+## that move.
+## Exact-boundary check of one '/proc/<pid>/maps' file against
+## '$real_path'. A plain substring match would false-positive on a sibling
+## path sharing the string prefix (e.g. '.../derivative-binary' vs
+## '.../derivative-binary_vbox-workdir') and get an innocent process
+## killed. The pathname field starts at field 6, may itself contain spaces,
+## and carries a trailing ' (deleted)' suffix for deleted files
+## (proc_pid_maps(5)); parse accordingly, then match with path-boundary
+## semantics.
+maps_file_matches() {
+   local maps_file maps_address maps_perms maps_offset maps_dev maps_inode maps_pathname
 
-## Use 'grep -F' (--fixed-strings) so a path containing regex
-## metacharacters (., *, [, (, ...) is matched literally.
-temp1=$(lsof -- "$file_system_object" 2> /dev/null) || true
-temp2=$(printf '%s\n' "$temp1" | grep --fixed-strings -- "$file_system_object") || true
-temp3=$(printf '%s\n' "$temp2" | tail -n +2) || true
-pids=$(printf '%s\n' "$temp3" | awk '{print $2}') || true
+   maps_file="$1"
+   while read -r maps_address maps_perms maps_offset maps_dev maps_inode maps_pathname; do
+      [ -n "${maps_pathname}" ] || continue
+      maps_pathname="${maps_pathname% (deleted)}"
+      case "${maps_pathname}" in
+         "${real_path}" | "${real_path}"/*)
+            return 0
+            ;;
+      esac
+   done < "${maps_file}"
+   return 1
+}
+
+pids_using_path() {
+   local proc_entry proc_pid link_target_lines link_target
+
+   for proc_entry in /proc/[0-9]*; do
+      proc_pid="${proc_entry##*/}"
+      ## Never list this script itself or its invoking parent ('sudo').
+      ## '$$' and '$PPID' stay those of the script even inside the
+      ## command-substitution subshell that calls this function.
+      if [ "${proc_pid}" = "$$" ] || [ "${proc_pid}" = "${PPID}" ]; then
+         continue
+      fi
+      ## One 'readlink' invocation per process: prints one resolved target
+      ## per line, skips unreadable entries (exits non-zero then, hence
+      ## '|| true'). Kernel threads have no readable 'exe'/'fd'; vanished
+      ## processes disappear mid-scan; both end up as empty output.
+      link_target_lines="$(readlink -- "${proc_entry}/root" "${proc_entry}/cwd" "${proc_entry}/exe" "${proc_entry}"/fd/* 2>/dev/null)" || true
+      while IFS="" read -r link_target; do
+         case "${link_target}" in
+            "${real_path}" | "${real_path}"/*)
+               printf '%s\n' "${proc_pid}"
+               continue 2
+               ;;
+         esac
+      done <<< "${link_target_lines}"
+      ## mmap-only usage (shared library mapped from inside the tree while
+      ## root/cwd/exe/fds all point elsewhere). 'grep -F' (literal match, no
+      ## regex metacharacter surprises) is only a cheap substring PRE-filter
+      ## so the common no-hit case stays one grep per process; a hit is then
+      ## verified with exact path-boundary matching ('maps_file_matches')
+      ## before the process is listed.
+      if grep --quiet --fixed-strings -- "${real_path}" "${proc_entry}/maps" 2>/dev/null; then
+         if maps_file_matches "${proc_entry}/maps"; then
+            printf '%s\n' "${proc_pid}"
+         fi
+      fi
+   done
+}
+
+pids="$(pids_using_path)"
 
 if [ "${pids:-}" = "" ]; then
    true "INFO: Okay, no pids still running in '$file_system_object', no need to kill any."
@@ -85,11 +162,33 @@ else
    ## Debugging.
    ## Overwrite with '|| true' to avoid race condition if these processes already
    ## terminated themselves.
+   ## Word-splitting of '$pids' is intentional (one PID per line).
+   # shellcheck disable=SC2086
    ps -p $pids || printf '%s\n' "WARNING: Command 'ps -p $pids' exited non-zero." >&2
 
-   kill -9 $pids || printf '%s\n' "WARNING: Command 'kill -9 $pids' exited non-zero." >&2
-   ## Killing processes is not instant and a check to wait for the process to be gone isn't implemented.
-   sleep 3
+   ## SIGTERM first: a daemon such as 'VBoxSVC' shuts down cleanly on it
+   ## (flushes state, removes its sockets), whereas SIGKILL guarantees stale
+   ## runtime litter. Escalate only if something is still alive after the
+   ## grace period.
+   # shellcheck disable=SC2086
+   kill -s TERM -- $pids || printf '%s\n' "WARNING: Command 'kill -s TERM -- $pids' exited non-zero." >&2
+
+   grace_seconds_left=5
+   pids="$(pids_using_path)"
+   while [ ! "${pids}" = "" ] && [ "${grace_seconds_left}" -gt 0 ]; do
+      sleep 1
+      grace_seconds_left=$((grace_seconds_left - 1))
+      pids="$(pids_using_path)"
+   done
+
+   if [ ! "${pids}" = "" ]; then
+      printf '%s\n' "WARNING: The following pids survived SIGTERM and the grace period, sending SIGKILL: $pids" >&2
+      # shellcheck disable=SC2086
+      kill -s KILL -- $pids || printf '%s\n' "WARNING: Command 'kill -s KILL -- $pids' exited non-zero." >&2
+      ## Killing processes is not instant; give the kernel a moment before
+      ## callers proceed to unmount / delete the tree.
+      sleep 3
+   fi
 fi
 
 true "$0 INFO: end"

@@ -6,7 +6,7 @@
 ## Static-analysis waivers: intentional word-splitting of a few command
 ## variables; '$SUDO_TO_ROOT rm' of specific known runtime files (not user
 ## paths). The deliberate 'set +o errexit' toggle (pre's retry/exception mode,
-## documented below) has no waiver mechanism and stays flagged by R-011.
+## documented below) carries the R-011 waiver at the toggle itself.
 # shellcheck disable=SC2086,SC2004
 ## style-ok: no-safe-rm
 
@@ -141,6 +141,33 @@ fi
 ## Initialize 'args' to an empty array here so a later 'args=("$@")' from
 ## parse-cmd still wins.
 args=()
+
+## Wrapper that runs a command as the init process of a private PID
+## namespace: when the command exits, the kernel SIGKILLs every process
+## still alive in the namespace. Used by ALL cowbuilder call sites
+## ('build-steps.d/*_cowbuilder-setup', '*_create-debian-packages',
+## '*_create-vbox-vm'; 'dm-prepare-release', 'dm-tor-update-repository' and
+## 'dm-virtualbox-guest-additions-iso-update' in developer-meta-files;
+## 'make-helper-one.bsh' in genmkfile via the exported environment) to
+## guarantee that nothing started inside a chroot session (a lingering
+## 'VBoxSVC', a stray 'gpg-agent', any daemon) outlives the build step;
+## upstream pbuilder deliberately has no process reaper (its unmount handler
+## asks the operator to "check and kill these processes manually"). SIGKILL
+## cannot remove stale IPC socket FILES; the VBox chroot scripts unlink
+## those separately ('vbox_stale_ipc_cleanup' in
+## 'help-steps/vbox-chroot-shared', which explains the split). Correct
+## in-namespace '/proc' is guaranteed because pbuilder mounts a fresh 'proc'
+## instance from inside the namespace ('mount -t proc' in pbuilder-modules
+## 'mountproc'); the environment passes through 'unshare' unchanged.
+## Needs CAP_SYS_ADMIN: call sites run it under '$SUDO_TO_ROOT' (the CI
+## container is '--privileged', see 'docker/derivative-maker-docker-run').
+## Overridable ('[ -v ]'): set to the empty string to run without a private
+## PID namespace (e.g. in an unprivileged environment). At 'sudo' call
+## sites that pass 'VAR=val' words, the expansion must come AFTER those:
+## sudo consumes them as environment assignments only while they precede
+## the command; 'unshare' itself would not accept them.
+[ -v UNSHARE_PID_NS ] || UNSHARE_PID_NS="unshare --pid --fork --kill-child --"
+export UNSHARE_PID_NS
 
 ## output_cmd_set is sourced from helper-scripts (xtrace.bsh) at the
 ## top of this file.
@@ -488,9 +515,15 @@ exception_handler_signal() {
    signal="$1"
    kind="$2"
    case "$signal" in
-      INT)  signum=2 ;;
-      TERM) signum=15 ;;
-      *)    signum=1 ;;
+      INT)
+         signum=2
+         ;;
+      TERM)
+         signum=15
+         ;;
+      *)
+         signum=1
+         ;;
    esac
    exit_code="$(( 128 + signum ))"
    output_cmd_set
@@ -554,6 +587,10 @@ exception_handler_setup "exception_handler_general" ERR INT TERM
 if [ "${dist_build_auto_retry:-}" = "0" ]; then
    true "${BASH_SOURCE[0]} INFO: fail-fast mode (retry-max 0); keeping errexit on."
 else
+   ## R-011 targets the capture-an-exit-code toggle anti-pattern; this is a
+   ## deliberate GLOBAL mode switch instead (see the comment above), so it
+   ## carries the gate's script-wide waiver:
+   ## style-ok: allow-errexit-toggle
    set +o errexit
 fi
 
