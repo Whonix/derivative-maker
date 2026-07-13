@@ -152,10 +152,10 @@ args=()
 ## guarantee that nothing started inside a chroot session (a lingering
 ## 'VBoxSVC', a stray 'gpg-agent', any daemon) outlives the build step;
 ## upstream pbuilder deliberately has no process reaper (its unmount handler
-## asks the operator to "check and kill these processes manually"). The
-## SIGKILL is unclean by design, so call sites pair this backstop with a
-## clean in-chroot daemon shutdown ('vboxsvc_shutdown' in the
-## 'pbuilder-chroot-script-*-vbox-vm' scripts, which runs first). Correct
+## asks the operator to "check and kill these processes manually"). SIGKILL
+## cannot remove stale IPC socket FILES; the VBox chroot scripts unlink
+## those separately ('vbox_stale_ipc_cleanup' in
+## 'help-steps/vbox-chroot-shared', which explains the split). Correct
 ## in-namespace '/proc' is guaranteed because pbuilder mounts a fresh 'proc'
 ## instance from inside the namespace ('mount -t proc' in pbuilder-modules
 ## 'mountproc'); the environment passes through 'unshare' unchanged.
@@ -512,9 +512,15 @@ exception_handler_signal() {
    signal="$1"
    kind="$2"
    case "$signal" in
-      INT)  signum=2 ;;
-      TERM) signum=15 ;;
-      *)    signum=1 ;;
+      INT)
+         signum=2
+         ;;
+      TERM)
+         signum=15
+         ;;
+      *)
+         signum=1
+         ;;
    esac
    exit_code="$(( 128 + signum ))"
    output_cmd_set
@@ -578,6 +584,10 @@ exception_handler_setup "exception_handler_general" ERR INT TERM
 if [ "${dist_build_auto_retry:-}" = "0" ]; then
    true "${BASH_SOURCE[0]} INFO: fail-fast mode (retry-max 0); keeping errexit on."
 else
+   ## R-011 targets the capture-an-exit-code toggle anti-pattern; this is a
+   ## deliberate GLOBAL mode switch instead (see the comment above), so it
+   ## carries the gate's script-wide waiver:
+   ## style-ok: allow-errexit-toggle
    set +o errexit
 fi
 

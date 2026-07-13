@@ -574,7 +574,11 @@ main() {
       $SUDO_TO_ROOT safe-rm -f -- "$binary_image_raw_file"
    fi
 
-   vboxsvc_shutdown
+   ## Unlink the VirtualBox IPC state so '--save-after-login' persists a
+   ## clean 'base.cow'; lingering daemons are reaped by the host wrapper's
+   ## private PID namespace (see 'vbox_stale_ipc_cleanup' in
+   ## 'vbox-chroot-shared' for the full rationale).
+   vbox_stale_ipc_cleanup
 
    sync
 }
