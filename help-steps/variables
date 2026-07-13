@@ -1597,6 +1597,19 @@ export APTCACHEHARDLINK
 PBUILDERSATISFYDEPENDSCMD=/usr/lib/pbuilder/pbuilder-satisfydepends-apt
 export PBUILDERSATISFYDEPENDSCMD
 
+## pbuilder hard-exports 'LANG=C' and 'LC_ALL=C' when 'pbuilder-checkparams'
+## sources 'pbuilder-modules', clobbering the locale passed in through the
+## environment. This configfile is sourced AFTER that (at '--configfile'
+## argument parsing, also in 'pbuilder-checkparams'), so re-exporting here
+## restores the build's deterministic locale for everything pbuilder runs,
+## the 'pbuilder-chroot-script-*' included. The values are interpolated at
+## generation time from the assignments earlier in 'help-steps/variables'
+## (the single source of truth). 'LANGUAGE' is not touched by pbuilder but
+## is re-exported for consistency.
+export LANG=\"$LANG\"
+export LC_ALL=\"$LC_ALL\"
+export LANGUAGE=\"$LANGUAGE\"
+
 ## End of: '$dist_build_pbuilder_config_file'
 " | \
    tee -- "$dist_build_pbuilder_config_file" >/dev/null
