@@ -38,11 +38,20 @@ done
 
 ## Shared chroot-session plumbing (SUDO_TO_ROOT handling, 'error', failure
 ## diagnostics + ERR trap, VirtualBox daemon shutdown / stale-IPC cleanup,
-## 'dm-vbox-temp' sudoers setup) lives in a single sourced sibling file;
-## this script runs from the bind-mounted 'help-steps' folder, so the
-## sibling path resolves identically inside the chroot.
+## 'dm-vbox-temp' sudoers setup) lives in a single sourced file. pbuilder
+## COPIES this script into the chroot as '/runscript', so
+## '${BASH_SOURCE[0]}' does NOT point at 'help-steps' there; resolve the
+## library through the bind-mounted source tree instead
+## ('$dist_source_help_steps_folder' arrives via the environment
+## allowlist, see '$env_vars_keep_list' in 'help-steps/variables'). The
+## BASH_SOURCE fallback keeps direct (non-cowbuilder) execution working.
+if [ -v dist_source_help_steps_folder ]; then
+   vbox_chroot_shared_file="${dist_source_help_steps_folder}/vbox-chroot-shared"
+else
+   vbox_chroot_shared_file="$(dirname -- "${BASH_SOURCE[0]}")/vbox-chroot-shared"
+fi
 # shellcheck source=./vbox-chroot-shared
-source "$(dirname -- "${BASH_SOURCE[0]}")/vbox-chroot-shared"
+source "${vbox_chroot_shared_file}"
 
 ## Absolute path of the VM disk. It lives under '$binary_image_vdi_dir' (on the
 ## bind-mounted host build folder), NOT the chroot-local 'dm-vbox-temp' home,
