@@ -287,9 +287,8 @@ is not included in available_architectures_for_download_only_list: $available_ar
          ## something like 'env http_proxy=... foo=bar' that must split
          ## into multiple argv slots.
          ##
-         ## '${UNSHARE_PID_NS:-}' must come AFTER the 'VAR=val' words: sudo
-         ## consumes those as environment assignments only while they precede
-         ## the command; 'unshare' itself would not accept them.
+         ## '${UNSHARE_PID_NS:-}': private PID namespace, see 'help-steps/pre'
+         ## (also for its placement after the 'VAR=val' words).
          # shellcheck disable=SC2086
          $SUDO_TO_ROOT \
             --preserve-env \
