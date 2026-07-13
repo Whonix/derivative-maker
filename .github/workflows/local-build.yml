@@ -2,9 +2,10 @@
 name: Build
 
 ## Repo-private native build workflow (G-A-005 'local-' prefix): builds the
-## kicksecure-cli image for amd64 and arm64 on native runners. All build
-## logic lives in ci/github-build so the shell is lint-covered and runnable
-## locally. See agents/github-actions-security.md for the required
+## kicksecure-cli VirtualBox image for amd64 and arm64 plus the
+## kicksecure-lxqt ISO for amd64, all on native runners in parallel. All
+## build logic lives in ci/github-build so the shell is lint-covered and
+## runnable locally. See agents/github-actions-security.md for the required
 ## permissions / persist-credentials / fork-PR / SHA-pin patterns applied below.
 
 on:
@@ -39,8 +40,18 @@ jobs:
         include:
           - arch: amd64
             runner: ubuntu-24.04
+            target: virtualbox
+            flavor: kicksecure-cli
           - arch: arm64
             runner: ubuntu-24.04-arm
+            target: virtualbox
+            flavor: kicksecure-cli
+          ## Native amd64 lxqt ISO lane; real (non-dry-run) build because
+          ## help-steps/parse-cmd's CI gate only dry-runs CROSS-builds.
+          - arch: amd64
+            runner: ubuntu-24.04
+            target: iso
+            flavor: kicksecure-lxqt
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     steps:
@@ -62,7 +73,7 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.approx-cache-sidecar
-          key: ${{ runner.os }}-${{ matrix.arch }}-approx-${{ hashFiles('.github/workflows/local-build.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.target }}-approx-${{ hashFiles('.github/workflows/local-build.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
 
       ## Cache the derivative-maker docker image: its Dockerfile RUNs
       ## docker-setup's apt-get install of build-host tools, which hits the
@@ -82,14 +93,16 @@ jobs:
         if: steps.dmimg-cache.outputs.cache-hit == 'true'
         run: ./ci/dm-docker-image-cache load
 
-      - name: Build kicksecure-cli (${{ matrix.arch }})
-        ## CI=true tells docker-run this is headless; ARCH is routed through env
-        ## (rule 4: no ${{ }} interpolation into run:). All build logic lives in
-        ## ci/github-build (rule 7).
+      - name: Build ${{ matrix.flavor }} ${{ matrix.target }} (${{ matrix.arch }})
+        ## CI=true tells docker-run this is headless; ARCH/TARGET/FLAVOR are
+        ## routed through env (rule 4: no ${{ }} interpolation into run:). All
+        ## build logic lives in ci/github-build (rule 7).
         env:
           CI: "true"
           ARCH: ${{ matrix.arch }}
-        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}"
+          TARGET: ${{ matrix.target }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}" --target "${TARGET}" --flavor "${FLAVOR}"
 
       - name: Save docker image to cache
         if: steps.dmimg-cache.outputs.cache-hit != 'true'
@@ -103,7 +116,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: kicksecure-cli-${{ matrix.arch }}
+          name: ${{ matrix.flavor }}-${{ matrix.target }}-${{ matrix.arch }}
           ## docker-run bind-mounts the build output at $HOME/binary_mnt; on
           ## GitHub-hosted runners $HOME is /home/runner. upload-artifact does
           ## not expand '~' or env vars, so the path is spelled out.

@@ -1005,16 +1005,22 @@ ${reset}"
    fi
 
    if [ "${CI:-}" = "true" ]; then
-      if ! [ "${dist_build_flavor:-}" = "kicksecure-cli" ]; then
-         ## TODO: cross-building is too slow. Hits GitHub 6 hours maximum time.
-         ## Therefore, build fewer flavors on CI to save build time.
-         ## At this time, build flavor 'kicksecure-cli' only on CI.
-         ## - Specifically cross-builds (using AMD64 to build ARM64) is hitting GitHub CI timeout.
-         ## - It is unlikely that building an LXQt flavor would succeed while the CLI flavor would fail.
+      ## CI real-build versus dry-run is about CROSS-building, not about
+      ## flavor: cross-builds (e.g. AMD64 building ARM64) hit the GitHub
+      ## 6 hours maximum time, while native builds of any production flavor
+      ## (kicksecure-cli, kicksecure-lxqt, ...) fit comfortably.
+      ## 'kicksecure-cli' additionally stays real even when cross-built
+      ## (historical behavior; the CLI flavor is small enough).
+      ci_host_architecture="$(dpkg --print-architecture)"
+      if [ "${dist_build_flavor:-}" = "kicksecure-cli" ]; then
+         true "${BASH_SOURCE[0]} INFO: CI='${CI:-}' and dist_build_flavor='${dist_build_flavor:-}': real build."
+      elif [ "${dist_build_target_arch:-}" = "${ci_host_architecture}" ]; then
+         true "${BASH_SOURCE[0]} INFO: CI='${CI:-}', native build (target arch '${dist_build_target_arch:-}' == build host arch): real build."
+      else
          ## equivalent of '--dry-run true'
          build_dry_run="true"
          export build_dry_run
-         true "${BASH_SOURCE[0]} INFO: CI='${CI:-}' and dist_build_flavor='${dist_build_flavor:-}' is NOT kicksecure-cli, therefore setting: build_dry_run='${build_dry_run:-}'"
+         true "${BASH_SOURCE[0]} INFO: CI='${CI:-}', cross-build of dist_build_flavor='${dist_build_flavor:-}' (target arch '${dist_build_target_arch:-}' != build host arch '${ci_host_architecture}'), therefore setting: build_dry_run='${build_dry_run:-}'"
       fi
    fi
 }

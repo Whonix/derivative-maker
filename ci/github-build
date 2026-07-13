@@ -27,6 +27,8 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 
 arch=""
+target="virtualbox"
+flavor="kicksecure-cli"
 while [ "$#" -gt 0 ]; do
    case "$1" in
       --arch)
@@ -37,6 +39,22 @@ while [ "$#" -gt 0 ]; do
          arch="$2"
          shift 2
          ;;
+      --target)
+         if [ "$#" -lt 2 ]; then
+            printf '%s\n' "${BASH_SOURCE[0]}: --target requires a value" >&2
+            exit 1
+         fi
+         target="$2"
+         shift 2
+         ;;
+      --flavor)
+         if [ "$#" -lt 2 ]; then
+            printf '%s\n' "${BASH_SOURCE[0]}: --flavor requires a value" >&2
+            exit 1
+         fi
+         flavor="$2"
+         shift 2
+         ;;
       *)
          printf '%s\n' "${BASH_SOURCE[0]}: unexpected argument: $1" >&2
          exit 1
@@ -45,14 +63,52 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "${arch}" in
-   amd64 | arm64) ;;
+   amd64 | arm64)
+      ;;
    *)
       printf '%s\n' "${BASH_SOURCE[0]}: --arch <amd64|arm64> is required (got: '${arch}')" >&2
       exit 1
       ;;
 esac
 
+case "${target}" in
+   virtualbox | iso)
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --target <virtualbox|iso> is required (got: '${target}')" >&2
+      exit 1
+      ;;
+esac
+
+## Fail fast on an unknown flavor: parse-cmd's CI gate silently degrades an
+## unrecognized real-build combination to a dry-run, which would look green
+## while building nothing.
+case "${flavor}" in
+   kicksecure-cli | kicksecure-lxqt)
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --flavor <kicksecure-cli|kicksecure-lxqt> is required (got: '${flavor}')" >&2
+      exit 1
+      ;;
+esac
+
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
+
+## The ISO build leaves live-build's work tree (bootstrap/chroot cache,
+## root-owned with 0700 entries such as 'etc/ssl/private') under the
+## version folder of the bind-mounted output directory. The workflow's
+## upload-artifact directory scan fails on those entries with EACCES, and
+## gigabytes of chroot cache are not a useful artifact anyway. Remove the
+## tree after the build; the '.iso' and the logs are siblings and stay.
+## Registered as an EXIT trap so a FAILED build does not leave the
+## unreadable tree behind for the 'if: always()' upload step either.
+iso_workdir_cleanup() {
+   if [ "${target}" = "iso" ]; then
+      sudo --non-interactive safe-rm -r -f -- "${HOME}/derivative-binary/"*/live-build
+   fi
+}
+
+trap iso_workdir_cleanup EXIT
 
 ## Create signing material (idempotent; signing-key-create never overwrites an
 ## existing key) and sign+tag HEAD. Mirrors ci/dry-run.d/150_signing-key-create
@@ -66,10 +122,19 @@ cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 ## key is a fresh CI key minted by signing-key-create, so a green check
 ## exercises the signing/verification MECHANISM end to end -- it is a
 ## self-signed build, not maintainer provenance.
+##
+## '--target iso' implies '--type host' (help-steps/parse-cmd
+## implicit_dist_type_host), so '--type vm' is passed only for the VM
+## target.
+type_args=()
+if [ "${target}" = "virtualbox" ]; then
+   type_args=(--type vm)
+fi
+
 ./derivative-maker \
-   --flavor kicksecure-cli \
-   --target virtualbox \
-   --type vm \
+   --flavor "${flavor}" \
+   --target "${target}" \
+   "${type_args[@]}" \
    --arch "${arch}" \
    --allow-uncommitted true \
    --allow-untagged true \
