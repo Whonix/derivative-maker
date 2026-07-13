@@ -94,6 +94,22 @@ esac
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
+## The ISO build leaves live-build's work tree (bootstrap/chroot cache,
+## root-owned with 0700 entries such as 'etc/ssl/private') under the
+## version folder of the bind-mounted output directory. The workflow's
+## upload-artifact directory scan fails on those entries with EACCES, and
+## gigabytes of chroot cache are not a useful artifact anyway. Remove the
+## tree after the build; the '.iso' and the logs are siblings and stay.
+## Registered as an EXIT trap so a FAILED build does not leave the
+## unreadable tree behind for the 'if: always()' upload step either.
+iso_workdir_cleanup() {
+   if [ "${target}" = "iso" ]; then
+      sudo --non-interactive safe-rm -r -f -- "${HOME}/derivative-binary/"*/live-build
+   fi
+}
+
+trap iso_workdir_cleanup EXIT
+
 ## Create signing material (idempotent; signing-key-create never overwrites an
 ## existing key) and sign+tag HEAD. Mirrors ci/dry-run.d/150_signing-key-create
 ## and ci/dry-run.d/200_sign-and-tag.
