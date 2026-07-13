@@ -111,8 +111,8 @@ main() {
    ##
    ## '$UNSHARE_PID_NS' (see 'help-steps/pre') runs cowbuilder as the init
    ## of a private PID namespace so nothing started inside the chroot
-   ## session can outlive this build step; the clean daemon shutdown is
-   ## 'vboxsvc_shutdown' in the chroot script, which runs first.
+   ## session can outlive this build step; the chroot script separately
+   ## unlinks stale VirtualBox IPC files ('vbox_stale_ipc_cleanup').
    $SUDO_TO_ROOT \
       --preserve-env \
          ${COWBUILDER_PREFIX:-} \
