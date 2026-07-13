@@ -13,3 +13,16 @@ much for humans to review -- live in the AI-maintained `dist-ai` repo
 tests in-tree. A package that has such a suite links to it from its own
 `AGENTS.md`, together with the environment variable that points the suite
 at a local checkout (for example `ONION_GRATER_REPO="$PWD" onion-grater-tests`).
+
+## Tests
+
+This repo's comprehensive suite lives in the AI-maintained `dist-ai` repo
+(https://github.com/org-ai-assisted/dist-ai): `dm-help-steps-tests`
+(functional tests for `help-steps/umount_kill.sh`, the /proc-based process
+reaper). Run it against this checkout with:
+
+    UMOUNT_KILL_SH="$PWD/help-steps/umount_kill.sh" dm-help-steps-tests
+
+It requires root (unprivileged runs SKIP) and kills processes, so run it in
+a throwaway container or sandbox VM, never on a workstation session. CI
+runs it on every PR via `.github/workflows/consumer-dist-ai-tests.yml`.
