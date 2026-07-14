@@ -1,0 +1,98 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Unmounts leftover mount points under the live-build work folder
+## ('$dist_binary_build_folder/live-build'), deepest first.
+##
+## Needed on the FAILURE path of 'build-steps.d/*_create-lb-iso': that step
+## bind-mounts the HOST's /dev, /dev/pts, /sys and /proc into the lb chroot
+## for its chroot_run interludes and unmounts them on the success path
+## only; an abort in between leaves host bind-mounts under the tree, where
+## a later recursive deletion would recurse into the real /dev. Invoked by
+## 'exception_handler_unmount_lb' ('help-steps/pre') on ERR/INT/TERM and at
+## the end of the successful build (where the sweep is a no-op). Safe to
+## run repeatedly.
+##
+## Deliberately does NOT run 'umount_kill.sh': that reaper scans /proc for
+## processes whose cwd/root/fd is under the tree and kills them, but
+## 'build-steps.d/*_create-lb-iso' pushd's INTO this very tree, so the
+## build process itself (the caller of this cleanup) would be a match and
+## get killed before the unmount loop runs. It is not needed either --
+## 'umount --lazy' detaches a busy mount immediately (the aborting build's
+## own processes exit right after), and any daemon a live-build phase might
+## leak is already reaped by the private PID namespace the phases run in
+## ('UNSHARE_PID_NS', see 'help-steps/pre').
+
+set -x
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
+
+MYDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+source "$MYDIR/pre"
+source "$MYDIR/variables"
+
+## Print the mount points still attached under '$1', deepest first
+## ('sort --reverse' orders '/a/b/c' before '/a/b'). Path-boundary prefix
+## match via the case pattern, not a substring grep, so a sibling folder
+## sharing the name prefix cannot be matched.
+lb_mounts_under() {
+   local tree mount_list mount_target
+
+   tree="$1"
+   ## Fail closed: if the mount table cannot be read there is no safe way to
+   ## conclude the tree is clean, so propagate the failure to the caller.
+   mount_list="$(findmnt --list --noheadings --output TARGET | sort --reverse)" || return 1
+   while IFS="" read -r mount_target; do
+      case "${mount_target}" in
+         "${tree}"/*)
+            printf '%s\n' "${mount_target}"
+            ;;
+      esac
+   done <<< "${mount_list}"
+}
+
+main() {
+   local live_build_folder mount_target remaining
+
+   live_build_folder="${dist_binary_build_folder}/live-build"
+
+   if [ ! -d "${live_build_folder}" ]; then
+      true "INFO: '${live_build_folder}' does not exist, nothing to unmount, ok."
+      return 0
+   fi
+
+   ## Attempt every mount below the tree ('|| true' so one stubborn target
+   ## does not skip the rest); 'umount --lazy' detaches immediately even
+   ## when busy.
+   while IFS="" read -r mount_target; do
+      [ -n "${mount_target}" ] || continue
+      $SUDO_TO_ROOT umount --lazy -- "${mount_target}" || true
+   done < <(lb_mounts_under "${live_build_folder}")
+
+   sync
+
+   ## Fail closed: verify nothing remains mounted under the tree. A leftover
+   ## host bind mount here is exactly what would let a downstream recursive
+   ## deletion cross into the real /dev, so surface it as an error rather
+   ## than returning success with mounts still attached.
+   remaining="$(lb_mounts_under "${live_build_folder}")" || {
+      error "Could not read the mount table to confirm '${live_build_folder}' is unmounted."
+   }
+   if [ -n "${remaining}" ]; then
+      printf '%s\n' "${remaining}" >&2
+      error "Mounts still present under '${live_build_folder}' after unmount."
+   fi
+}
+
+main "$@"
