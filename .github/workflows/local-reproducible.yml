@@ -1,0 +1,181 @@
+---
+name: Reproducible
+
+## Repo-private native reproducibility lane (G-A-005 'local-' prefix): builds
+## the same image TWICE as two INDEPENDENT jobs (separate runner VMs, the
+## reproducible-builds gold standard -- not one job building twice), then a
+## third job compares the two images with diffoscope via
+## help-steps/reproducible-compare, applying the expected-to-differ allowlist.
+## The compare job's conclusion IS the reproducibility pass/fail signal: green
+## == bit-for-bit reproducible, red == a difference remains after the allowlist.
+## Until the images are fully reproducible this lane is EXPECTED to be red; that
+## red is the honest "not there yet" signal and the diffoscope report artifact
+## says exactly what still differs. All build logic reuses ci/github-build and
+## all compare logic lives in ci/reproducible-compare-artifacts (rule 7), so the
+## shell stays lint-covered and locally runnable. See
+## agents/github-actions-security.md for the pinning / permissions patterns.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Build target to check for reproducibility."
+        type: choice
+        default: virtualbox
+        options:
+          - virtualbox
+          - iso
+      flavor:
+        description: "Flavor (use kicksecure-lxqt with target iso)."
+        type: choice
+        default: kicksecure-cli
+        options:
+          - kicksecure-cli
+          - kicksecure-lxqt
+  schedule:
+    ## Weekly, Sundays 07:00 UTC (offset from the scorecard lane at 06:00 to
+    ## avoid a thundering herd on the shared runner pool).
+    - cron: '0 7 * * 0'
+
+## Least privilege (rule 1): read the repo and use the Actions artifact backend
+## only; deny everything else.
+permissions:
+  contents: read
+
+## Per-ref cancellation (G-A-006): a new dispatch on the same ref cancels the
+## in-flight run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+## Resolve the dispatch inputs once, with defaults that also apply to the
+## scheduled run (where inputs are empty). Fixed to amd64: the primary
+## reproducibility target; arm64 is a follow-up.
+env:
+  REPRO_TARGET: ${{ inputs.target || 'virtualbox' }}
+  REPRO_FLAVOR: ${{ inputs.flavor || 'kicksecure-cli' }}
+  REPRO_ARCH: amd64
+
+jobs:
+  build:
+    ## Fork-PR guard (rule 3); always true for the dispatch / schedule triggers
+    ## this workflow uses.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        ## Two independent builds of the SAME spec. Separate matrix entries run
+        ## on separate runner VMs, so 'a' and 'b' are genuinely independent
+        ## rebuilds rather than one machine building twice.
+        copy:
+          - a
+          - b
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout (recursive submodules)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          ## rule 2: the build only signs/tags locally and never pushes.
+          persist-credentials: false
+
+      ## Cache plumbing mirrors local-build.yml (proven). The two independent
+      ## builds may share a warm cache; cache provenance does not affect a
+      ## reproducible build's output, so this only speeds the lane up. Key
+      ## includes matrix.copy so the parallel 'a'/'b' saves do not race on one
+      ## cache entry.
+      - name: Restore approx package cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.approx-cache-sidecar
+          key: ${{ runner.os }}-repro-${{ matrix.copy }}-approx-${{ hashFiles('.github/workflows/local-reproducible.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
+
+      - name: Restore docker image cache
+        id: dmimg-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.dm-docker-image
+          key: ${{ runner.os }}-repro-${{ matrix.copy }}-dmimg-${{ hashFiles('docker/**') }}
+
+      - name: Seed approx cache from sidecar
+        run: ./ci/approx-cache-sidecar seed
+
+      - name: Load cached docker image
+        if: steps.dmimg-cache.outputs.cache-hit == 'true'
+        run: ./ci/dm-docker-image-cache load
+
+      - name: Build ${{ matrix.copy }} (${{ env.REPRO_FLAVOR }} ${{ env.REPRO_TARGET }} amd64)
+        ## rule 4: route every value through env, never interpolate into run:.
+        env:
+          CI: "true"
+          ARCH: ${{ env.REPRO_ARCH }}
+          TARGET: ${{ env.REPRO_TARGET }}
+          FLAVOR: ${{ env.REPRO_FLAVOR }}
+        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}" --target "${TARGET}" --flavor "${FLAVOR}"
+
+      - name: Save docker image to cache
+        if: steps.dmimg-cache.outputs.cache-hit != 'true'
+        run: ./ci/dm-docker-image-cache save
+
+      - name: Snapshot approx cache to sidecar
+        if: always()
+        run: ./ci/approx-cache-sidecar snapshot
+
+      - name: Upload build ${{ matrix.copy }} image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: repro-image-${{ matrix.copy }}
+          path: /home/runner/binary_mnt/
+          if-no-files-found: error
+          retention-days: 7
+
+  compare:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ## Only help-steps/ and ci/ scripts are needed for the comparison.
+          submodules: false
+          fetch-depth: 1
+          persist-credentials: false
+
+      ## diffoscope and the format-descent helpers it shells out to. No external
+      ## input in this command (rule 4/7 injection class does not apply to a
+      ## fixed apt-get install line).
+      - name: Install diffoscope and descent helpers
+        ## rule 7: post-checkout shell lives in a lint-covered ci/ script.
+        run: ./ci/reproducible-install-deps
+
+      - name: Download image A
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: repro-image-a
+          path: build-a
+
+      - name: Download image B
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: repro-image-b
+          path: build-b
+
+      ## Exit code IS the pass/fail: 0 reproducible, 1 differs (report written),
+      ## 2 environment error. A remaining difference fails the job on purpose.
+      - name: Compare images (diffoscope + allowlist)
+        env:
+          REPORT: reproducible-report.html
+          TARGET: ${{ env.REPRO_TARGET }}
+        run: ./ci/reproducible-compare-artifacts --target "${TARGET}" --dir-a build-a --dir-b build-b --output "${REPORT}"
+
+      - name: Upload diffoscope report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reproducible-report
+          path: reproducible-report.html
+          if-no-files-found: warn
+          retention-days: 14
