@@ -1,0 +1,168 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Compare two build artifacts for reproducibility with diffoscope.
+##
+## diffoscope dissects and recursively descends raw / qcow2 / vmdk / OVA /
+## ISO 9660 / squashfs / ext / initrd / .deb / tar / ... natively, so this is a
+## thin, format-agnostic wrapper -- no per-format extraction (loop-mount,
+## unsquashfs, xorriso, manifest hashing) is re-implemented here. It replaces
+## the older "each builder emits a stat+sha512 manifest, then diff the
+## manifests" scheme (help-steps/analyze_image) for the two-artifact
+## comparison case, and it works for ISOs, which that scheme never supported.
+##
+## Two independent builders (or a build and a reference build) each keep their
+## artifact; run this on both to get a rich, format-aware difference report.
+##
+## Usage:
+##   reproducible-compare [--output FILE] [--] ARTIFACT_A ARTIFACT_B
+##
+##   --output FILE   write the report to FILE; format is chosen from the
+##                   extension (.html -> HTML, .md -> Markdown, .json -> JSON,
+##                   otherwise plain text). Default: plain text to stdout.
+##
+## Exit codes (diffoscope's own convention, passed through):
+##   0  the two artifacts are identical (bit-for-bit reproducible)
+##   1  differences were found (report written)
+##   2  usage / environment error
+##
+## NOTE (policy layer, intentionally NOT here yet): some differences are
+## expected and benign (the MBR disk signature bytes 441-444, /etc/shadow salts,
+## sysvinit '.depend.*' order, '.ovf'/'.mf' UUIDs, ISO volume timestamps). A
+## Kicksecure/Whonix-aware allowlist to classify those is future work; for now
+## diffoscope reports everything and the reviewer applies that judgement. Extra
+## diffoscope arguments (e.g. '--exclude') can be appended AFTER the two
+## artifacts: 'reproducible-compare A B --exclude PATTERN'.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## style-ok: no-has
+## This is a self-contained tool (usable standalone to compare two artifacts,
+## outside a build tree), so it probes for diffoscope / fakeroot / helper tools
+## with 'command -v' rather than sourcing the 'has' helper from helper-scripts.
+
+error() {
+   printf '%s\n' "ERROR: $*" >&2
+   exit 2
+}
+
+output_file=""
+artifact_a=""
+artifact_b=""
+
+while [ "$#" -gt 0 ]; do
+   case "${1:-}" in
+      --output)
+         [ "$#" -ge 2 ] || error "--output requires a value."
+         output_file="$2"
+         shift 2
+         ;;
+      --output=*)
+         output_file="${1#*=}"
+         shift
+         ;;
+      -h|--help)
+         ## Print the leading comment block as help.
+         grep '^##' -- "${BASH_SOURCE[0]}" | sed 's/^## \{0,1\}//'
+         exit 0
+         ;;
+      --)
+         shift
+         break
+         ;;
+      -*)
+         error "unknown option: '$1' (run with --help)."
+         ;;
+      *)
+         break
+         ;;
+   esac
+done
+
+[ "$#" -ge 2 ] || error "two artifacts are required: reproducible-compare [--output FILE] ARTIFACT_A ARTIFACT_B"
+artifact_a="$1"
+artifact_b="$2"
+shift 2
+## Any remaining args are passed through to diffoscope (e.g. extra --exclude).
+
+command -v diffoscope >/dev/null || error "diffoscope not found; install the 'diffoscope' package."
+[ -e "${artifact_a}" ] || error "artifact does not exist: '${artifact_a}'"
+[ -e "${artifact_b}" ] || error "artifact does not exist: '${artifact_b}'"
+
+## diffoscope shells out to helper tools to descend each format; without them
+## it silently degrades to an opaque hexdump. Warn (do not hard-fail: which
+## ones matter depends on the artifact format).
+for diffoscope_helper in isoinfo unsquashfs 7z xxd ; do
+   command -v "${diffoscope_helper}" >/dev/null \
+      || printf '%s\n' "WARNING: '${diffoscope_helper}' not found; diffoscope may not fully descend some formats (install genisoimage / squashfs-tools / 7zip / xxd)." >&2
+done
+
+## Run diffoscope under fakeroot when available: extracting a squashfs (or other
+## root-owned tree) as an unprivileged user drops char/block device nodes and
+## ownership, so those would not be compared. fakeroot restores that without
+## real privilege.
+diffoscope_runner=()
+if command -v fakeroot >/dev/null ; then
+   diffoscope_runner=( fakeroot )
+fi
+
+## Map the output-file extension to diffoscope's format flag.
+diffoscope_output_args=()
+if [ -n "${output_file}" ]; then
+   case "${output_file}" in
+      *.html|*.htm) diffoscope_output_args=( "--html" "${output_file}" ) ;;
+      *.md)         diffoscope_output_args=( "--markdown" "${output_file}" ) ;;
+      *.json)       diffoscope_output_args=( "--json" "${output_file}" ) ;;
+      *)            diffoscope_output_args=( "--text" "${output_file}" ) ;;
+   esac
+else
+   diffoscope_output_args=( "--text" "-" )
+fi
+
+printf '%s\n' "INFO: comparing (diffoscope) '${artifact_a}' vs '${artifact_b}'..." >&2
+
+## Raise diffoscope's size ceilings: disk/ISO images are large, and the
+## defaults truncate (or, on multi-GB inputs, OOM) before the interesting diff
+## is reached. Same reason Tails raises these for its ISO comparisons.
+diffoscope_limit_args=(
+   "--max-report-size" "262144000"
+   "--max-diff-block-lines" "10000"
+   "--max-diff-input-lines" "10000000"
+)
+
+## Do not let errexit swallow diffoscope's meaningful exit code (1 = differs).
+## Prefix with fakeroot (when available) so squashfs / archive device nodes and
+## ownership compare fully.
+diffoscope_exit_code="0"
+"${diffoscope_runner[@]}" \
+   diffoscope \
+   --exclude-directory-metadata=recursive \
+   "${diffoscope_limit_args[@]}" \
+   "${diffoscope_output_args[@]}" \
+   "${artifact_a}" \
+   "${artifact_b}" \
+   "$@" \
+   || diffoscope_exit_code="$?"
+
+case "${diffoscope_exit_code}" in
+   0)
+      printf '%s\n' "INFO: identical -- the two artifacts are bit-for-bit reproducible." >&2
+      ;;
+   1)
+      printf '%s\n' "INFO: differences found${output_file:+ (report: ${output_file})} -- review them against the expected-to-differ policy (see the header note)." >&2
+      ;;
+   *)
+      error "diffoscope failed (exit ${diffoscope_exit_code})."
+      ;;
+esac
+
+exit "${diffoscope_exit_code}"
