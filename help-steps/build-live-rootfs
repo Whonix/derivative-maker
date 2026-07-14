@@ -5,35 +5,29 @@
 
 ## AI-Assisted
 
-## Build the live-ISO root filesystem with the derivative's OWN bootstrap +
-## package-install toolchain (mmdebstrap), instead of letting live-build
-## re-bootstrap and re-install a second, parallel root filesystem via
-## 'lb bootstrap' + 'lb chroot'. The result is seeded into live-build's
-## bootstrap cache (see 'help-steps/lb-seed-rootfs-cache') so 'lb bootstrap'
-## adopts it and live-build is left doing only what it is uniquely good at:
-## the BIOS+EFI bootloader matrix, squashfs, and hybrid-ISO packing
-## ('lb binary').
+## Build ONLY the base live-ISO root filesystem with the derivative's OWN
+## bootstrap toolchain (mmdebstrap), instead of letting live-build
+## re-bootstrap a second, parallel root filesystem via 'lb bootstrap'. The
+## result is seeded into live-build's bootstrap cache (see
+## 'help-steps/lb-seed-rootfs-cache') so 'lb bootstrap' adopts it.
 ##
-## To stay faithful to the intricate, per-architecture live-build package
-## and source configuration WITHOUT duplicating it, this reads live-build's
-## OWN generated config as the source of truth:
-##   - config/package-lists/*.list.chroot   -> the package set (--include)
+## This deliberately does the raw base creation ONLY. The package install --
+## the heavy lifting -- is done by 'build-steps.d/*_create-lb-iso' against the
+## adopted chroot, using the derivative's own chroot tooling (the same tooling
+## the raw/VM path's 'build-steps.d/*_install-packages' uses), so live-build is
+## left doing only what it is uniquely good at: the BIOS+EFI bootloader matrix,
+## squashfs, and hybrid-ISO packing ('lb binary').
+##
+## This reads live-build's OWN generated config for the extra apt sources so
+## the adopted chroot has working apt for that later install:
 ##   - config/archives/*.sources.chroot     -> the extra apt sources
 ##                                             (derivative local repo,
 ##                                              fasttrack, remote derivative)
 ##   - config/archives/*.pref.chroot        -> apt pins (e.g. calamares from
 ##                                             backports)
-## plus the base Debian bootstrap sources live-build already assembled into
-## the caller-provided '--base-sources' file. 'build-steps.d/*_create-lb-iso'
-## generates all of that via 'lb config' before calling this.
-##
-## Bootloader packages are intentionally NOT special-cased here: whichever
-## signed/unsigned bootloader packages the live-build package list selected
-## for this architecture are installed into the rootfs as data; the actual
-## bootloader is written into the ISO by 'lb binary'. mmdebstrap installs
-## packages in a chroot with no disk device, so a package whose postinst
-## needs a real disk (plain 'grub-pc') must not be in the list -- the
-## live-build lists already use '*-bin' / signed variants for that reason.
+## plus the base Debian bootstrap sources the caller assembled into the
+## '--base-sources' file. 'build-steps.d/*_create-lb-iso' generates all of
+## that via 'lb config' before calling this.
 ##
 ## Usage:
 ##   build-live-rootfs --lb-dir <dir> --rootfs <dir> --base-sources <file> \
@@ -133,42 +127,7 @@ add_trusted_to_sources() {
    flush_stanza
 }
 
-## Collect the package set from live-build's generated chroot package lists,
-## in file/line ORDER, one package per line, into '${outfile}'. Order matters:
-## the live package list deliberately contains packages that conflict with
-## each other (e.g. 'virtualbox-guest-utils' vs the baremetal-gui meta, whose
-## dependency 'dist-baremetal-gui-all' Breaks it), and relies on a sequential,
-## one-package-per-transaction install where the package listed LATER wins and
-## apt removes the earlier conflicting one. This mirrors live-build's own
-## 'chroot_install-packages', which for LB_INITRAMFS=dracut-live installs the
-## list with 'xargs --max-args 1 ... apt-get install' for exactly this reason.
-collect_ordered_list() {
-   local outfile="$1"
-   local list_glob include_line count=0
-
-   : > "${outfile}"
-   shopt -s nullglob
-   for list_glob in "${lb_dir}"/config/package-lists/*.list.chroot; do
-      while IFS="" read -r include_line; do
-         ## Strip a trailing comment and surrounding whitespace.
-         include_line="${include_line%%#*}"
-         include_line="${include_line#"${include_line%%[![:space:]]*}"}"
-         include_line="${include_line%"${include_line##*[![:space:]]}"}"
-         [ -n "${include_line}" ] || continue
-         printf '%s\n' "${include_line}" >> "${outfile}"
-         count=$(( count + 1 ))
-      done < "${list_glob}"
-   done
-   shopt -u nullglob
-
-   if [ "${count}" -eq 0 ]; then
-      error "no packages found in ${lb_dir}/config/package-lists/*.list.chroot"
-   fi
-}
-
 main() {
-   local prep_hook kernel_img_conf_src install_hook pkglist_staged
-
    [ -n "${lb_dir}" ] || error "--lb-dir is required."
    [ -n "${rootfs_dir}" ] || error "--rootfs is required."
    [ -n "${base_sources_file}" ] || error "--base-sources is required."
@@ -180,20 +139,22 @@ main() {
    ## mmdebstrap bootstraps (extracts the Essential set) from the mirror
    ## argument BEFORE any setup-hook runs. So ONLY the signed Debian base
    ## sources go there; the derivative's own extra sources (local repo,
-   ## remote derivative) -- some of which are unsigned localhost repos that
-   ## authenticate via an imported key -- are added by a setup-hook that
-   ## runs AFTER the base bootstrap and BEFORE the '--include' package
-   ## install, together with their keys. Putting an unsigned/keyed source in
-   ## the mirror argument makes the initial bootstrap 'apt-get update' fail
-   ## with "repository is not signed".
+   ## remote derivative) are added by a setup-hook that runs AFTER the base
+   ## bootstrap, together with their pins. This mmdebstrap invocation builds
+   ## ONLY the base rootfs: the package install is the heavy lifting and is
+   ## done by 'build-steps.d/*_create-lb-iso' against the adopted chroot,
+   ## using the derivative's own chroot tooling (the same tooling the raw/VM
+   ## path's 'build-steps.d/*_install-packages' uses). live-build then only
+   ## packs the ISO.
    local derivative_sources_hook chroot_source src_body pref_body staged staging_dir
    src_body=""
    pref_body=""
    ## Stage the derivative sources with 'Trusted: yes' added; the setup-hook
-   ## copies the staged (trusted) files into the rootfs.
+   ## copies the staged (trusted) files into the rootfs. Trusted because these
+   ## are localhost build-environment sources (approx proxy / local file repo)
+   ## and trixie's 'sqv' verifier is stricter than the legacy 'gpgv' the old
+   ## flow relied on. The Debian base keeps full signature verification.
    staging_dir="$(mktemp -d)"
-   pkglist_staged="${staging_dir}/packages.chroot"
-   collect_ordered_list "${pkglist_staged}"
    shopt -s nullglob
    for chroot_source in "${lb_dir}"/config/archives/*.sources.chroot; do
       staged="${staging_dir}/$(basename -- "${chroot_source}" .chroot)"
@@ -213,63 +174,19 @@ ${src_body}${pref_body}true"
    safe-rm --recursive --force -- "${rootfs_dir}"
    mkdir --parents -- "${rootfs_dir}"
 
-   ## Install-time customizations that 'build-steps.d/*_create-lb-iso' places
-   ## into the chroot BEFORE the package install, so package postinsts behave
-   ## during a live build. Because the install now happens here (mmdebstrap),
-   ## these must be present before '--include' runs -- a setup-hook does that
-   ## (setup-hooks run after the Essential extract, before --include). Kept in
-   ## step with '2800' (security-misc skip, dist-base-files live marker,
-   ## kernel-img.conf, MOK-suppress, dracut-disable).
-   kernel_img_conf_src="${source_code_folder_dist}/live-build-data/live-build-config/live_build_kernel_img_conf"
-   test -r "${kernel_img_conf_src}"
-   test -r "${source_dkms_suppress_mok_snippet}"
-   test -r "${source_dracut_disable_config_snippet}"
-   prep_hook="set -e
-r=\"\$1\"
-mkdir -p \"\$r/var/lib/security-misc\" \"\$r/var/lib/dist-base-files\" \"\$r/etc\" \"\$r/etc/dkms/framework.conf.d\" \"\$r/etc/dracut.conf.d\"
-touch \"\$r/var/lib/security-misc/skip_install_check\"
-touch \"\$r/var/lib/dist-base-files/live_build\"
-cp -- \"${kernel_img_conf_src}\" \"\$r/etc/kernel-img.conf\"
-cp -- \"${source_dkms_suppress_mok_snippet}\" \"\$r/etc/dkms/framework.conf.d/90-derivative-maker-build.conf\"
-cp -- \"${source_dracut_disable_config_snippet}\" \"\$r/etc/dracut.conf.d/90-derivative-maker-build.conf\""
-
-   ## Install the live package set ONE PACKAGE PER apt transaction, in list
-   ## order, instead of a single mmdebstrap '--include'. The live package list
-   ## intentionally contains mutually-conflicting packages (see
-   ## 'collect_ordered_list') and depends on the later-listed package winning,
-   ## with apt removing the earlier conflicting one. A single '--include'
-   ## transaction cannot express that: trixie's apt solver (3.0) treats every
-   ## '--include' package as a hard must-install and aborts on the conflict
-   ## ("Reached two conflicting decisions"). Running 'apt-get install' once per
-   ## package (via 'xargs --max-args 1', exactly as live-build's
-   ## 'chroot_install-packages' does for LB_INITRAMFS=dracut-live) lets each
-   ## later package's Breaks/Conflicts remove the earlier one. A customize-hook
-   ## runs after the setup-hooks (sources, keys, pins, prep files) are in place,
-   ## in mmdebstrap's fully-prepared chroot, so package postinsts behave exactly
-   ## as they do under a normal '--include' install.
-   ## The staged package list is fed to the in-chroot 'xargs' via stdin (read
-   ## on the host, piped in), so nothing is written into or removed from the
-   ## chroot by this hook.
-   install_hook="set -e
-r=\"\$1\"
-chroot \"\$r\" apt-get -o Acquire::Retries=5 update
-chroot \"\$r\" sh -c 'xargs --max-args 1 apt-get -o Apt::Install-Recommends=false -o Dpkg::Options::=--force-confnew -o Acquire::Retries=5 --yes --allow-remove-essential install' < \"${pkglist_staged}\""
-
-   true "INFO: Building live rootfs with mmdebstrap into '${rootfs_dir}'..."
+   true "INFO: Building live rootfs base with mmdebstrap into '${rootfs_dir}'..."
    ## Bootstrap from the signed Debian base ('${base_sources_file}'); the
-   ## derivative sources+keys+pins are added by 'derivative_sources_hook', the
-   ## install-time files by 'prep_hook', then 'install_hook' installs the full
-   ## live package set one-by-one (see above). '--variant=minbase' matches
-   ## live-build's bootstrap variant; SOURCE_DATE_EPOCH (exported by
-   ## help-steps/variables) makes the rootfs reproducible.
+   ## derivative sources+pins are added by 'derivative_sources_hook' so the
+   ## adopted chroot has working apt for the package install '2800' runs later.
+   ## '--variant=minbase' matches live-build's bootstrap variant;
+   ## SOURCE_DATE_EPOCH (exported by help-steps/variables) makes the rootfs
+   ## reproducible.
    # shellcheck disable=SC2086
    $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} mmdebstrap \
       --variant=minbase \
       --architectures="${arch}" \
       --components='main contrib non-free non-free-firmware' \
       --setup-hook="${derivative_sources_hook}" \
-      --setup-hook="${prep_hook}" \
-      --customize-hook="${install_hook}" \
       --format=directory \
       "${suite}" \
       "${rootfs_dir}" \
@@ -277,21 +194,14 @@ chroot \"\$r\" sh -c 'xargs --max-args 1 apt-get -o Apt::Install-Recommends=fals
 
    safe-rm --recursive --force -- "${staging_dir}"
 
-   ## Sanity test: the rootfs must have a package database and a kernel (the
-   ## live package list installs linux-image). Run these as root: security-misc
-   ## (installed above) hardens '/boot' permissions during the package install,
-   ## so a non-root glob cannot see the kernel that is actually present. Let
-   ## root expand the glob, too, or the hardened directory makes it a literal.
-   local kernel_found
+   ## Sanity test: the base rootfs must have a package database. There is no
+   ## kernel yet -- the kernel is part of the package set '2800' installs into
+   ## the adopted chroot.
    $SUDO_TO_ROOT test -f "${rootfs_dir}/var/lib/dpkg/status" \
-      || error "live rootfs has no dpkg status database."
-   kernel_found="$( $SUDO_TO_ROOT find "${rootfs_dir}/boot" -maxdepth 1 -name 'vmlinuz-*' -print -quit 2>/dev/null )"
-   if [ -z "${kernel_found}" ]; then
-      error "live rootfs has no kernel (/boot/vmlinuz-*); check the live-build package list."
-   fi
+      || error "live rootfs base has no dpkg status database."
 
    sync
-   true "INFO: live rootfs built. Seed it with 'help-steps/lb-seed-rootfs-cache'."
+   true "INFO: live rootfs base built. Seed it with 'help-steps/lb-seed-rootfs-cache'."
 }
 
 main "$@"

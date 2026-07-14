@@ -415,12 +415,6 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    ## (EACCES on '.../var/lib/apt/lists/partial').
    $SUDO_TO_ROOT safe-rm --recursive --force --one-file-system -- "${live_rootfs_dir}"
 
-   ## The rootfs already carries the full package set; empty the live-build
-   ## chroot package lists so 'lb chroot' does not re-install them. 'lb chroot'
-   ## then only runs the live-specific finishing (dracut initrd, live-config,
-   ## repository-dist-initializer, bootloader prep).
-   safe-rm --force -- config/package-lists/*.list.chroot
-
    ## Build ISO bootstrap (adopts the seeded rootfs from cache; no debootstrap)
    # shellcheck disable=SC2086
    if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb bootstrap --verbose --debug; then
@@ -457,6 +451,64 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    ## Prevent needless initramfs builds.
    $SUDO_TO_ROOT mkdir --parents -- "${target_dracut_disable_config_snippet%/*}"
    $SUDO_TO_ROOT cp --verbose -- "$source_dracut_disable_config_snippet" "$target_dracut_disable_config_snippet"
+
+   ## Install the live package set into the adopted chroot with the
+   ## derivative's OWN step -- the heavy lifting -- rather than letting
+   ## 'lb chroot' (re-)install it. 'help-steps/build-live-rootfs' built only
+   ## the base; the adopted chroot already carries the trusted derivative apt
+   ## sources + pins (baked into the seeded rootfs), so only an 'apt-get
+   ## update' plus the install is needed here.
+   ##
+   ## Packages are installed ONE PER apt transaction, in list order: the live
+   ## package list deliberately contains mutually-conflicting packages (e.g.
+   ## 'virtualbox-guest-utils' vs the baremetal-gui meta, whose dependency
+   ## 'dist-baremetal-gui-all' Breaks it), and relies on the later-listed
+   ## package winning with apt removing the earlier one. This mirrors
+   ## live-build's own 'chroot_install-packages' (LB_INITRAMFS=dracut-live
+   ## installs the list with 'xargs --max-args 1 ... apt-get install' for
+   ## exactly this reason); a single transaction aborts under trixie's apt
+   ## solver 3.0 ("Reached two conflicting decisions").
+   $SUDO_TO_ROOT mount --bind /dev "${CHROOT_FOLDER}/dev"
+   $SUDO_TO_ROOT mount --bind /dev/pts "${CHROOT_FOLDER}/dev/pts"
+   $SUDO_TO_ROOT mount --bind /sys "${CHROOT_FOLDER}/sys"
+   $SUDO_TO_ROOT mount --bind /proc "${CHROOT_FOLDER}/proc"
+
+   chroot_run apt-get "${DIST_APTGETOPT[@]}" -o Acquire::Retries=5 update
+
+   ## Read the generated package lists in glob (alphabetical) order --
+   ## 'live.list.chroot' then 'z-kicksecure.list.chroot' -- one package per
+   ## line, stripping comments and blanks, and install each on its own.
+   live_build_install_pkg=""
+   while IFS="" read -r live_build_install_pkg; do
+      live_build_install_pkg="${live_build_install_pkg%%#*}"
+      live_build_install_pkg="${live_build_install_pkg#"${live_build_install_pkg%%[![:space:]]*}"}"
+      live_build_install_pkg="${live_build_install_pkg%"${live_build_install_pkg##*[![:space:]]}"}"
+      [ -n "${live_build_install_pkg}" ] || continue
+      chroot_run apt-get "${DIST_APTGETOPT[@]}" \
+         -o Apt::Install-Recommends=false \
+         -o Dpkg::Options::=--force-confnew \
+         -o Acquire::Retries=5 \
+         --yes \
+         --allow-remove-essential \
+         install "${live_build_install_pkg}"
+   done < <(cat -- config/package-lists/*.list.chroot)
+
+   ## Sanity test: the package set installs a kernel. Root-expand the glob;
+   ## security-misc (now installed) hardens '/boot' so a non-root glob would
+   ## miss the kernel that is present.
+   if [ -z "$( $SUDO_TO_ROOT find "${CHROOT_FOLDER}/boot" -maxdepth 1 -name 'vmlinuz-*' -print -quit 2>/dev/null )" ]; then
+      error "live chroot has no kernel (/boot/vmlinuz-*); check the live package list install."
+   fi
+
+   $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/proc"
+   $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/sys"
+   $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/dev/pts"
+   $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/dev"
+
+   ## The package set is installed; empty the live-build chroot package lists
+   ## so 'lb chroot' does not re-install them. 'lb chroot' then only runs the
+   ## live-specific finishing (live-config, repository-dist-initializer, etc.).
+   safe-rm --force -- config/package-lists/*.list.chroot
 
    ## Build ISO chroot
    # shellcheck disable=SC2086
