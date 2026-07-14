@@ -1,0 +1,131 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Seed a live-build working directory so that 'lb bootstrap' ADOPTS an
+## externally built root filesystem instead of bootstrapping a new one.
+##
+## live-build has no first-class "import a prebuilt chroot" command, but it
+## does have a native cache-restore path: when 'cache/bootstrap' exists,
+## 'lb bootstrap' runs 'bootstrap_cache restore', which does
+## 'cp -a cache/bootstrap chroot' and creates the 'bootstrap' stagefile
+## itself; the subsequent 'bootstrap_debootstrap' then sees that stagefile
+## and skips debootstrap entirely (verified against live-build
+## '/usr/lib/live/build/bootstrap_cache' and 'bootstrap_debootstrap', and by
+## a spike). So placing our own-built rootfs at 'cache/bootstrap' makes lb
+## adopt it with no hand-crafted stagefiles and no re-bootstrap.
+##
+## This lets the derivative build the root filesystem ONCE with its own
+## steps and hand it to live-build only for the parts live-build is uniquely
+## good at (BIOS+EFI bootloader matrix, squashfs, xorriso ISO packing),
+## instead of live-build bootstrapping and installing a second, parallel
+## root filesystem.
+##
+## Usage:
+##   lb-seed-rootfs-cache --rootfs <dir> --lb-dir <live-build-work-dir>
+##
+## '<dir>' is a populated root filesystem tree (as produced by the
+## derivative's own bootstrap + package-install steps). '<live-build-work-dir>'
+## is the directory in which 'lb config' / 'lb build' run (the one that holds
+## 'config/' and '.build/'). The rootfs is copied to
+## '<live-build-work-dir>/cache/bootstrap' with 'cp --archive' so ownership,
+## permissions, timestamps, symlinks and sparse files are preserved exactly
+## (matching live-build's own 'bootstrap_cache save').
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
+
+MYDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+source "$MYDIR/pre"
+source "$MYDIR/variables"
+
+rootfs_dir=""
+lb_dir=""
+
+while [ "$#" -gt 0 ]; do
+   case "$1" in
+      --rootfs)
+         if [ "$#" -lt 2 ]; then
+            error "--rootfs requires a value"
+         fi
+         rootfs_dir="$2"
+         shift 2
+         ;;
+      --lb-dir)
+         if [ "$#" -lt 2 ]; then
+            error "--lb-dir requires a value"
+         fi
+         lb_dir="$2"
+         shift 2
+         ;;
+      *)
+         error "unexpected argument: $1"
+         ;;
+   esac
+done
+
+main() {
+   local bootstrap_cache_dir
+
+   if [ "${rootfs_dir}" = "" ]; then
+      error "--rootfs <dir> is required."
+   fi
+   if [ "${lb_dir}" = "" ]; then
+      error "--lb-dir <live-build-work-dir> is required."
+   fi
+
+   ## Validate the source really is a root filesystem tree rather than an
+   ## arbitrary or empty directory: a bad seed would make 'lb binary'
+   ## produce a broken image far downstream with a confusing error.
+   if [ ! -d "${rootfs_dir}" ]; then
+      error "rootfs '${rootfs_dir}' is not a directory."
+   fi
+   local rootfs_marker
+   for rootfs_marker in etc usr bin sbin var; do
+      if [ ! -e "${rootfs_dir}/${rootfs_marker}" ]; then
+         error "rootfs '${rootfs_dir}' does not look like a root filesystem (missing '/${rootfs_marker}')."
+      fi
+   done
+
+   if [ ! -d "${lb_dir}" ]; then
+      error "live-build work directory '${lb_dir}' does not exist."
+   fi
+
+   bootstrap_cache_dir="${lb_dir}/cache/bootstrap"
+
+   ## Replace any previous cache so a stale tree cannot be adopted. 'lb clean
+   ## --cache' is not used here because it would also drop the package cache
+   ## we want to keep; only the bootstrap cache is our concern.
+   $SUDO_TO_ROOT mkdir --parents -- "${lb_dir}/cache"
+   $SUDO_TO_ROOT safe-rm --recursive --force -- "${bootstrap_cache_dir}"
+
+   ## '--archive' (== -dR --preserve=all) so the adopted tree is
+   ## byte-for-byte what our own steps produced; '--one-file-system' as a
+   ## safety guard so a stray bind mount under the rootfs can never make the
+   ## copy cross into the host (see the live-build unmount-lb history).
+   true "INFO: Seeding '${bootstrap_cache_dir}' from rootfs '${rootfs_dir}'..."
+   $SUDO_TO_ROOT cp --archive --one-file-system -- "${rootfs_dir}" "${bootstrap_cache_dir}"
+
+   sync
+
+   ## Sanity test: the marker files must be present in the seeded cache.
+   for rootfs_marker in etc usr bin; do
+      if [ ! -e "${bootstrap_cache_dir}/${rootfs_marker}" ]; then
+         error "seed failed: '${bootstrap_cache_dir}/${rootfs_marker}' missing after copy."
+      fi
+   done
+
+   true "INFO: Seeded live-build bootstrap cache. 'lb bootstrap' will adopt this rootfs (no debootstrap)."
+}
+
+main "$@"
