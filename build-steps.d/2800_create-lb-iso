@@ -22,6 +22,12 @@ cd help-steps
 source pre
 source variables
 
+## On failure or signal, unmount the host /dev, /sys, /proc bind-mounts
+## this step establishes for its chroot_run interludes (only the success
+## path unmounts them inline), so the ISO-cleanup deletion cannot recurse
+## into the real /dev; see 'help-steps/unmount-lb'.
+exception_handler_setup "exception_handler_unmount_lb" ERR INT TERM
+
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/check_runtime.bsh"
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/strings.bsh"
 
@@ -591,6 +597,17 @@ Not running any chroot scripts.${reset}"
 
    ## Revert back to the original umask.
    umask -- "$old_umask"
+
+   ## Final sweep: unmount any host /dev,/sys,/proc bind still under the tree
+   ## after a successful build. Normally a no-op (the inline umounts above
+   ## already ran), but it gives local/non-CI callers the same mount
+   ## verification the CI wrapper gets, so a later deletion of the output
+   ## tree cannot interact with a leftover bind mount. unmount-lb is
+   ## best-effort (it warns but returns success); '|| true' is defensive
+   ## belt-and-suspenders so a non-zero from its sourced 'pre'/'variables'
+   ## chain can never fail a build whose ISO is already written (this
+   ## codebase's ERR trap fires on a non-zero command even with errexit off).
+   "$dist_source_help_steps_folder/unmount-lb" "${args[@]}" || true
 }
 
 main() {

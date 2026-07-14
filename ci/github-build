@@ -103,9 +103,31 @@ cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 ## Registered as an EXIT trap so a FAILED build does not leave the
 ## unreadable tree behind for the 'if: always()' upload step either.
 iso_workdir_cleanup() {
-   if [ "${target}" = "iso" ]; then
-      sudo --non-interactive safe-rm -r -f -- "${HOME}/derivative-binary/"*/live-build
+   local mount_list mount_target
+
+   if [ ! "${target}" = "iso" ]; then
+      return 0
    fi
+   ## A failed build can abort between 2800's 'mount --bind' of the HOST
+   ## /dev, /proc, /sys into the lb chroot and the matching umount. The
+   ## step's own exception handler tears that down ('unmount-lb'), but stay
+   ## safe even if that failed too: unmount anything below the tree,
+   ## deepest first, and refuse to let the recursive deletion cross a
+   ## filesystem boundary ('--one-file-system'), so a still-mounted bind
+   ## can never route the rm into the real /dev.
+   mount_list="$(findmnt --list --noheadings --output TARGET | sort --reverse)" || mount_list=""
+   while IFS="" read -r mount_target; do
+      case "${mount_target}" in
+         "${HOME}"/derivative-binary/*/live-build/*)
+            sudo --non-interactive umount --lazy -- "${mount_target}" || true
+            ;;
+      esac
+   done <<< "${mount_list}"
+   ## '|| true': best-effort cleanup must not fail an otherwise-successful
+   ## build. '--one-file-system' still refuses to cross a mount boundary
+   ## (it exits non-zero when it skips one), so /dev can never be deleted
+   ## through a leftover bind mount regardless of this guard.
+   sudo --non-interactive safe-rm --one-file-system -r -f -- "${HOME}/derivative-binary/"*/live-build || true
 }
 
 trap iso_workdir_cleanup EXIT
