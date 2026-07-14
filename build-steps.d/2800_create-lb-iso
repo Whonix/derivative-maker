@@ -598,9 +598,16 @@ Not running any chroot scripts.${reset}"
    ## Revert back to the original umask.
    umask -- "$old_umask"
 
-   ## Final sweep (normally a no-op: the inline umounts above already ran):
-   ## leave no process and no mount below the live-build tree behind.
-   "$dist_source_help_steps_folder/unmount-lb" "${args[@]}"
+   ## Final sweep: unmount any host /dev,/sys,/proc bind still under the tree
+   ## after a successful build. Normally a no-op (the inline umounts above
+   ## already ran), but it gives local/non-CI callers the same mount
+   ## verification the CI wrapper gets, so a later deletion of the output
+   ## tree cannot interact with a leftover bind mount. unmount-lb is
+   ## best-effort (it warns but returns success); '|| true' is defensive
+   ## belt-and-suspenders so a non-zero from its sourced 'pre'/'variables'
+   ## chain can never fail a build whose ISO is already written (this
+   ## codebase's ERR trap fires on a non-zero command even with errexit off).
+   "$dist_source_help_steps_folder/unmount-lb" "${args[@]}" || true
 }
 
 main() {

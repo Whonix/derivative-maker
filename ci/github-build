@@ -123,7 +123,11 @@ iso_workdir_cleanup() {
             ;;
       esac
    done <<< "${mount_list}"
-   sudo --non-interactive safe-rm --one-file-system -r -f -- "${HOME}/derivative-binary/"*/live-build
+   ## '|| true': best-effort cleanup must not fail an otherwise-successful
+   ## build. '--one-file-system' still refuses to cross a mount boundary
+   ## (it exits non-zero when it skips one), so /dev can never be deleted
+   ## through a leftover bind mount regardless of this guard.
+   sudo --non-interactive safe-rm --one-file-system -r -f -- "${HOME}/derivative-binary/"*/live-build || true
 }
 
 trap iso_workdir_cleanup EXIT
