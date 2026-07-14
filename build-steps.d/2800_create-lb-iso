@@ -373,14 +373,38 @@ Pin-Priority: 900"
    ## parts it is uniquely good at: the BIOS+EFI bootloader matrix, squashfs,
    ## and hybrid-ISO packing ('lb binary'). See 'help-steps/build-live-rootfs'
    ## and 'help-steps/lb-seed-rootfs-cache'.
-   local live_rootfs_dir
+   local live_rootfs_dir live_build_own_base_sources
    live_rootfs_dir="${dist_binary_build_folder}/live-build-rootfs"
+
+   ## Full base apt sources for the own package install: unlike the
+   ## bootstrap mirror files (Components: main only, for the minbase
+   ## bootstrap), the install must see every archive-area live-build's
+   ## '--archive-areas' selects, plus '-security' and '-backports' (the
+   ## live-build config sets '--backports true'; calamares is pinned to
+   ## backports). Mirrors the '--mirror-chroot' + '--archive-areas' inputs
+   ## live-build would use for 'lb chroot'.
+   live_build_own_base_sources="$(mktemp)"
+   printf '%s\n' "\
+Types: deb
+URIs: ${dist_build_apt_sources_mirror}
+Suites: ${dist_build_apt_stable_release} ${dist_build_apt_stable_release}-backports
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: ${dist_build_apt_sources_security_mirror}
+Suites: ${dist_build_apt_stable_release}-security
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
+      | sponge -- "${live_build_own_base_sources}"
+
    "$dist_source_help_steps_folder/build-live-rootfs" \
       --lb-dir "$PWD" \
       --rootfs "${live_rootfs_dir}" \
-      --base-sources "${live_build_bootstrap_mirror_file}" \
+      --base-sources "${live_build_own_base_sources}" \
       --arch "${dist_build_target_arch}" \
       --suite "${dist_build_apt_stable_release}"
+   safe-rm --force -- "${live_build_own_base_sources}"
    "$dist_source_help_steps_folder/lb-seed-rootfs-cache" \
       --rootfs "${live_rootfs_dir}" \
       --lb-dir "$PWD"

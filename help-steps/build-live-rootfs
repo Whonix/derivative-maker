@@ -196,6 +196,25 @@ cp -- \"${kernel_img_conf_src}\" \"\$r/etc/kernel-img.conf\"
 cp -- \"${source_dkms_suppress_mok_snippet}\" \"\$r/etc/dkms/framework.conf.d/90-derivative-maker-build.conf\"
 cp -- \"${source_dracut_disable_config_snippet}\" \"\$r/etc/dracut.conf.d/90-derivative-maker-build.conf\""
 
+   ## Import the archive keys live-build generated for its custom chroot
+   ## sources. live-build imports 'config/archives/*.key.chroot' into the
+   ## chroot trusted keys before apt uses the matching '*.sources.chroot';
+   ## the remote-derivative source has no inline 'Signed-By' and relies on
+   ## this. Place each key into the rootfs 'trusted.gpg.d' before '--include'
+   ## resolves packages, else an authenticated archive cannot be verified.
+   ## No-op when no key files exist (local-repo path uses 'Trusted: yes').
+   local key_hook key_file key_hook_body
+   key_hook_body=""
+   shopt -s nullglob
+   for key_file in "${lb_dir}"/config/archives/*.key.chroot; do
+      key_hook_body="${key_hook_body}cp -- \"${key_file}\" \"\$1/etc/apt/trusted.gpg.d/$(basename -- "${key_file}" .key.chroot).asc\"
+"
+   done
+   shopt -u nullglob
+   key_hook="set -e
+mkdir -p \"\$1/etc/apt/trusted.gpg.d\"
+${key_hook_body}true"
+
    true "INFO: Building live rootfs with mmdebstrap into '${rootfs_dir}'..."
    # shellcheck disable=SC2086
    $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} mmdebstrap \
@@ -204,6 +223,7 @@ cp -- \"${source_dracut_disable_config_snippet}\" \"\$r/etc/dracut.conf.d/90-der
       --components='main contrib non-free non-free-firmware' \
       --include="${include_list}" \
       --setup-hook="${setup_hook}" \
+      --setup-hook="${key_hook}" \
       --setup-hook="${prep_hook}" \
       --format=directory \
       "${suite}" \
