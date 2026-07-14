@@ -46,6 +46,14 @@ true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
 MYDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+## Set 'dist_build_source_run' before sourcing so 'help-steps/variables'
+## (which runs 'dist_build_one_parse_cmd "$@"') tolerates this script's own
+## '--rootfs' / '--lb-dir' options instead of aborting on them: in
+## source-run mode parse-cmd BREAKS on the first unknown option rather than
+## 'exit 1', leaving those options in "$@" for the parser below. Same idiom
+## as 'help-steps/analyze_image'.
+dist_build_source_run="true"
+
 source "$MYDIR/pre"
 source "$MYDIR/variables"
 
