@@ -10,6 +10,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
 export HELPER_SCRIPTS_PATH
@@ -33,7 +35,7 @@ if [ "${mount_raw_was_sourced}" = 'false' ]; then
    source "$MYDIR/variables"
 
    error_handler_mount-raw() {
-      : echo "
+      true "
    ${red}${bold}BASH_COMMAND${reset}: $BASH_COMMAND
    ${red}${bold}ERROR ${BASH_SOURCE[0]}: | caller: $(caller)${reset}
    "
@@ -43,7 +45,7 @@ fi
 
 mount_raw() {
    if [ "${mount_raw_was_sourced}" = 'false' ]; then
-      trap "error_handler_mount-raw" ERR INT TERM
+      trap error_handler_mount-raw ERR INT TERM
    fi
 
    if [ "${mount_folder:-}" = "" ]; then
@@ -51,6 +53,16 @@ mount_raw() {
    else
       ## hack for help-steps/analyze-image
       CHROOT_FOLDER="$mount_folder"
+   fi
+
+   ## Directory-rootfs mode (see 'dist_build_chroot_dir' in
+   ## 'help-steps/variables'): CHROOT_FOLDER already points at a populated
+   ## root filesystem TREE, so there is no disk image to loop-mount. Nothing
+   ## to do here.
+   if [ -n "${dist_build_chroot_dir:-}" ]; then
+      true "INFO: dist_build_chroot_dir set, CHROOT_FOLDER='$CHROOT_FOLDER' is a directory; skipping image mount."
+      test -d "$CHROOT_FOLDER"
+      return 0
    fi
 
    sync
@@ -96,7 +108,7 @@ mount_raw() {
    fi
 
    ## This is needed because using grml-debootstrap with '--vmefi' option.
-   kpartx_last_line=$(echo "$kpartx_output" | tail --lines -1)
+   kpartx_last_line=$(printf '%s\n' "$kpartx_output" | tail --lines -1)
    ## example kpartx_last_line:
    ## add map loop0p3 (253:2): 0 3983360 linear 7:0 208896
 
