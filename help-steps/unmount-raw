@@ -34,15 +34,6 @@ unmount_raw() {
       CHROOT_FOLDER="$mount_folder"
    fi
 
-   ## Directory-rootfs mode (see 'dist_build_chroot_dir' in
-   ## 'help-steps/variables'): nothing was loop-mounted, so there is nothing
-   ## to unmount. The bind mounts ('/dev', '/proc', '/sys') are handled by
-   ## 'unchroot-raw' as usual.
-   if [ -n "${dist_build_chroot_dir:-}" ]; then
-      true "INFO: dist_build_chroot_dir set; no image was mounted, nothing to unmount."
-      return 0
-   fi
-
    sync
 
    true "INFO: Start of ${FUNCNAME[0]}. Running losetup --all for debugging before running kpartx."

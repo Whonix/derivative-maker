@@ -251,88 +251,13 @@ Enabled: yes
 Trusted: yes" > archives/derivative-localrepo.sources.chroot
    fi
 
-   ## Apt configuration
-   live_build_package_pins="Package: calamares
-Pin: release n=${dist_build_apt_stable_release}-backports
-Pin-Priority: 900"
-   printf '%s\n' "${live_build_package_pins}" | sponge -- archives/z-kicksecure.pref.chroot
-
-   ## Package lists
-   mkdir --parents -- package-lists
-   cp -- "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_live" package-lists/live.list.chroot
-   ## NOTE: This file is called 'z-kicksecure.list.chroot' because the list
-   ## files are handled in alphabetical order and these packages MUST be
-   ## handled last.
-   cp -- "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_kicksecure" package-lists/z-kicksecure.list.chroot
-
-   ## Replace linux-image-XXX_ARCHITECTURE_XXX and linux-headers-XXX_ARCHITECTURE_XXX with actual ${dist_build_target_arch}.
-   sed -i "s/XXX_ARCHITECTURE_XXX/${dist_build_target_arch}/" package-lists/z-kicksecure.list.chroot
-
-   case "${dist_build_target_arch}" in
-      armel|mipsel|mips64el|riscv64|ppc64el|s390x)
-         ## no grub-pc
-         ## no shim-signed
-         ## no signed grub-efi
-         ## no fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         ;;
-      armhf)
-         ## no grub-pc
-         ## no shim-signed
-         ## no signed grub-efi
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-      arm64)
-         ## no grub-pc
-         ## has shim-signed
-         ## has signed grub-efi
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX/shim-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX/grub-efi-arm64-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-      amd64)
-         ## has grub-pc
-         ## has shim-signed
-         ## has signed grub-efi for 64-bit systems
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX/grub-pc-bin/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX/shim-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX/grub-efi-amd64-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-   esac
-   if [ "${build_freedom_only:-}" = "true" ]; then
-      sed -i 's/XXX_FIRMWARE_NONFREEDOM_XXX//' package-lists/z-kicksecure.list.chroot
-   elif [ "${build_freedom_only:-}" = "false" ]; then
-      sed -i 's/XXX_FIRMWARE_NONFREEDOM_XXX/firmware-nonfreedom\nfirmware-nonfreedom-noarch/' package-lists/z-kicksecure.list.chroot
-   fi
-
-   ## Example flavor_meta_packages_to_install:
-   ## kicksecure-baremetal-gui-lxqt kicksecure-baremetal-server
-
-   live_build_flavor_line_list="$(trim_collapse_split "${flavor_meta_packages_to_install}")"
-   ## Example live_build_flavor_line_list:
-   ## kicksecure-baremetal-gui-lxqt \
-   ## kicksecure-baremetal-server
-
-   sed -i "s/XXX_KICKSECURE_HOST_XXX/${live_build_flavor_line_list}/" package-lists/z-kicksecure.list.chroot
-
-   if [ "${dist_build_type_short:-}" = 'kicksecure' ]; then
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_XXX/kicksecure-network-conf/" package-lists/z-kicksecure.list.chroot
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_GUI_XXX/kicksecure-network-conf-gui/" package-lists/z-kicksecure.list.chroot
-   else
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_XXX//" package-lists/z-kicksecure.list.chroot
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_GUI_XXX//" package-lists/z-kicksecure.list.chroot
-   fi
+   ## No live-build package lists are generated: the package set is installed
+   ## into the shared raw image by 'build-steps.d/*_install-packages' (the ISO
+   ## extras are resolved in 'help-steps/variables' as
+   ## 'dist_build_iso_extra_packages', from the same source-of-truth live
+   ## package lists, with the per-architecture / freedom substitutions). This
+   ## step only packs the already-installed rootfs into an ISO, so 'lb chroot'
+   ## has nothing to install.
 
    ## Branding and GRUB configuration
    mkdir --parents -- bootloaders
@@ -418,14 +343,9 @@ Pin-Priority: 900"
    $SUDO_TO_ROOT mkdir --parents -- "${target_dracut_disable_config_snippet%/*}"
    $SUDO_TO_ROOT cp --verbose -- "$source_dracut_disable_config_snippet" "$target_dracut_disable_config_snippet"
 
-   ## The package set is already installed (in the shared raw image, by
-   ## 'build-steps.d/*_install-packages'); empty the live-build chroot package
-   ## lists so 'lb chroot' does not install anything. 'lb chroot' then only
-   ## runs the live-specific finishing (live-config, repository-dist-initializer,
-   ## etc.).
-   safe-rm --force -- config/package-lists/*.list.chroot
-
-   ## Build ISO chroot
+   ## Build ISO chroot ('lb chroot' installs nothing -- no package lists were
+   ## generated; the package set is already in the shared raw image -- so it
+   ## only runs the live-specific finishing: live-config, etc.)
    # shellcheck disable=SC2086
    if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb chroot --verbose --debug; then
       error "${bold}${red}ERROR: Live build chroot stage failed!${reset}"

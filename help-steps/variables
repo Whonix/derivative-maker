@@ -710,16 +710,6 @@ export DISK_IDENTIFIER
 
 if [ "${dist_build_install_to_root:-}" = "true" ]; then
    [ -n "${CHROOT_FOLDER:-}" ] || CHROOT_FOLDER=""
-elif [ -n "${dist_build_chroot_dir:-}" ]; then
-   ## Directory-rootfs mode: operate on an already-populated root filesystem
-   ## TREE instead of a partitioned disk image. Used by the live-build ISO
-   ## path so the derivative's own bootstrap + package-install steps
-   ## ('help-steps/mmdebstrap', 'build-steps.d/*_install-packages') can
-   ## build the rootfs once, into a plain directory, which is then handed to
-   ## live-build (see 'help-steps/lb-seed-rootfs-cache'). 'mount-raw' /
-   ## 'unmount-raw' skip their loop-mount when this is set; everything else
-   ## operates on CHROOT_FOLDER generically. Overrides any inherited value.
-   CHROOT_FOLDER="${dist_build_chroot_dir}"
 else
    [ -n "${CHROOT_FOLDER:-}" ] || CHROOT_FOLDER="${binary_build_folder_dist:-}/${VMNAME:-}_image"
 fi
@@ -1830,7 +1820,6 @@ env_vars_keep_list="
    dist_build_qcow2
    dist_build_raw
    dist_build_iso
-   dist_build_chroot_dir
    dist_build_utm
    dist_build_install_to_root
    dist_build_source_run
