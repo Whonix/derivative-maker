@@ -409,6 +409,12 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
       --rootfs "${live_rootfs_dir}" \
       --lb-dir "$PWD"
 
+   ## The rootfs has been copied into cache/bootstrap; the original is now
+   ## redundant. Remove it so it does not consume disk and, being root-owned
+   ## with restrictive apt dirs, does not break the CI artifact-upload scan
+   ## (EACCES on '.../var/lib/apt/lists/partial').
+   $SUDO_TO_ROOT safe-rm --recursive --force --one-file-system -- "${live_rootfs_dir}"
+
    ## The rootfs already carries the full package set; empty the live-build
    ## chroot package lists so 'lb chroot' does not re-install them. 'lb chroot'
    ## then only runs the live-specific finishing (dracut initrd, live-config,
