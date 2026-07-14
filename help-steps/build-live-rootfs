@@ -1,0 +1,226 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Build the live-ISO root filesystem with the derivative's OWN bootstrap +
+## package-install toolchain (mmdebstrap), instead of letting live-build
+## re-bootstrap and re-install a second, parallel root filesystem via
+## 'lb bootstrap' + 'lb chroot'. The result is seeded into live-build's
+## bootstrap cache (see 'help-steps/lb-seed-rootfs-cache') so 'lb bootstrap'
+## adopts it and live-build is left doing only what it is uniquely good at:
+## the BIOS+EFI bootloader matrix, squashfs, and hybrid-ISO packing
+## ('lb binary').
+##
+## To stay faithful to the intricate, per-architecture live-build package
+## and source configuration WITHOUT duplicating it, this reads live-build's
+## OWN generated config as the source of truth:
+##   - config/package-lists/*.list.chroot   -> the package set (--include)
+##   - config/archives/*.sources.chroot     -> the extra apt sources
+##                                             (derivative local repo,
+##                                              fasttrack, remote derivative)
+##   - config/archives/*.pref.chroot        -> apt pins (e.g. calamares from
+##                                             backports)
+## plus the base Debian bootstrap sources live-build already assembled into
+## the caller-provided '--base-sources' file. 'build-steps.d/*_create-lb-iso'
+## generates all of that via 'lb config' before calling this.
+##
+## Bootloader packages are intentionally NOT special-cased here: whichever
+## signed/unsigned bootloader packages the live-build package list selected
+## for this architecture are installed into the rootfs as data; the actual
+## bootloader is written into the ISO by 'lb binary'. mmdebstrap installs
+## packages in a chroot with no disk device, so a package whose postinst
+## needs a real disk (plain 'grub-pc') must not be in the list -- the
+## live-build lists already use '*-bin' / signed variants for that reason.
+##
+## Usage:
+##   build-live-rootfs --lb-dir <dir> --rootfs <dir> --base-sources <file> \
+##                     --arch <arch> --suite <suite>
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
+
+MYDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+## Tolerate this script's own options in 'variables' -> 'parse-cmd'
+## (source-run mode makes parse-cmd break, not exit, on unknown options).
+## Same idiom as 'help-steps/analyze_image' and 'help-steps/lb-seed-rootfs-cache'.
+dist_build_source_run="true"
+
+source "$MYDIR/pre"
+source "$MYDIR/variables"
+
+lb_dir=""
+rootfs_dir=""
+base_sources_file=""
+arch=""
+suite=""
+
+while [ "$#" -gt 0 ]; do
+   case "$1" in
+      --lb-dir)
+         [ "$#" -ge 2 ] || error "--lb-dir requires a value"
+         lb_dir="$2"
+         shift 2
+         ;;
+      --rootfs)
+         [ "$#" -ge 2 ] || error "--rootfs requires a value"
+         rootfs_dir="$2"
+         shift 2
+         ;;
+      --base-sources)
+         [ "$#" -ge 2 ] || error "--base-sources requires a value"
+         base_sources_file="$2"
+         shift 2
+         ;;
+      --arch)
+         [ "$#" -ge 2 ] || error "--arch requires a value"
+         arch="$2"
+         shift 2
+         ;;
+      --suite)
+         [ "$#" -ge 2 ] || error "--suite requires a value"
+         suite="$2"
+         shift 2
+         ;;
+      *)
+         error "unexpected argument: $1"
+         ;;
+   esac
+done
+
+## Collect the package set from live-build's generated chroot package lists.
+## Each '*.list.chroot' is one package per line; strip comments and blanks
+## and join with commas for mmdebstrap '--include'.
+collect_include_list() {
+   local list_glob include_line
+   local -a include_packages=()
+
+   shopt -s nullglob
+   for list_glob in "${lb_dir}"/config/package-lists/*.list.chroot; do
+      while IFS="" read -r include_line; do
+         ## Strip a trailing comment and surrounding whitespace.
+         include_line="${include_line%%#*}"
+         include_line="${include_line#"${include_line%%[![:space:]]*}"}"
+         include_line="${include_line%"${include_line##*[![:space:]]}"}"
+         [ -n "${include_line}" ] || continue
+         include_packages+=( "${include_line}" )
+      done < "${list_glob}"
+   done
+   shopt -u nullglob
+
+   if [ "${#include_packages[@]}" -eq 0 ]; then
+      error "no packages found in ${lb_dir}/config/package-lists/*.list.chroot"
+   fi
+
+   ## Comma-join.
+   local IFS=","
+   printf '%s' "${include_packages[*]}"
+}
+
+main() {
+   local include_list combined_sources apt_pref
+   local setup_hook prep_hook
+   local kernel_img_conf_src
+
+   [ -n "${lb_dir}" ] || error "--lb-dir is required."
+   [ -n "${rootfs_dir}" ] || error "--rootfs is required."
+   [ -n "${base_sources_file}" ] || error "--base-sources is required."
+   [ -n "${arch}" ] || error "--arch is required."
+   [ -n "${suite}" ] || error "--suite is required."
+   [ -d "${lb_dir}/config" ] || error "'${lb_dir}/config' does not exist; run 'lb config' first."
+   [ -r "${base_sources_file}" ] || error "base sources '${base_sources_file}' not readable."
+
+   include_list="$( collect_include_list )"
+   true "INFO: live rootfs package set (--include): ${include_list}"
+
+   ## Build the combined deb822 apt sources: the base Debian bootstrap
+   ## sources live-build assembled, followed by every chroot source
+   ## live-build generated (derivative local repo, fasttrack, remote
+   ## derivative). mmdebstrap resolves --include packages across all of them.
+   combined_sources="$( mktemp )"
+   cat -- "${base_sources_file}" > "${combined_sources}"
+   local chroot_source
+   shopt -s nullglob
+   for chroot_source in "${lb_dir}"/config/archives/*.sources.chroot; do
+      printf '%s\n' "" >> "${combined_sources}"
+      cat -- "${chroot_source}" >> "${combined_sources}"
+   done
+   shopt -u nullglob
+
+   ## Concatenate any apt pins live-build generated (e.g. calamares pinned to
+   ## backports) so mmdebstrap honours them during --include resolution.
+   apt_pref="$( mktemp )"
+   shopt -s nullglob
+   for chroot_source in "${lb_dir}"/config/archives/*.pref.chroot; do
+      cat -- "${chroot_source}" >> "${apt_pref}"
+      printf '%s\n' "" >> "${apt_pref}"
+   done
+   shopt -u nullglob
+
+   safe-rm --recursive --force -- "${rootfs_dir}"
+   mkdir --parents -- "${rootfs_dir}"
+
+   ## '--include' installs the full live package set during bootstrap.
+   ## '--variant=minbase' matches live-build's bootstrap variant.
+   ## '--aptopt' points apt at the pin file inside the build.
+   ## SOURCE_DATE_EPOCH (exported by help-steps/variables) makes the rootfs
+   ## reproducible.
+   setup_hook="mkdir -p \"\$1/etc/apt/preferences.d\"; cp -- \"${apt_pref}\" \"\$1/etc/apt/preferences.d/00-derivative-live.pref\""
+
+   ## Install-time customizations that 'build-steps.d/*_create-lb-iso' places
+   ## into the chroot BEFORE the package install, so package postinsts behave
+   ## during a live build. Because the install now happens here (mmdebstrap),
+   ## these must be present before '--include' runs -- a setup-hook does that
+   ## (setup-hooks run after the Essential extract, before --include). Kept in
+   ## step with '2800' (security-misc skip, dist-base-files live marker,
+   ## kernel-img.conf, MOK-suppress, dracut-disable).
+   kernel_img_conf_src="${source_code_folder_dist}/live-build-data/live-build-config/live_build_kernel_img_conf"
+   test -r "${kernel_img_conf_src}"
+   test -r "${source_dkms_suppress_mok_snippet}"
+   test -r "${source_dracut_disable_config_snippet}"
+   prep_hook="set -e
+r=\"\$1\"
+mkdir -p \"\$r/var/lib/security-misc\" \"\$r/var/lib/dist-base-files\" \"\$r/etc\" \"\$r/etc/dkms/framework.conf.d\" \"\$r/etc/dracut.conf.d\"
+touch \"\$r/var/lib/security-misc/skip_install_check\"
+touch \"\$r/var/lib/dist-base-files/live_build\"
+cp -- \"${kernel_img_conf_src}\" \"\$r/etc/kernel-img.conf\"
+cp -- \"${source_dkms_suppress_mok_snippet}\" \"\$r/etc/dkms/framework.conf.d/90-derivative-maker-build.conf\"
+cp -- \"${source_dracut_disable_config_snippet}\" \"\$r/etc/dracut.conf.d/90-derivative-maker-build.conf\""
+
+   true "INFO: Building live rootfs with mmdebstrap into '${rootfs_dir}'..."
+   # shellcheck disable=SC2086
+   $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} mmdebstrap \
+      --variant=minbase \
+      --architectures="${arch}" \
+      --components='main contrib non-free non-free-firmware' \
+      --include="${include_list}" \
+      --setup-hook="${setup_hook}" \
+      --setup-hook="${prep_hook}" \
+      --format=directory \
+      "${suite}" \
+      "${rootfs_dir}" \
+      "${combined_sources}"
+
+   safe-rm --force -- "${combined_sources}" "${apt_pref}"
+
+   ## Sanity test: the rootfs must have a package database and a kernel
+   ## (the live package list installs linux-image).
+   test -f "${rootfs_dir}/var/lib/dpkg/status"
+   if ! ls "${rootfs_dir}"/boot/vmlinuz-* >/dev/null 2>&1; then
+      error "live rootfs has no kernel (/boot/vmlinuz-*); check the live-build package list."
+   fi
+
+   sync
+   true "INFO: live rootfs built. Seed it with 'help-steps/lb-seed-rootfs-cache'."
+}
+
+main "$@"
