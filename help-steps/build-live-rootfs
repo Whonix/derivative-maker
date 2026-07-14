@@ -127,9 +127,7 @@ collect_include_list() {
 }
 
 main() {
-   local include_list combined_sources apt_pref
-   local setup_hook prep_hook
-   local kernel_img_conf_src
+   local include_list prep_hook kernel_img_conf_src
 
    [ -n "${lb_dir}" ] || error "--lb-dir is required."
    [ -n "${rootfs_dir}" ] || error "--rootfs is required."
@@ -142,39 +140,39 @@ main() {
    include_list="$( collect_include_list )"
    true "INFO: live rootfs package set (--include): ${include_list}"
 
-   ## Build the combined deb822 apt sources: the base Debian bootstrap
-   ## sources live-build assembled, followed by every chroot source
-   ## live-build generated (derivative local repo, fasttrack, remote
-   ## derivative). mmdebstrap resolves --include packages across all of them.
-   combined_sources="$( mktemp )"
-   cat -- "${base_sources_file}" > "${combined_sources}"
-   local chroot_source
+   ## mmdebstrap bootstraps (extracts the Essential set) from the mirror
+   ## argument BEFORE any setup-hook runs. So ONLY the signed Debian base
+   ## sources go there; the derivative's own extra sources (local repo,
+   ## remote derivative) -- some of which are unsigned localhost repos that
+   ## authenticate via an imported key -- are added by a setup-hook that
+   ## runs AFTER the base bootstrap and BEFORE the '--include' package
+   ## install, together with their keys. Putting an unsigned/keyed source in
+   ## the mirror argument makes the initial bootstrap 'apt-get update' fail
+   ## with "repository is not signed".
+   local derivative_sources_hook chroot_source src_body key_body pref_body
+   src_body=""
+   key_body=""
+   pref_body=""
    shopt -s nullglob
    for chroot_source in "${lb_dir}"/config/archives/*.sources.chroot; do
-      printf '%s\n' "" >> "${combined_sources}"
-      cat -- "${chroot_source}" >> "${combined_sources}"
+      src_body="${src_body}cp -- \"${chroot_source}\" \"\$1/etc/apt/sources.list.d/$(basename -- "${chroot_source}" .chroot)\"
+"
    done
-   shopt -u nullglob
-
-   ## Concatenate any apt pins live-build generated (e.g. calamares pinned to
-   ## backports) so mmdebstrap honours them during --include resolution.
-   apt_pref="$( mktemp )"
-   shopt -s nullglob
+   for chroot_source in "${lb_dir}"/config/archives/*.key.chroot; do
+      key_body="${key_body}cp -- \"${chroot_source}\" \"\$1/etc/apt/trusted.gpg.d/$(basename -- "${chroot_source}" .key.chroot).asc\"
+"
+   done
    for chroot_source in "${lb_dir}"/config/archives/*.pref.chroot; do
-      cat -- "${chroot_source}" >> "${apt_pref}"
-      printf '%s\n' "" >> "${apt_pref}"
+      pref_body="${pref_body}cp -- \"${chroot_source}\" \"\$1/etc/apt/preferences.d/$(basename -- "${chroot_source}" .chroot)\"
+"
    done
    shopt -u nullglob
+   derivative_sources_hook="set -e
+mkdir -p \"\$1/etc/apt/sources.list.d\" \"\$1/etc/apt/trusted.gpg.d\" \"\$1/etc/apt/preferences.d\"
+${src_body}${key_body}${pref_body}true"
 
    safe-rm --recursive --force -- "${rootfs_dir}"
    mkdir --parents -- "${rootfs_dir}"
-
-   ## '--include' installs the full live package set during bootstrap.
-   ## '--variant=minbase' matches live-build's bootstrap variant.
-   ## '--aptopt' points apt at the pin file inside the build.
-   ## SOURCE_DATE_EPOCH (exported by help-steps/variables) makes the rootfs
-   ## reproducible.
-   setup_hook="mkdir -p \"\$1/etc/apt/preferences.d\"; cp -- \"${apt_pref}\" \"\$1/etc/apt/preferences.d/00-derivative-live.pref\""
 
    ## Install-time customizations that 'build-steps.d/*_create-lb-iso' places
    ## into the chroot BEFORE the package install, so package postinsts behave
@@ -196,41 +194,24 @@ cp -- \"${kernel_img_conf_src}\" \"\$r/etc/kernel-img.conf\"
 cp -- \"${source_dkms_suppress_mok_snippet}\" \"\$r/etc/dkms/framework.conf.d/90-derivative-maker-build.conf\"
 cp -- \"${source_dracut_disable_config_snippet}\" \"\$r/etc/dracut.conf.d/90-derivative-maker-build.conf\""
 
-   ## Import the archive keys live-build generated for its custom chroot
-   ## sources. live-build imports 'config/archives/*.key.chroot' into the
-   ## chroot trusted keys before apt uses the matching '*.sources.chroot';
-   ## the remote-derivative source has no inline 'Signed-By' and relies on
-   ## this. Place each key into the rootfs 'trusted.gpg.d' before '--include'
-   ## resolves packages, else an authenticated archive cannot be verified.
-   ## No-op when no key files exist (local-repo path uses 'Trusted: yes').
-   local key_hook key_file key_hook_body
-   key_hook_body=""
-   shopt -s nullglob
-   for key_file in "${lb_dir}"/config/archives/*.key.chroot; do
-      key_hook_body="${key_hook_body}cp -- \"${key_file}\" \"\$1/etc/apt/trusted.gpg.d/$(basename -- "${key_file}" .key.chroot).asc\"
-"
-   done
-   shopt -u nullglob
-   key_hook="set -e
-mkdir -p \"\$1/etc/apt/trusted.gpg.d\"
-${key_hook_body}true"
-
    true "INFO: Building live rootfs with mmdebstrap into '${rootfs_dir}'..."
+   ## Bootstrap from the signed Debian base ('${base_sources_file}'); the
+   ## derivative sources+keys+pins are added by 'derivative_sources_hook'
+   ## before '--include' installs the full live package set. '--variant=minbase'
+   ## matches live-build's bootstrap variant; SOURCE_DATE_EPOCH (exported by
+   ## help-steps/variables) makes the rootfs reproducible.
    # shellcheck disable=SC2086
    $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} mmdebstrap \
       --variant=minbase \
       --architectures="${arch}" \
       --components='main contrib non-free non-free-firmware' \
       --include="${include_list}" \
-      --setup-hook="${setup_hook}" \
-      --setup-hook="${key_hook}" \
+      --setup-hook="${derivative_sources_hook}" \
       --setup-hook="${prep_hook}" \
       --format=directory \
       "${suite}" \
       "${rootfs_dir}" \
-      "${combined_sources}"
-
-   safe-rm --force -- "${combined_sources}" "${apt_pref}"
+      "${base_sources_file}"
 
    ## Sanity test: the rootfs must have a package database and a kernel
    ## (the live package list installs linux-image).
