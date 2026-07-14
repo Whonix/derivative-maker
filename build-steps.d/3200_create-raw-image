@@ -255,10 +255,11 @@ main() {
       return 0
    fi
 
-   if [ "${dist_build_iso:-}" = "true" ]; then
-       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_iso is set to true.${reset}"
-       return 0
-   fi
+   ## ISO builds now share this base raw image: the ISO is produced as another
+   ## output format of the same raw image the VM path builds (created here,
+   ## packages installed by 'build-steps.d/*_install-packages', then packed
+   ## into an ISO by 'build-steps.d/*_convert-raw-to-iso'). So this step runs
+   ## for ISO too (identical raw image), rather than being skipped.
 
    if [ "${build_dry_run:-}" = "true" ]; then
       true "${bold}${cyan}INFO: dry-run.${reset}"
