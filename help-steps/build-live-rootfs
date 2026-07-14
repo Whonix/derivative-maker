@@ -277,10 +277,16 @@ chroot \"\$r\" sh -c 'xargs --max-args 1 apt-get -o Apt::Install-Recommends=fals
 
    safe-rm --recursive --force -- "${staging_dir}"
 
-   ## Sanity test: the rootfs must have a package database and a kernel
-   ## (the live package list installs linux-image).
-   test -f "${rootfs_dir}/var/lib/dpkg/status"
-   if ! ls "${rootfs_dir}"/boot/vmlinuz-* >/dev/null 2>&1; then
+   ## Sanity test: the rootfs must have a package database and a kernel (the
+   ## live package list installs linux-image). Run these as root: security-misc
+   ## (installed above) hardens '/boot' permissions during the package install,
+   ## so a non-root glob cannot see the kernel that is actually present. Let
+   ## root expand the glob, too, or the hardened directory makes it a literal.
+   local kernel_found
+   $SUDO_TO_ROOT test -f "${rootfs_dir}/var/lib/dpkg/status" \
+      || error "live rootfs has no dpkg status database."
+   kernel_found="$( $SUDO_TO_ROOT find "${rootfs_dir}/boot" -maxdepth 1 -name 'vmlinuz-*' -print -quit 2>/dev/null )"
+   if [ -z "${kernel_found}" ]; then
       error "live rootfs has no kernel (/boot/vmlinuz-*); check the live-build package list."
    fi
 
