@@ -133,13 +133,20 @@ add_trusted_to_sources() {
    flush_stanza
 }
 
-## Collect the package set from live-build's generated chroot package lists.
-## Each '*.list.chroot' is one package per line; strip comments and blanks
-## and join with commas for mmdebstrap '--include'.
-collect_include_list() {
-   local list_glob include_line
-   local -a include_packages=()
+## Collect the package set from live-build's generated chroot package lists,
+## in file/line ORDER, one package per line, into '${outfile}'. Order matters:
+## the live package list deliberately contains packages that conflict with
+## each other (e.g. 'virtualbox-guest-utils' vs the baremetal-gui meta, whose
+## dependency 'dist-baremetal-gui-all' Breaks it), and relies on a sequential,
+## one-package-per-transaction install where the package listed LATER wins and
+## apt removes the earlier conflicting one. This mirrors live-build's own
+## 'chroot_install-packages', which for LB_INITRAMFS=dracut-live installs the
+## list with 'xargs --max-args 1 ... apt-get install' for exactly this reason.
+collect_ordered_list() {
+   local outfile="$1"
+   local list_glob include_line count=0
 
+   : > "${outfile}"
    shopt -s nullglob
    for list_glob in "${lb_dir}"/config/package-lists/*.list.chroot; do
       while IFS="" read -r include_line; do
@@ -148,22 +155,19 @@ collect_include_list() {
          include_line="${include_line#"${include_line%%[![:space:]]*}"}"
          include_line="${include_line%"${include_line##*[![:space:]]}"}"
          [ -n "${include_line}" ] || continue
-         include_packages+=( "${include_line}" )
+         printf '%s\n' "${include_line}" >> "${outfile}"
+         count=$(( count + 1 ))
       done < "${list_glob}"
    done
    shopt -u nullglob
 
-   if [ "${#include_packages[@]}" -eq 0 ]; then
+   if [ "${count}" -eq 0 ]; then
       error "no packages found in ${lb_dir}/config/package-lists/*.list.chroot"
    fi
-
-   ## Comma-join.
-   local IFS=","
-   printf '%s' "${include_packages[*]}"
 }
 
 main() {
-   local include_list prep_hook kernel_img_conf_src
+   local prep_hook kernel_img_conf_src install_hook pkglist_staged
 
    [ -n "${lb_dir}" ] || error "--lb-dir is required."
    [ -n "${rootfs_dir}" ] || error "--rootfs is required."
@@ -172,9 +176,6 @@ main() {
    [ -n "${suite}" ] || error "--suite is required."
    [ -d "${lb_dir}/config" ] || error "'${lb_dir}/config' does not exist; run 'lb config' first."
    [ -r "${base_sources_file}" ] || error "base sources '${base_sources_file}' not readable."
-
-   include_list="$( collect_include_list )"
-   true "INFO: live rootfs package set (--include): ${include_list}"
 
    ## mmdebstrap bootstraps (extracts the Essential set) from the mirror
    ## argument BEFORE any setup-hook runs. So ONLY the signed Debian base
@@ -191,6 +192,8 @@ main() {
    ## Stage the derivative sources with 'Trusted: yes' added; the setup-hook
    ## copies the staged (trusted) files into the rootfs.
    staging_dir="$(mktemp -d)"
+   pkglist_staged="${staging_dir}/packages.chroot"
+   collect_ordered_list "${pkglist_staged}"
    shopt -s nullglob
    for chroot_source in "${lb_dir}"/config/archives/*.sources.chroot; do
       staged="${staging_dir}/$(basename -- "${chroot_source}" .chroot)"
@@ -230,20 +233,43 @@ cp -- \"${kernel_img_conf_src}\" \"\$r/etc/kernel-img.conf\"
 cp -- \"${source_dkms_suppress_mok_snippet}\" \"\$r/etc/dkms/framework.conf.d/90-derivative-maker-build.conf\"
 cp -- \"${source_dracut_disable_config_snippet}\" \"\$r/etc/dracut.conf.d/90-derivative-maker-build.conf\""
 
+   ## Install the live package set ONE PACKAGE PER apt transaction, in list
+   ## order, instead of a single mmdebstrap '--include'. The live package list
+   ## intentionally contains mutually-conflicting packages (see
+   ## 'collect_ordered_list') and depends on the later-listed package winning,
+   ## with apt removing the earlier conflicting one. A single '--include'
+   ## transaction cannot express that: trixie's apt solver (3.0) treats every
+   ## '--include' package as a hard must-install and aborts on the conflict
+   ## ("Reached two conflicting decisions"). Running 'apt-get install' once per
+   ## package (via 'xargs --max-args 1', exactly as live-build's
+   ## 'chroot_install-packages' does for LB_INITRAMFS=dracut-live) lets each
+   ## later package's Breaks/Conflicts remove the earlier one. A customize-hook
+   ## runs after the setup-hooks (sources, keys, pins, prep files) are in place,
+   ## in mmdebstrap's fully-prepared chroot, so package postinsts behave exactly
+   ## as they do under a normal '--include' install.
+   ## The staged package list is fed to the in-chroot 'xargs' via stdin (read
+   ## on the host, piped in), so nothing is written into or removed from the
+   ## chroot by this hook.
+   install_hook="set -e
+r=\"\$1\"
+chroot \"\$r\" apt-get -o Acquire::Retries=5 update
+chroot \"\$r\" sh -c 'xargs --max-args 1 apt-get -o Apt::Install-Recommends=false -o Dpkg::Options::=--force-confnew -o Acquire::Retries=5 --yes --allow-remove-essential install' < \"${pkglist_staged}\""
+
    true "INFO: Building live rootfs with mmdebstrap into '${rootfs_dir}'..."
    ## Bootstrap from the signed Debian base ('${base_sources_file}'); the
-   ## derivative sources+keys+pins are added by 'derivative_sources_hook'
-   ## before '--include' installs the full live package set. '--variant=minbase'
-   ## matches live-build's bootstrap variant; SOURCE_DATE_EPOCH (exported by
+   ## derivative sources+keys+pins are added by 'derivative_sources_hook', the
+   ## install-time files by 'prep_hook', then 'install_hook' installs the full
+   ## live package set one-by-one (see above). '--variant=minbase' matches
+   ## live-build's bootstrap variant; SOURCE_DATE_EPOCH (exported by
    ## help-steps/variables) makes the rootfs reproducible.
    # shellcheck disable=SC2086
    $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} mmdebstrap \
       --variant=minbase \
       --architectures="${arch}" \
       --components='main contrib non-free non-free-firmware' \
-      --include="${include_list}" \
       --setup-hook="${derivative_sources_hook}" \
       --setup-hook="${prep_hook}" \
+      --customize-hook="${install_hook}" \
       --format=directory \
       "${suite}" \
       "${rootfs_dir}" \
