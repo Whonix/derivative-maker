@@ -278,17 +278,19 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
    sed -i "s|@DIST_NAME@|${dist_build_type_short_pretty}|; s|@DIST_VERSION@|${dist_build_version}|;" bootloaders/grub-pc/splash.svg
 
    ## '--serial-console-enable true': make the GRUB boot MENU itself reachable
-   ## over the serial line (in addition to the display) by prepending a serial
-   ## terminal to the ISO's grub.cfg, so the ISO can be driven headless from the
-   ## GRUB menu onward, not just after the kernel starts.
+   ## over the serial line (in addition to the display), so the ISO can be
+   ## driven headless from the GRUB menu onward, not just after the kernel
+   ## starts. grub.cfg's first line 'source /boot/grub/config.cfg' runs
+   ## 'terminal_output gfxterm', so this must be added AFTER that source (append
+   ## to the end) and use '--append' -- otherwise gfxterm clobbers the serial
+   ## output terminal. '--append' keeps the graphical terminal and ADDS serial,
+   ## so the menu renders to both.
    if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
-      {
-         printf '%s\n' \
-            'serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1' \
-            'terminal_input serial console' \
-            'terminal_output serial console'
-         cat -- bootloaders/grub-pc/grub.cfg
-      } | sponge -- bootloaders/grub-pc/grub.cfg
+      printf '%s\n' \
+         'serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1' \
+         'terminal_input --append serial' \
+         'terminal_output --append serial' \
+         >> bootloaders/grub-pc/grub.cfg
    fi
 
    ## d-i config
