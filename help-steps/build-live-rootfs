@@ -97,6 +97,42 @@ while [ "$#" -gt 0 ]; do
    esac
 done
 
+## Copy a deb822 sources file, adding 'Trusted: yes' to every stanza that
+## lacks it. The derivative sources are served over the localhost approx
+## proxy (127.0.0.1:9977) and a local file repo -- trusted build-environment
+## sources. The old live-build flow authenticated them with an imported key,
+## but trixie's apt verifies with 'sqv' (sequoia), which is stricter than the
+## legacy 'gpgv' and rejected the developers-repo key the old flow imported.
+## Marking these localhost sources trusted (as the local-repo source already
+## is) is the robust equivalent; the Debian base keeps full signature
+## verification via its Signed-By keyring.
+add_trusted_to_sources() {
+   local infile="$1" outfile="$2"
+   local line stanza=""
+
+   : > "${outfile}"
+   ## Read stanza by stanza (deb822 paragraphs separated by blank lines).
+   ## '|| [ -n "$line" ]' emits a final stanza with no trailing newline.
+   flush_stanza() {
+      [ -n "${stanza}" ] || return 0
+      printf '%s\n' "${stanza}" >> "${outfile}"
+      if ! printf '%s\n' "${stanza}" | grep --quiet --ignore-case '^Trusted:'; then
+         printf '%s\n' "Trusted: yes" >> "${outfile}"
+      fi
+      printf '%s\n' "" >> "${outfile}"
+      stanza=""
+   }
+   while IFS="" read -r line || [ -n "${line}" ]; do
+      if [ -z "${line}" ]; then
+         flush_stanza
+      else
+         stanza="${stanza:+${stanza}
+}${line}"
+      fi
+   done < "${infile}"
+   flush_stanza
+}
+
 ## Collect the package set from live-build's generated chroot package lists.
 ## Each '*.list.chroot' is one package per line; strip comments and blanks
 ## and join with commas for mmdebstrap '--include'.
@@ -149,17 +185,17 @@ main() {
    ## install, together with their keys. Putting an unsigned/keyed source in
    ## the mirror argument makes the initial bootstrap 'apt-get update' fail
    ## with "repository is not signed".
-   local derivative_sources_hook chroot_source src_body key_body pref_body
+   local derivative_sources_hook chroot_source src_body pref_body staged staging_dir
    src_body=""
-   key_body=""
    pref_body=""
+   ## Stage the derivative sources with 'Trusted: yes' added; the setup-hook
+   ## copies the staged (trusted) files into the rootfs.
+   staging_dir="$(mktemp -d)"
    shopt -s nullglob
    for chroot_source in "${lb_dir}"/config/archives/*.sources.chroot; do
-      src_body="${src_body}cp -- \"${chroot_source}\" \"\$1/etc/apt/sources.list.d/$(basename -- "${chroot_source}" .chroot)\"
-"
-   done
-   for chroot_source in "${lb_dir}"/config/archives/*.key.chroot; do
-      key_body="${key_body}cp -- \"${chroot_source}\" \"\$1/etc/apt/trusted.gpg.d/$(basename -- "${chroot_source}" .key.chroot).asc\"
+      staged="${staging_dir}/$(basename -- "${chroot_source}" .chroot)"
+      add_trusted_to_sources "${chroot_source}" "${staged}"
+      src_body="${src_body}cp -- \"${staged}\" \"\$1/etc/apt/sources.list.d/$(basename -- "${staged}")\"
 "
    done
    for chroot_source in "${lb_dir}"/config/archives/*.pref.chroot; do
@@ -168,8 +204,8 @@ main() {
    done
    shopt -u nullglob
    derivative_sources_hook="set -e
-mkdir -p \"\$1/etc/apt/sources.list.d\" \"\$1/etc/apt/trusted.gpg.d\" \"\$1/etc/apt/preferences.d\"
-${src_body}${key_body}${pref_body}true"
+mkdir -p \"\$1/etc/apt/sources.list.d\" \"\$1/etc/apt/preferences.d\"
+${src_body}${pref_body}true"
 
    safe-rm --recursive --force -- "${rootfs_dir}"
    mkdir --parents -- "${rootfs_dir}"
@@ -212,6 +248,8 @@ cp -- \"${source_dracut_disable_config_snippet}\" \"\$r/etc/dracut.conf.d/90-der
       "${suite}" \
       "${rootfs_dir}" \
       "${base_sources_file}"
+
+   safe-rm --recursive --force -- "${staging_dir}"
 
    ## Sanity test: the rootfs must have a package database and a kernel
    ## (the live package list installs linux-image).
