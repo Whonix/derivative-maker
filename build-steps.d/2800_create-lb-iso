@@ -473,6 +473,17 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    $SUDO_TO_ROOT mount --bind /sys "${CHROOT_FOLDER}/sys"
    $SUDO_TO_ROOT mount --bind /proc "${CHROOT_FOLDER}/proc"
 
+   ## Prevent daemons from starting during the install. This install runs in a
+   ## plain chroot with no service manager, so a package whose postinst starts
+   ## its daemon (e.g. usbguard) would fail 'invoke-rc.d ... start' and abort
+   ## the configure. mmdebstrap placed an equivalent 'policy-rc.d' (exit 101)
+   ## during its own '--include' installs, which is why this did not surface
+   ## while the install lived inside mmdebstrap; do the same here (this is what
+   ## 'help-steps/prevent-daemons-from-starting' does for the raw/VM path).
+   ## Removed right after the install so it does not leak into the ISO.
+   $SUDO_TO_ROOT cp --preserve -- "${source_code_folder_dist}/packages/kicksecure/helper-scripts/usr/share/helper-scripts/policy-rc.d" "${CHROOT_FOLDER}/usr/sbin/policy-rc.d"
+   $SUDO_TO_ROOT chmod 0755 -- "${CHROOT_FOLDER}/usr/sbin/policy-rc.d"
+
    chroot_run apt-get "${DIST_APTGETOPT[@]}" -o Acquire::Retries=5 update
 
    ## Read the generated package lists in glob (alphabetical) order --
@@ -499,6 +510,10 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    if [ -z "$( $SUDO_TO_ROOT find "${CHROOT_FOLDER}/boot" -maxdepth 1 -name 'vmlinuz-*' -print -quit 2>/dev/null )" ]; then
       error "live chroot has no kernel (/boot/vmlinuz-*); check the live package list install."
    fi
+
+   ## Remove the daemon-start guard so it does not leak into the ISO ('lb
+   ## chroot' manages its own during its stage).
+   $SUDO_TO_ROOT safe-rm --force -- "${CHROOT_FOLDER}/usr/sbin/policy-rc.d"
 
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/proc"
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/sys"
