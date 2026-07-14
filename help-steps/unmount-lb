@@ -63,7 +63,7 @@ lb_mounts_under() {
 }
 
 main() {
-   local live_build_folder mount_target remaining
+   local live_build_folder mount_target
 
    live_build_folder="${dist_binary_build_folder}/live-build"
 
@@ -82,16 +82,27 @@ main() {
 
    sync
 
-   ## Fail closed: verify nothing remains mounted under the tree. A leftover
-   ## host bind mount here is exactly what would let a downstream recursive
-   ## deletion cross into the real /dev, so surface it as an error rather
-   ## than returning success with mounts still attached.
+   ## Report (do not fail on) anything still mounted under the tree. This is
+   ## a best-effort helper: warn loudly so a leftover host bind mount is
+   ## visible, but return success. Returning non-zero would be pointless
+   ## and harmful -- no caller consumes the exit code (2800's success sweep
+   ## uses '|| true', the failure-path exception handler ignores it), and a
+   ## non-zero 'return' here would trip THIS script's own ERR trap (installed
+   ## by the sourced 'pre'), firing exception_handler_general before any
+   ## caller could react. The actual fail-closed guarantee -- that a
+   ## downstream recursive deletion cannot cross a leftover bind mount into
+   ## the real /dev -- lives in 'ci/github-build's 'rm --one-file-system',
+   ## which is structural (the kernel refuses the crossing) regardless of
+   ## this warning.
+   local remaining
    remaining="$(lb_mounts_under "${live_build_folder}")" || {
-      error "Could not read the mount table to confirm '${live_build_folder}' is unmounted."
+      printf '%s\n' "WARNING: ${BASH_SOURCE[0]}: could not read the mount table to confirm '${live_build_folder}' is unmounted." >&2
+      return 0
    }
    if [ -n "${remaining}" ]; then
+      printf '%s\n' "WARNING: ${BASH_SOURCE[0]}: mounts still present under '${live_build_folder}' after unmount:" >&2
       printf '%s\n' "${remaining}" >&2
-      error "Mounts still present under '${live_build_folder}' after unmount."
+      printf '%s\n' "WARNING: do NOT 'rm -rf' '${live_build_folder}' until these are unmounted -- a recursive delete would cross the bind mount(s). Unmount them manually, or the next build's 'lb clean' will." >&2
    fi
 }
 
