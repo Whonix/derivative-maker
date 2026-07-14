@@ -1284,6 +1284,12 @@ fi
 [ -n "${dist_build_installer_dist:-}" ] || dist_build_installer_dist="false"
 export dist_build_installer_dist
 
+## Default off; '--serial-console-enable true' installs the serial-console-enable
+## package and adds a serial console (ttyS0) to the boot cmdline so the image can
+## be driven headless over a serial line (e.g. in qemu).
+[ -n "${dist_build_serial_console_enable:-}" ] || dist_build_serial_console_enable="false"
+export dist_build_serial_console_enable
+
 if [ "${dist_build_installer_dist}" = "true" ]; then
    [ -n "${ssh_uploader_account:-}" ] || ssh_uploader_account="root"
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="
@@ -1811,6 +1817,7 @@ env_vars_keep_list="
    dist_build_qcow2
    dist_build_raw
    dist_build_iso
+   dist_build_serial_console_enable
    dist_build_utm
    dist_build_install_to_root
    dist_build_source_run

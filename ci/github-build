@@ -153,10 +153,19 @@ if [ "${target}" = "virtualbox" ]; then
    type_args=(--type vm)
 fi
 
+## CI ISOs get a serial console so they can be smoke-boot-tested headless
+## (qemu -nographic). Harmless for a test image; production ISO builds simply
+## omit '--serial-console-enable'.
+serial_args=()
+if [ "${target}" = "iso" ]; then
+   serial_args=(--serial-console-enable true)
+fi
+
 ./derivative-maker \
    --flavor "${flavor}" \
    --target "${target}" \
    "${type_args[@]}" \
+   "${serial_args[@]}" \
    --arch "${arch}" \
    --allow-uncommitted true \
    --allow-untagged true \
