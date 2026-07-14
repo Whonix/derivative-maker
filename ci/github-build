@@ -108,7 +108,7 @@ iso_workdir_cleanup() {
    if [ ! "${target}" = "iso" ]; then
       return 0
    fi
-   ## A failed build can abort between 2800's 'mount --bind' of the HOST
+   ## A failed build can abort between 3600_convert-raw-to-iso's 'mount --bind' of the HOST
    ## /dev, /proc, /sys into the lb chroot and the matching umount. The
    ## step's own exception handler tears that down ('unmount-lb'), but stay
    ## safe even if that failed too: unmount anything below the tree,

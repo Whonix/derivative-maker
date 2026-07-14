@@ -301,9 +301,17 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
    ## at CHROOT_FOLDER; 'lb bootstrap' below reassigns CHROOT_FOLDER to the
    ## live-build chroot for the finishing steps.
    "$dist_source_help_steps_folder/mount-raw" "${args[@]}"
-   "$dist_source_help_steps_folder/lb-seed-rootfs-cache" \
+   ## Unmount the raw image even if seeding fails. This step's ERR trap
+   ## ('exception_handler_unmount_lb') only tears down mounts under the
+   ## live-build tree, NOT this raw-image loop-mount at CHROOT_FOLDER (a
+   ## sibling of 'live-build/'), so guard the seed explicitly to avoid leaving
+   ## a dangling loop / device-mapper mount behind on failure.
+   if ! "$dist_source_help_steps_folder/lb-seed-rootfs-cache" \
       --rootfs "${CHROOT_FOLDER}" \
-      --lb-dir "$PWD"
+      --lb-dir "$PWD"; then
+      "$dist_source_help_steps_folder/unmount-raw" "${args[@]}" || true
+      error "seeding the live rootfs from the raw image into live-build's cache failed"
+   fi
    "$dist_source_help_steps_folder/unmount-raw" "${args[@]}"
 
    ## Build ISO bootstrap (adopts the seeded rootfs from cache; no debootstrap)
