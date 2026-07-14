@@ -763,16 +763,12 @@ true "${cyan}${BASH_SOURCE[0]} INFO: BUILD_INITRAMFS_PKGS (--initramfs): $BUILD_
 ## '*_install-packages' runs) from the same source-of-truth package lists the
 ## ISO has always used, applying the per-architecture / freedom substitutions.
 ##
-## Notes:
-## - The baremetal host meta ('XXX_KICKSECURE_HOST_XXX') and network-conf are
-##   installed by '*_install-packages' itself (flavor_meta_packages_to_install
-##   and its kicksecure-network-conf handling), so they are substituted to
-##   empty here.
-## - 'virtualbox-guest-utils' / '-x11' are intentionally EXCLUDED: the live
-##   list installs them BEFORE the baremetal meta, which Breaks them, so the
-##   final image never has them. '*_install-packages' installs the meta first,
-##   so adding them afterwards would invert that; excluding them yields the
-##   same (absent) result.
+## Note: the baremetal host meta ('XXX_KICKSECURE_HOST_XXX') and network-conf
+## are installed by '*_install-packages' itself (flavor_meta_packages_to_install
+## and its kicksecure-network-conf handling), so they are substituted to empty
+## here. VirtualBox Guest Additions are handled by the GUI metapackage
+## ('Depends: virtualbox-guest-additions-iso', 'Breaks/Replaces' the deprecated
+## 'virtualbox-guest-utils'/'-x11'), so the live list no longer carries those.
 if [ "${dist_build_iso:-}" = "true" ]; then
    dist_iso_grub_pc=""
    dist_iso_shim_signed=""
@@ -824,11 +820,6 @@ if [ "${dist_build_iso:-}" = "true" ]; then
          dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_NETWORK_CONF_GUI_XXX/}"
          ## A substituted-to-empty placeholder line is skipped.
          [ -n "${dist_iso_pkg_line}" ] || continue
-         case " ${dist_iso_pkg_line} " in
-            *" virtualbox-guest-utils "*|*" virtualbox-guest-x11 "*)
-               continue
-               ;;
-         esac
          dist_build_iso_extra_packages="${dist_build_iso_extra_packages:+${dist_build_iso_extra_packages} }${dist_iso_pkg_line}"
       done < "${dist_iso_list_file}"
    done
