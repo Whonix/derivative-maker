@@ -755,6 +755,80 @@ true "${cyan}${BASH_SOURCE[0]} INFO: BUILD_INITRAMFS_PKGS (--initramfs): $BUILD_
 
 ## }}}
 
+## {{{ ISO extra packages
+##
+## The ISO reuses the shared raw image + 'build-steps.d/*_install-packages'.
+## On top of the shared VM package set, the ISO needs the live-boot /
+## installer / live-bootloader packages. Resolve them here (before
+## '*_install-packages' runs) from the same source-of-truth package lists the
+## ISO has always used, applying the per-architecture / freedom substitutions.
+##
+## Note: the baremetal host meta ('XXX_KICKSECURE_HOST_XXX') and network-conf
+## are installed by '*_install-packages' itself (flavor_meta_packages_to_install
+## and its kicksecure-network-conf handling), so they are substituted to empty
+## here. VirtualBox Guest Additions are handled by the GUI metapackage
+## ('Depends: virtualbox-guest-additions-iso', 'Breaks/Replaces' the deprecated
+## 'virtualbox-guest-utils'/'-x11'), so the live list no longer carries those.
+if [ "${dist_build_iso:-}" = "true" ]; then
+   dist_iso_grub_pc=""
+   dist_iso_shim_signed=""
+   dist_iso_grub_efi_signed=""
+   dist_iso_fwupd_signed=""
+   case "${dist_build_target_arch:-}" in
+      armhf)
+         dist_iso_fwupd_signed="fwupd-signed"
+         ;;
+      arm64)
+         dist_iso_shim_signed="shim-signed"
+         dist_iso_grub_efi_signed="grub-efi-arm64-signed"
+         dist_iso_fwupd_signed="fwupd-signed"
+         ;;
+      amd64)
+         dist_iso_grub_pc="grub-pc-bin"
+         dist_iso_shim_signed="shim-signed"
+         dist_iso_grub_efi_signed="grub-efi-amd64-signed"
+         dist_iso_fwupd_signed="fwupd-signed"
+         ;;
+   esac
+   dist_iso_firmware_nonfreedom=""
+   if [ "${build_freedom_only:-}" = "false" ]; then
+      dist_iso_firmware_nonfreedom="firmware-nonfreedom firmware-nonfreedom-noarch"
+   fi
+
+   dist_build_iso_extra_packages=""
+   dist_iso_list_file=""
+   dist_iso_pkg_line=""
+   for dist_iso_list_file in \
+      "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_live" \
+      "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_kicksecure" ; do
+      while IFS="" read -r dist_iso_pkg_line || [ -n "${dist_iso_pkg_line}" ]; do
+         ## Strip a trailing comment and surrounding whitespace.
+         dist_iso_pkg_line="${dist_iso_pkg_line%%#*}"
+         dist_iso_pkg_line="${dist_iso_pkg_line#"${dist_iso_pkg_line%%[![:space:]]*}"}"
+         dist_iso_pkg_line="${dist_iso_pkg_line%"${dist_iso_pkg_line##*[![:space:]]}"}"
+         [ -n "${dist_iso_pkg_line}" ] || continue
+         ## Per-architecture / freedom substitutions.
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_ARCHITECTURE_XXX/${dist_build_target_arch:-}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_GRUB_PC_XXX/${dist_iso_grub_pc}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_SHIM_SIGNED_XXX/${dist_iso_shim_signed}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_GRUB_EFI_SIGNED_XXX/${dist_iso_grub_efi_signed}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_FWUPD_SIGNED_XXX/${dist_iso_fwupd_signed}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_FIRMWARE_NONFREEDOM_XXX/${dist_iso_firmware_nonfreedom}}"
+         ## Installed by '*_install-packages' itself; drop from the extras.
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_HOST_XXX/}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_NETWORK_CONF_XXX/}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_NETWORK_CONF_GUI_XXX/}"
+         ## A substituted-to-empty placeholder line is skipped.
+         [ -n "${dist_iso_pkg_line}" ] || continue
+         dist_build_iso_extra_packages="${dist_build_iso_extra_packages:+${dist_build_iso_extra_packages} }${dist_iso_pkg_line}"
+      done < "${dist_iso_list_file}"
+   done
+   export dist_build_iso_extra_packages
+   true "${cyan}${BASH_SOURCE[0]} INFO: dist_build_iso_extra_packages: ${dist_build_iso_extra_packages}${reset}"
+fi
+
+## }}}
+
 if [ "${VMNAME:-}" = "unknown" ]; then
    true "variables ERROR: VMNAME is unknown. Please report this bug!"
    exit 1
@@ -1527,18 +1601,38 @@ export cowbuilder_cache_dir
 ## architecture.
 dist_build_arch_to_qemu_machine() {
    case "${1}" in
-      amd64)    printf '%s' "x86_64" ;;
-      arm64)    printf '%s' "aarch64" ;;
+      amd64)
+         printf '%s' "x86_64"
+         ;;
+      arm64)
+         printf '%s' "aarch64"
+         ;;
       ## Both 32-bit ARM variants use the same emulator.
-      armel)    printf '%s' "arm" ;;
-      armhf)    printf '%s' "arm" ;;
-      mipsel)   printf '%s' "mipsel" ;;
-      mips64el) printf '%s' "mips64el" ;;
+      armel)
+         printf '%s' "arm"
+         ;;
+      armhf)
+         printf '%s' "arm"
+         ;;
+      mipsel)
+         printf '%s' "mipsel"
+         ;;
+      mips64el)
+         printf '%s' "mips64el"
+         ;;
       ## The emulator for ppc64el really is ppc64le. This is not a typo.
-      ppc64el)  printf '%s' "ppc64le" ;;
-      riscv64)  printf '%s' "riscv64" ;;
-      s390x)    printf '%s' "s390x" ;;
-      *)        return 1 ;;
+      ppc64el)
+         printf '%s' "ppc64le"
+         ;;
+      riscv64)
+         printf '%s' "riscv64"
+         ;;
+      s390x)
+         printf '%s' "s390x"
+         ;;
+      *)
+         return 1
+         ;;
    esac
 }
 

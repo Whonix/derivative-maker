@@ -251,88 +251,13 @@ Enabled: yes
 Trusted: yes" > archives/derivative-localrepo.sources.chroot
    fi
 
-   ## Apt configuration
-   live_build_package_pins="Package: calamares
-Pin: release n=${dist_build_apt_stable_release}-backports
-Pin-Priority: 900"
-   printf '%s\n' "${live_build_package_pins}" | sponge -- archives/z-kicksecure.pref.chroot
-
-   ## Package lists
-   mkdir --parents -- package-lists
-   cp -- "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_live" package-lists/live.list.chroot
-   ## NOTE: This file is called 'z-kicksecure.list.chroot' because the list
-   ## files are handled in alphabetical order and these packages MUST be
-   ## handled last.
-   cp -- "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_kicksecure" package-lists/z-kicksecure.list.chroot
-
-   ## Replace linux-image-XXX_ARCHITECTURE_XXX and linux-headers-XXX_ARCHITECTURE_XXX with actual ${dist_build_target_arch}.
-   sed -i "s/XXX_ARCHITECTURE_XXX/${dist_build_target_arch}/" package-lists/z-kicksecure.list.chroot
-
-   case "${dist_build_target_arch}" in
-      armel|mipsel|mips64el|riscv64|ppc64el|s390x)
-         ## no grub-pc
-         ## no shim-signed
-         ## no signed grub-efi
-         ## no fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         ;;
-      armhf)
-         ## no grub-pc
-         ## no shim-signed
-         ## no signed grub-efi
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-      arm64)
-         ## no grub-pc
-         ## has shim-signed
-         ## has signed grub-efi
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX/shim-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX/grub-efi-arm64-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-      amd64)
-         ## has grub-pc
-         ## has shim-signed
-         ## has signed grub-efi for 64-bit systems
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX/grub-pc-bin/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX/shim-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX/grub-efi-amd64-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-   esac
-   if [ "${build_freedom_only:-}" = "true" ]; then
-      sed -i 's/XXX_FIRMWARE_NONFREEDOM_XXX//' package-lists/z-kicksecure.list.chroot
-   elif [ "${build_freedom_only:-}" = "false" ]; then
-      sed -i 's/XXX_FIRMWARE_NONFREEDOM_XXX/firmware-nonfreedom\nfirmware-nonfreedom-noarch/' package-lists/z-kicksecure.list.chroot
-   fi
-
-   ## Example flavor_meta_packages_to_install:
-   ## kicksecure-baremetal-gui-lxqt kicksecure-baremetal-server
-
-   live_build_flavor_line_list="$(trim_collapse_split "${flavor_meta_packages_to_install}")"
-   ## Example live_build_flavor_line_list:
-   ## kicksecure-baremetal-gui-lxqt \
-   ## kicksecure-baremetal-server
-
-   sed -i "s/XXX_KICKSECURE_HOST_XXX/${live_build_flavor_line_list}/" package-lists/z-kicksecure.list.chroot
-
-   if [ "${dist_build_type_short:-}" = 'kicksecure' ]; then
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_XXX/kicksecure-network-conf/" package-lists/z-kicksecure.list.chroot
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_GUI_XXX/kicksecure-network-conf-gui/" package-lists/z-kicksecure.list.chroot
-   else
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_XXX//" package-lists/z-kicksecure.list.chroot
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_GUI_XXX//" package-lists/z-kicksecure.list.chroot
-   fi
+   ## No live-build package lists are generated: the package set is installed
+   ## into the shared raw image by 'build-steps.d/*_install-packages' (the ISO
+   ## extras are resolved in 'help-steps/variables' as
+   ## 'dist_build_iso_extra_packages', from the same source-of-truth live
+   ## package lists, with the per-architecture / freedom substitutions). This
+   ## step only packs the already-installed rootfs into an ISO, so 'lb chroot'
+   ## has nothing to install.
 
    ## Branding and GRUB configuration
    mkdir --parents -- bootloaders
@@ -355,6 +280,10 @@ Pin-Priority: 900"
 
    if [ "${build_dry_run:-}" = "true" ]; then
       true "${bold}${cyan}INFO: Dry-run, skipping the rest of ${BASH_SOURCE[0]}. ${reset}"
+      ## The bootstrap-mirror temp files are otherwise cleaned only after
+      ## 'lb bootstrap' (below), which the dry-run never reaches; remove them
+      ## here so repeated CI dry-runs do not accumulate stray files in /tmp.
+      safe-rm -f -- "${live_build_bootstrap_mirror_file}" "${live_build_bootstrap_mirror_security_file}" "${live_build_parent_bootstrap_mirror_file}" "${live_build_parent_bootstrap_mirror_security_file}"
       ## Cannot be completely empty, or torrent creation would later fail during the prepare-release step.
       printf '%s\n' "dummy" | sponge -- "${binary_image_iso_file}"
       return 0
@@ -365,7 +294,31 @@ Pin-Priority: 900"
       test -d "${dist_apt_repository_folder}"
    fi
 
-   ## Build ISO bootstrap
+   ## The rootfs comes from the shared base raw image: built by
+   ## 'build-steps.d/*_create-raw-image' and fully package-installed (VM set +
+   ## ISO extras) by 'build-steps.d/*_install-packages', exactly like a VM
+   ## build. Mount that raw image and seed its rootfs into live-build's
+   ## bootstrap cache so 'lb bootstrap' adopts it (no debootstrap, no second
+   ## package install). live-build is thereby reduced to the parts it is
+   ## uniquely good at: the BIOS+EFI bootloader matrix, squashfs, and
+   ## hybrid-ISO packing ('lb binary'). 'mount-raw' loop-mounts the raw image
+   ## at CHROOT_FOLDER; 'lb bootstrap' below reassigns CHROOT_FOLDER to the
+   ## live-build chroot for the finishing steps.
+   "$dist_source_help_steps_folder/mount-raw" "${args[@]}"
+   ## Unmount the raw image even if seeding fails. This step's ERR trap
+   ## ('exception_handler_unmount_lb') only tears down mounts under the
+   ## live-build tree, NOT this raw-image loop-mount at CHROOT_FOLDER (a
+   ## sibling of 'live-build/'), so guard the seed explicitly to avoid leaving
+   ## a dangling loop / device-mapper mount behind on failure.
+   if ! "$dist_source_help_steps_folder/lb-seed-rootfs-cache" \
+      --rootfs "${CHROOT_FOLDER}" \
+      --lb-dir "$PWD"; then
+      "$dist_source_help_steps_folder/unmount-raw" "${args[@]}" || true
+      error "seeding the live rootfs from the raw image into live-build's cache failed"
+   fi
+   "$dist_source_help_steps_folder/unmount-raw" "${args[@]}"
+
+   ## Build ISO bootstrap (adopts the seeded rootfs from cache; no debootstrap)
    # shellcheck disable=SC2086
    if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb bootstrap --verbose --debug; then
       error "${bold}${red}ERROR: Live build bootstrap stage failed!${reset}"
@@ -402,7 +355,9 @@ Pin-Priority: 900"
    $SUDO_TO_ROOT mkdir --parents -- "${target_dracut_disable_config_snippet%/*}"
    $SUDO_TO_ROOT cp --verbose -- "$source_dracut_disable_config_snippet" "$target_dracut_disable_config_snippet"
 
-   ## Build ISO chroot
+   ## Build ISO chroot ('lb chroot' installs nothing -- no package lists were
+   ## generated; the package set is already in the shared raw image -- so it
+   ## only runs the live-specific finishing: live-config, etc.)
    # shellcheck disable=SC2086
    if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb chroot --verbose --debug; then
       error "${bold}${red}ERROR: Live build chroot stage failed!${reset}"

@@ -273,6 +273,23 @@ install-packages() {
       $SUDO_TO_ROOT -- cp --verbose -- "$source_dracut_disable_config_snippet" "$target_dracut_disable_config_snippet"
    fi
 
+   if [ "${dist_build_iso:-}" = "true" ]; then
+      ## ISO builds install their packages HERE (into the shared raw image),
+      ## then 'build-steps.d/*_convert-raw-to-iso' packs the rootfs into an
+      ## ISO. Mark this as a live-build BEFORE any package is installed, so
+      ## package postinsts take the live path rather than the VM/disk path.
+      ## Notably 'initializer-dist/75_growfs' skips systemd-repart when this
+      ## marker exists (repart does not work on the ISO's MBR layout), and
+      ## dist-base-files / vm-config-dist / vbox-guest-installer / user_create
+      ## all branch on it. The old ISO flow set this before 'lb chroot'
+      ## installed the packages; the install now lives here. The marker is
+      ## removed again by '*_convert-raw-to-iso' before the ISO is finalized.
+      $SUDO_TO_ROOT -- mkdir --parents -- "$CHROOT_FOLDER/var/lib/dist-base-files"
+      $SUDO_TO_ROOT -- touch -- "$CHROOT_FOLDER/var/lib/dist-base-files/live_build"
+      $SUDO_TO_ROOT -- mkdir --parents -- "$CHROOT_FOLDER/var/lib/security-misc"
+      $SUDO_TO_ROOT -- touch -- "$CHROOT_FOLDER/var/lib/security-misc/skip_install_check"
+   fi
+
    ## Install legacy-dist earlier so debconf questions are answered before
    ## meta package installation.
    pkg-install legacy-dist
@@ -491,10 +508,25 @@ $dist_build_script_skip_package_install${reset}"
       done
    fi
 
-   ## NOTE: firmware:
-   ##       This script 'build-steps.d/*_install-packages' is not used for ISO / host builds.
-   ##       Therefore no need
-   #pkg-add-to-install-list "$meta_package_firmware"
+   ## ISO-only extras: the live-boot / installer / live-bootloader packages
+   ## the ISO needs on top of the shared VM package set (live-config, calamares,
+   ## grub-live, isomd5sum, memtest86+, the live bootloader variants, ...).
+   ## 'build-steps.d/*_convert-raw-to-iso' then packs this rootfs into an ISO.
+   ## These are added to 'pkg_install_list' and installed together with the VM
+   ## set by 'pkg-list-install' (a single apt transaction). The extras must
+   ## therefore not conflict with the VM set: the deprecated
+   ## 'virtualbox-guest-utils' / '-x11' (which the baremetal-gui meta Breaks)
+   ## are already dropped from the live package list, so no conflict remains.
+   if [ "${dist_build_iso:-}" = "true" ]; then
+      if [ "${dist_build_iso_extra_packages:-}" = "" ] || [ "${dist_build_iso_extra_packages:-}" = "none" ]; then
+         true "${cyan}INFO: variable dist_build_iso_extra_packages is empty, skipping ISO extras.${reset}"
+      else
+         for dist_build_iso_extra_package_item in $dist_build_iso_extra_packages ; do
+            true "${cyan}INFO: ISO extra package: '$dist_build_iso_extra_package_item'${reset}"
+            pkg-add-to-install-list "$dist_build_iso_extra_package_item"
+         done
+      fi
+   fi
 
    pkg-list-install
 
@@ -627,11 +659,11 @@ main() {
       return 0
    fi
 
-   if [ "${dist_build_iso:-}" = "true" ]; then
-       ## NOTE: ISO builds do not use 'build-steps.d/*_install-packages' to install packages.
-       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_iso is set to true.${reset}"
-       return 0
-   fi
+   ## ISO builds now share this step: packages are installed into the same
+   ## base raw image the VM path uses (see 'build-steps.d/*_create-raw-image'),
+   ## then 'build-steps.d/*_convert-raw-to-iso' packs that rootfs into an ISO.
+   ## The ISO-only extras (live-config, calamares, grub-live, the live
+   ## bootloaders, ...) are added via 'dist_build_iso_extra_packages' below.
 
    if [ "${dist_build_flavor:-}" = "whonix-custom-workstation" ]; then
       true "${cyan}INFO: Skipping installing packages for $VMNAME.${reset}"
