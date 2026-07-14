@@ -365,7 +365,33 @@ Pin-Priority: 900"
       test -d "${dist_apt_repository_folder}"
    fi
 
-   ## Build ISO bootstrap
+   ## Build the live root filesystem with the derivative's OWN toolchain
+   ## (mmdebstrap), driven by the package/source config live-build just
+   ## generated, and seed it into live-build's bootstrap cache so
+   ## 'lb bootstrap' adopts it instead of bootstrapping and installing a
+   ## second, parallel root filesystem. live-build is thereby reduced to the
+   ## parts it is uniquely good at: the BIOS+EFI bootloader matrix, squashfs,
+   ## and hybrid-ISO packing ('lb binary'). See 'help-steps/build-live-rootfs'
+   ## and 'help-steps/lb-seed-rootfs-cache'.
+   local live_rootfs_dir
+   live_rootfs_dir="${dist_binary_build_folder}/live-build-rootfs"
+   "$dist_source_help_steps_folder/build-live-rootfs" \
+      --lb-dir "$PWD" \
+      --rootfs "${live_rootfs_dir}" \
+      --base-sources "${live_build_bootstrap_mirror_file}" \
+      --arch "${dist_build_target_arch}" \
+      --suite "${dist_build_apt_stable_release}"
+   "$dist_source_help_steps_folder/lb-seed-rootfs-cache" \
+      --rootfs "${live_rootfs_dir}" \
+      --lb-dir "$PWD"
+
+   ## The rootfs already carries the full package set; empty the live-build
+   ## chroot package lists so 'lb chroot' does not re-install them. 'lb chroot'
+   ## then only runs the live-specific finishing (dracut initrd, live-config,
+   ## repository-dist-initializer, bootloader prep).
+   safe-rm --force -- config/package-lists/*.list.chroot
+
+   ## Build ISO bootstrap (adopts the seeded rootfs from cache; no debootstrap)
    # shellcheck disable=SC2086
    if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb bootstrap --verbose --debug; then
       error "${bold}${red}ERROR: Live build bootstrap stage failed!${reset}"
