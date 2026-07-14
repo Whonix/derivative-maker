@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -23,13 +25,22 @@ ${red}${bold}ERROR ${BASH_SOURCE[0]}: | caller: $(caller)${reset}"
 }
 
 unmount_raw() {
-   trap "exception_handler_unmount-raw" ERR INT TERM
+   trap exception_handler_unmount-raw ERR INT TERM
 
    if [ "${mount_folder:-}" = "" ]; then
       true
    else
       ## hack for help-steps/analyze-image
       CHROOT_FOLDER="$mount_folder"
+   fi
+
+   ## Directory-rootfs mode (see 'dist_build_chroot_dir' in
+   ## 'help-steps/variables'): nothing was loop-mounted, so there is nothing
+   ## to unmount. The bind mounts ('/dev', '/proc', '/sys') are handled by
+   ## 'unchroot-raw' as usual.
+   if [ -n "${dist_build_chroot_dir:-}" ]; then
+      true "INFO: dist_build_chroot_dir set; no image was mounted, nothing to unmount."
+      return 0
    fi
 
    sync
