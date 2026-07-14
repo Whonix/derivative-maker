@@ -55,16 +55,6 @@ mount_raw() {
       CHROOT_FOLDER="$mount_folder"
    fi
 
-   ## Directory-rootfs mode (see 'dist_build_chroot_dir' in
-   ## 'help-steps/variables'): CHROOT_FOLDER already points at a populated
-   ## root filesystem TREE, so there is no disk image to loop-mount. Nothing
-   ## to do here.
-   if [ -n "${dist_build_chroot_dir:-}" ]; then
-      true "INFO: dist_build_chroot_dir set, CHROOT_FOLDER='$CHROOT_FOLDER' is a directory; skipping image mount."
-      test -d "$CHROOT_FOLDER"
-      return 0
-   fi
-
    sync
 
    if [ "${dist_build_mount_raw_file:-}" = "" ]; then
