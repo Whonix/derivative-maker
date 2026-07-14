@@ -273,6 +273,23 @@ install-packages() {
       $SUDO_TO_ROOT -- cp --verbose -- "$source_dracut_disable_config_snippet" "$target_dracut_disable_config_snippet"
    fi
 
+   if [ "${dist_build_iso:-}" = "true" ]; then
+      ## ISO builds install their packages HERE (into the shared raw image),
+      ## then 'build-steps.d/*_convert-raw-to-iso' packs the rootfs into an
+      ## ISO. Mark this as a live-build BEFORE any package is installed, so
+      ## package postinsts take the live path rather than the VM/disk path.
+      ## Notably 'initializer-dist/75_growfs' skips systemd-repart when this
+      ## marker exists (repart does not work on the ISO's MBR layout), and
+      ## dist-base-files / vm-config-dist / vbox-guest-installer / user_create
+      ## all branch on it. The old ISO flow set this before 'lb chroot'
+      ## installed the packages; the install now lives here. The marker is
+      ## removed again by '*_convert-raw-to-iso' before the ISO is finalized.
+      $SUDO_TO_ROOT -- mkdir --parents -- "$CHROOT_FOLDER/var/lib/dist-base-files"
+      $SUDO_TO_ROOT -- touch -- "$CHROOT_FOLDER/var/lib/dist-base-files/live_build"
+      $SUDO_TO_ROOT -- mkdir --parents -- "$CHROOT_FOLDER/var/lib/security-misc"
+      $SUDO_TO_ROOT -- touch -- "$CHROOT_FOLDER/var/lib/security-misc/skip_install_check"
+   fi
+
    ## Install legacy-dist earlier so debconf questions are answered before
    ## meta package installation.
    pkg-install legacy-dist

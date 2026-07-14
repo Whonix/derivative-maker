@@ -280,6 +280,10 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
 
    if [ "${build_dry_run:-}" = "true" ]; then
       true "${bold}${cyan}INFO: Dry-run, skipping the rest of ${BASH_SOURCE[0]}. ${reset}"
+      ## The bootstrap-mirror temp files are otherwise cleaned only after
+      ## 'lb bootstrap' (below), which the dry-run never reaches; remove them
+      ## here so repeated CI dry-runs do not accumulate stray files in /tmp.
+      safe-rm -f -- "${live_build_bootstrap_mirror_file}" "${live_build_bootstrap_mirror_security_file}" "${live_build_parent_bootstrap_mirror_file}" "${live_build_parent_bootstrap_mirror_security_file}"
       ## Cannot be completely empty, or torrent creation would later fail during the prepare-release step.
       printf '%s\n' "dummy" | sponge -- "${binary_image_iso_file}"
       return 0
