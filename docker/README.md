@@ -73,7 +73,7 @@ On Apple Silicon hosts, the default platform already matches
 
 |  Option     | Description              | Sample Value
 | ------------| -------------------------|------------|
-| `--build-step`, `-b` | Allow execution of a specific build-step |2800_create-lb-iso
+| `--build-step`, `-b` | Allow execution of a specific build-step |3600_convert-raw-to-iso
 | `--custom`, `-c` | Run a custom command inside the container | /bin/bash
 | `--binary-mount` | Configure custom binary artifact directory | /home/user/whonix/dm-binary
 | `--cacher-mount` | Configure custom package cache directory | /home/user/whonix/apt-cache
@@ -85,7 +85,7 @@ On Apple Silicon hosts, the default platform already matches
    ```
 2. Execute specific build-steps
    ```sh
-   ./derivative-maker-docker-run -b 2800_create-lb-iso -- <build arguments>
+   ./derivative-maker-docker-run -b 3600_convert-raw-to-iso -- <build arguments>
    ```
 3. Running a custom command
    ```sh
