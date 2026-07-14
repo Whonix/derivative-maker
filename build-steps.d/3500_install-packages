@@ -474,6 +474,14 @@ $dist_build_script_skip_package_install${reset}"
       true "${cyan}INFO: skipping installation of weak recommended guest additions packages spice-vdagent because not using --target qcow2, ok.${reset}"
    fi
 
+   ## '--serial-console-enable true': install the serial-console-enable package
+   ## (GRUB serial terminal config + serial-getty@ttyS0) so the image can be
+   ## driven headless over a serial line. Target-independent.
+   if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
+      true "${cyan}INFO: --serial-console-enable true: adding serial-console-enable.${reset}"
+      pkg-add-to-install-list serial-console-enable
+   fi
+
    ## kicksecure-network-conf{,-gui} cannot be listed in metapackages, as it
    ## can break networking in some situations.
    if [ "${dist_build_type_short:-}" = "kicksecure" ]; then
