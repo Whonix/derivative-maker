@@ -488,21 +488,25 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
 
    ## Read the generated package lists in glob (alphabetical) order --
    ## 'live.list.chroot' then 'z-kicksecure.list.chroot' -- one package per
-   ## line, stripping comments and blanks, and install each on its own.
+   ## line, stripping comments and blanks, and install each on its own. Each
+   ## list is read directly from its file (no process substitution / subshell).
+   live_build_pkg_list_file=""
    live_build_install_pkg=""
-   while IFS="" read -r live_build_install_pkg; do
-      live_build_install_pkg="${live_build_install_pkg%%#*}"
-      live_build_install_pkg="${live_build_install_pkg#"${live_build_install_pkg%%[![:space:]]*}"}"
-      live_build_install_pkg="${live_build_install_pkg%"${live_build_install_pkg##*[![:space:]]}"}"
-      [ -n "${live_build_install_pkg}" ] || continue
-      chroot_run apt-get "${DIST_APTGETOPT[@]}" \
-         -o Apt::Install-Recommends=false \
-         -o Dpkg::Options::=--force-confnew \
-         -o Acquire::Retries=5 \
-         --yes \
-         --allow-remove-essential \
-         install "${live_build_install_pkg}"
-   done < <(cat -- config/package-lists/*.list.chroot)
+   for live_build_pkg_list_file in config/package-lists/*.list.chroot; do
+      while IFS="" read -r live_build_install_pkg; do
+         live_build_install_pkg="${live_build_install_pkg%%#*}"
+         live_build_install_pkg="${live_build_install_pkg#"${live_build_install_pkg%%[![:space:]]*}"}"
+         live_build_install_pkg="${live_build_install_pkg%"${live_build_install_pkg##*[![:space:]]}"}"
+         [ -n "${live_build_install_pkg}" ] || continue
+         chroot_run apt-get "${DIST_APTGETOPT[@]}" \
+            -o Apt::Install-Recommends=false \
+            -o Dpkg::Options::=--force-confnew \
+            -o Acquire::Retries=5 \
+            --yes \
+            --allow-remove-essential \
+            install "${live_build_install_pkg}"
+      done < "${live_build_pkg_list_file}"
+   done
 
    ## Sanity test: the package set installs a kernel. Root-expand the glob;
    ## security-misc (now installed) hardens '/boot' so a non-root glob would
