@@ -34,8 +34,9 @@
 ## expected and benign (the MBR disk signature bytes 441-444, /etc/shadow salts,
 ## sysvinit '.depend.*' order, '.ovf'/'.mf' UUIDs, ISO volume timestamps). A
 ## Kicksecure/Whonix-aware allowlist to classify those is future work; for now
-## diffoscope reports everything and the reviewer applies that judgement. Pass
-## extra diffoscope excludes after '--' if needed.
+## diffoscope reports everything and the reviewer applies that judgement. Extra
+## diffoscope arguments (e.g. '--exclude') can be appended AFTER the two
+## artifacts: 'reproducible-compare A B --exclude PATTERN'.
 
 set -o errexit
 set -o nounset
