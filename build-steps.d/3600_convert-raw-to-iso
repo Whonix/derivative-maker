@@ -235,7 +235,17 @@ Enabled: no
 Signed-By: /usr/share/keyrings/fasttrack-archive-keyring.gpg" | sponge -- archives/fasttrack.sources.chroot
    if [ "${build_remote_derivative_pkgs}" = 'true' ]; then
       printf '%s\n' "$sources_list_build_remote_derivative" | sponge -- archives/derivative-temp.sources.chroot
-      cp -- "${source_code_folder_dist}/packages/kicksecure/repository-dist/usr/share/keyrings/derivative.asc" archives/derivative-temp.key.chroot
+      ## 'install -m 0644' (NOT 'cp'): the source derivative.asc is mode 0660 (no world-read),
+      ## and 'cp' preserves that -- 'umask 0022' above only CLEARS bits, it cannot ADD the
+      ## world-read bit the source lacks, so a plain copy lands as 0640. live-build then installs
+      ## the key into the chroot's /etc/apt/trusted.gpg.d/ at 0640, where the unprivileged '_apt'
+      ## user cannot read it. apt therefore IGNORES the key ("The key(s) in the keyring
+      ## /etc/apt/trusted.gpg.d/derivative-temp.key.chroot.asc are ignored as the file is not
+      ## readable by user '_apt' ...") and, since the 'derivative-temp.sources' entry has no
+      ## Signed-By and falls back to this global keyring, sqv fails the derivative repo with
+      ## "Missing key 6E979B28...", aborting 'lb chroot'. Force 0644 so _apt can read the
+      ## (public) key.
+      install -m 0644 -- "${source_code_folder_dist}/packages/kicksecure/repository-dist/usr/share/keyrings/derivative.asc" archives/derivative-temp.key.chroot
    else
       if [ "${build_dry_run:-}" = "true" ]; then
          true "${bold}${cyan}INFO: Dry-run, skipping setting readlink_result_live_build_localrepo_location. ${reset}"
@@ -533,7 +543,18 @@ Not running any chroot scripts.${reset}"
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/proc"
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/sys"
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/dev/pts"
-   $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/dev"
+   ## Do NOT unmount "${CHROOT_FOLDER}/dev" before 'lb binary' -- keep the host /dev
+   ## bind-mounted (established above). The live rootfs is SEEDED from the raw image
+   ## (help-steps/lb-seed-rootfs-cache), whose on-disk /dev is empty/broken (mmdebstrap
+   ## creates no static device nodes; devtmpfs is runtime-only), and live-build's binary
+   ## stage mounts /dev/pts, /proc and /sys but NOT /dev. Unmounting /dev here therefore
+   ## left the chroot with no working /dev/null, so every '> /dev/null' in the binary stage
+   ## (the security-misc permission-hardener trigger fired by grub-efi install, man-db, and
+   ## live-build's own binary.sh) failed with "cannot create /dev/null: Permission denied",
+   ## aborting the ISO ~40min in. Keeping the real host /dev mounted shadows the broken
+   ## seeded nodes with working ones (/dev/null, /dev/ptmx, ...); the final unmount-lb sweep
+   ## and the ERR trap tear it down afterwards. Where the seed already has valid nodes (CI),
+   ## the bind-mount simply shadows equivalents, so behaviour there is unchanged.
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/run"
 
    ## Package into an ISO
