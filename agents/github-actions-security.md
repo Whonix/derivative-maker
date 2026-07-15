@@ -109,6 +109,12 @@ The format is:
 - Verbatim quote: `"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"`.
 - Verified: 2026-04.
 
+**`actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1`**
+- Source: https://github.com/actions/download-artifact/releases/tag/v8.0.1
+- Verbatim quote: `"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"` (release target commit).
+- Verified: 2026-07-14 by git-api tag resolution (`git/ref/tags/v8.0.1`, lightweight tag -> commit).
+- Used by `local-reproducible.yml` (compare job downloads both independent build images). Reads artifacts written by `upload-artifact` v7.
+
 **`actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5`**
 - Source: https://github.com/actions/cache/releases/tag/v5.0.5
 - Verbatim quote: `"27d5ce7f107fe9357f9df03efb73ab90386fccae"`.

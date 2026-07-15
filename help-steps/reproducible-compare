@@ -19,24 +19,35 @@
 ## artifact; run this on both to get a rich, format-aware difference report.
 ##
 ## Usage:
-##   reproducible-compare [--output FILE] [--] ARTIFACT_A ARTIFACT_B
+##   reproducible-compare [--output FILE] [--allowlist FILE] [--] ARTIFACT_A ARTIFACT_B
 ##
 ##   --output FILE   write the report to FILE; format is chosen from the
 ##                   extension (.html -> HTML, .md -> Markdown, .json -> JSON,
 ##                   otherwise plain text). Default: plain text to stdout.
+##
+##   --allowlist FILE  read expected-to-differ member-name patterns from FILE,
+##                   one per line ('#' comments and blank lines ignored), and
+##                   pass each to diffoscope as '--exclude PATTERN'. This is the
+##                   Kicksecure/Whonix expected-to-differ policy layer: with an
+##                   empty allowlist every difference is reported (and a
+##                   remaining difference means "not reproducible"), so the file
+##                   is kept as small as possible on purpose -- an entry is an
+##                   escape hatch for a genuinely benign, not-yet-fixable
+##                   member, never a substitute for fixing the build. See
+##                   'help-steps/reproducible-allowlist.conf'.
 ##
 ## Exit codes (diffoscope's own convention, passed through):
 ##   0  the two artifacts are identical (bit-for-bit reproducible)
 ##   1  differences were found (report written)
 ##   2  usage / environment error
 ##
-## NOTE (policy layer, intentionally NOT here yet): some differences are
-## expected and benign (the MBR disk signature bytes 441-444, /etc/shadow salts,
-## sysvinit '.depend.*' order, '.ovf'/'.mf' UUIDs, ISO volume timestamps). A
-## Kicksecure/Whonix-aware allowlist to classify those is future work; for now
-## diffoscope reports everything and the reviewer applies that judgement. Extra
-## diffoscope arguments (e.g. '--exclude') can be appended AFTER the two
-## artifacts: 'reproducible-compare A B --exclude PATTERN'.
+## NOTE: '--exclude' matches diffoscope MEMBER NAMES (files inside the descended
+## image), so it can allowlist whole files (e.g. '/etc/shadow' salts, '.ovf' /
+## '.mf' UUIDs) but NOT byte regions such as the MBR disk signature (bytes
+## 441-444) or the ISO volume-descriptor timestamps -- those are pinned at build
+## time (disk-region normalization), not allowlisted here. Extra diffoscope
+## arguments can still be appended AFTER the two artifacts:
+## 'reproducible-compare A B --exclude PATTERN'.
 
 set -o errexit
 set -o nounset
@@ -56,6 +67,7 @@ error() {
 }
 
 output_file=""
+allowlist_file=""
 artifact_a=""
 artifact_b=""
 
@@ -68,6 +80,15 @@ while [ "$#" -gt 0 ]; do
          ;;
       --output=*)
          output_file="${1#*=}"
+         shift
+         ;;
+      --allowlist)
+         [ "$#" -ge 2 ] || error "--allowlist requires a value."
+         allowlist_file="$2"
+         shift 2
+         ;;
+      --allowlist=*)
+         allowlist_file="${1#*=}"
          shift
          ;;
       -h|--help)
@@ -139,6 +160,28 @@ diffoscope_limit_args=(
    "--max-diff-input-lines" "10000000"
 )
 
+## Turn the expected-to-differ allowlist into '--exclude PATTERN' arguments.
+## One pattern per line; '#' comments and blank lines are ignored; surrounding
+## whitespace is trimmed. Kept deliberately small (see the header note): each
+## pattern is a benign, not-yet-fixable member, never a build fix in disguise.
+diffoscope_allowlist_args=()
+if [ -n "${allowlist_file}" ]; then
+   [ -f "${allowlist_file}" ] || error "allowlist file does not exist: '${allowlist_file}'"
+   allowlist_pattern=""
+   allowlist_count="0"
+   while IFS='' read -r allowlist_line || [ -n "${allowlist_line}" ]; do
+      ## Trim leading and trailing whitespace (pure bash, no subshell).
+      allowlist_pattern="${allowlist_line#"${allowlist_line%%[![:space:]]*}"}"
+      allowlist_pattern="${allowlist_pattern%"${allowlist_pattern##*[![:space:]]}"}"
+      case "${allowlist_pattern}" in
+         ''|'#'*) continue ;;
+      esac
+      diffoscope_allowlist_args+=( "--exclude" "${allowlist_pattern}" )
+      allowlist_count="$(( allowlist_count + 1 ))"
+   done < "${allowlist_file}"
+   printf '%s\n' "INFO: allowlist '${allowlist_file}': ${allowlist_count} exclude pattern(s) applied." >&2
+fi
+
 ## Do not let errexit swallow diffoscope's meaningful exit code (1 = differs).
 ## Prefix with fakeroot (when available) so squashfs / archive device nodes and
 ## ownership compare fully.
@@ -147,6 +190,7 @@ diffoscope_exit_code="0"
    diffoscope \
    --exclude-directory-metadata=recursive \
    "${diffoscope_limit_args[@]}" \
+   "${diffoscope_allowlist_args[@]}" \
    "${diffoscope_output_args[@]}" \
    "${artifact_a}" \
    "${artifact_b}" \

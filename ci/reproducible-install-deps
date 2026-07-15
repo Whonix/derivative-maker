@@ -1,0 +1,39 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Install diffoscope and the format-descent helpers the reproducibility lane
+## (.github/workflows/local-reproducible.yml) needs to compare two build images.
+## Kept as a ci/ script (github-actions-security.md rule 7) so this post-checkout
+## shell is shellcheck / 'bash -n' covered and runnable locally, rather than an
+## inline workflow 'run:' block.
+##
+## --no-install-recommends keeps diffoscope's large optional recommends (LaTeX
+## and friends) out; the descenders the lane's images actually need are named
+## explicitly: ISO 9660 (genisoimage), squashfs (squashfs-tools), tar/OVA
+## (built-in), qcow2 / vmdk / vdi (qemu-utils' qemu-img), 7z containers
+## (p7zip-full), raw hexdump (xxd), and fakeroot so squashfs/device nodes and
+## ownership compare fully. reproducible-compare only WARNs on a missing
+## descender, so an unlisted format degrades gracefully.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
+
+sudo apt-get update
+sudo apt-get install --yes --no-install-recommends \
+   diffoscope \
+   genisoimage \
+   squashfs-tools \
+   fakeroot \
+   xxd \
+   p7zip-full \
+   qemu-utils
