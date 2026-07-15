@@ -1,0 +1,60 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Single source of truth for the Debian-architecture -> qemu machine-name map.
+##
+## Sourced by BOTH help-steps/variables (build-time cross emulation / binfmt
+## handler names) and help-steps/dm-qemu (headless ISO boot-testing), so the
+## mapping is defined exactly once. This fragment defines ONLY a function and
+## must stay free of side effects and of any dependency on help-steps/pre, so a
+## standalone tool (dm-qemu) can source it without dragging in the whole build
+## context. Do not add a 'set'/'shopt' preamble here -- a sourced fragment must
+## not change the caller's shell options.
+##
+## style-ok: no-strict -- sourced-only fragment; a top-level 'set -o errexit'/
+## 'nounset'/'pipefail' would leak into (and could kill) the sourcing shell.
+
+## Translate a Debian architecture (dpkg --print-architecture style, e.g. the
+## values in make_cross_build_platform_list / dist_build_target_arch) to the
+## matching qemu-user / kernel machine name (uname -m style). Used for
+## binfmt_misc handler names ('qemu-<machine>'), cross-build emulation, and the
+## 'qemu-system-<machine>' binary that dm-qemu boots. Prints the machine name on
+## stdout; returns non-zero for an unmapped architecture.
+dist_build_arch_to_qemu_machine() {
+   case "${1}" in
+      amd64)
+         printf '%s' "x86_64"
+         ;;
+      arm64)
+         printf '%s' "aarch64"
+         ;;
+      ## Both 32-bit ARM variants use the same emulator.
+      armel)
+         printf '%s' "arm"
+         ;;
+      armhf)
+         printf '%s' "arm"
+         ;;
+      mipsel)
+         printf '%s' "mipsel"
+         ;;
+      mips64el)
+         printf '%s' "mips64el"
+         ;;
+      ## The emulator for ppc64el really is ppc64le. This is not a typo.
+      ppc64el)
+         printf '%s' "ppc64le"
+         ;;
+      riscv64)
+         printf '%s' "riscv64"
+         ;;
+      s390x)
+         printf '%s' "s390x"
+         ;;
+      *)
+         return 1
+         ;;
+   esac
+}
