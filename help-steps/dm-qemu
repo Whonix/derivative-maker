@@ -41,10 +41,17 @@ Usage: dm-qemu --iso PATH [options]
   --memory MB         guest RAM in MB (default 3072)
   --smp N             guest vCPUs (default 4)
   --extra-append STR  extra kernel cmdline appended in --verbose mode
+  --emit-argv         build the qemu command (incl. --verbose kernel/initrd extraction) but do
+                      NOT run it: print the argv one token per line to stdout for an external
+                      driver (e.g. a pexpect boot-login harness) to spawn, and leave the
+                      extracted-kernel workdir in place (its path is printed to stderr; the
+                      caller owns cleanup). '-serial mon:stdio' is NOT added -- the caller adds
+                      whatever serial wiring it needs. Composes with --verbose/--entry/--fast.
   --help, -h          this help
 
 Exit: 0 if the serial log reached a login prompt / systemd; 5 if it booted but did not reach
 login within the timeout; non-zero on a setup error. KVM (/dev/kvm) is used when available.
+With --emit-argv: exit 0 after printing the argv (nothing is booted).
 EOF
 }
 
@@ -57,6 +64,7 @@ entry='user'
 memory='3072'
 smp='4'
 extra_append=''
+emit_argv='false'
 
 while [ "$#" -gt 0 ]; do
    case "$1" in
@@ -64,6 +72,7 @@ while [ "$#" -gt 0 ]; do
       --serial-log)   serial_log="${2:?--serial-log needs a value}"; shift 2 ;;
       --timeout)      timeout_secs="${2:?--timeout needs a value}"; shift 2 ;;
       --verbose)      verbose='true'; shift ;;
+      --emit-argv)    emit_argv='true'; shift ;;
       --fast)         fast='true'; shift ;;
       --entry)        entry="${2:?--entry needs a value}"; shift 2 ;;
       --memory)       memory="${2:?--memory needs a value}"; shift 2 ;;
@@ -98,7 +107,11 @@ if [ "${verbose}" = 'true' ]; then
    ## Extract the kernel, initrd and grub.cfg from the ISO, derive the chosen entry's cmdline,
    ## strip the silencers, and direct-boot. The ISO stays attached (-cdrom) as the live medium.
    work_dir="$(mktemp --directory)"
-   trap 'rm -rf -- "${work_dir}"' EXIT
+   ## In --emit-argv mode the extracted kernel/initrd must OUTLIVE this process (the external
+   ## driver spawns qemu against them), so the caller owns the workdir -- do not auto-clean it.
+   if [ "${emit_argv}" != 'true' ]; then
+      trap 'rm -rf -- "${work_dir}"' EXIT
+   fi
 
    xorriso -osirrox on -indev "${iso}" -extract /boot/grub/grub.cfg "${work_dir}/grub.cfg" >/dev/null 2>&1 \
       || { printf 'dm-qemu: could not extract /boot/grub/grub.cfg from the ISO\n' >&2; exit 2; }
@@ -144,6 +157,19 @@ if [ "${verbose}" = 'true' ]; then
 else
    printf 'dm-qemu: plain GRUB boot of %s over serial (production-silent kernel; use --verbose for kernel output)\n' "${iso##*/}" >&2
    qemu_opts+=(-cdrom "${iso}" -boot d)
+fi
+
+if [ "${emit_argv}" = 'true' ]; then
+   ## Print the qemu binary + argv, one token per line, for an external driver to read into a
+   ## list and spawn (e.g. Python pexpect). One-token-per-line is unambiguous even though the
+   ## '-append' value contains spaces: each array element is exactly one line, and no element
+   ## contains a newline. The caller adds its own serial wiring ('-serial mon:stdio' etc.).
+   if [ "${verbose}" = 'true' ]; then
+      printf 'dm-qemu: emit-argv workdir (caller owns cleanup): %s\n' "${work_dir}" >&2
+   fi
+   printf '%s\n' qemu-system-x86_64
+   printf '%s\n' "${qemu_opts[@]}"
+   exit 0
 fi
 
 : > "${serial_log}"
