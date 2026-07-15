@@ -382,6 +382,23 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
    $SUDO_TO_ROOT mkdir --parents -- "${CHROOT_FOLDER}/etc"
    $SUDO_TO_ROOT cp -- "${source_code_folder_dist}/live-build-data/live-build-config/live_build_kernel_img_conf" "${CHROOT_FOLDER}/etc/kernel-img.conf"
 
+   ## Reset /etc/fstab for the LIVE image to the empty debootstrap default -- exactly what the
+   ## released ISO ships ("# UNCONFIGURED FSTAB FOR BASE SYSTEM"). The rootfs is SEEDED from the
+   ## raw VM image (help-steps/lb-seed-rootfs-cache), so it carries the grml-debootstrap fstab
+   ## that mounts the VM's root disk and EFI System Partition BY UUID. Those devices do not
+   ## exist in a live boot, so boot-efi.mount (and systemd-fsck@<esp-uuid>) time out,
+   ## local-fs.target fails, and systemd drops to emergency.target -- a headless serial boot then
+   ## hangs at the "Press Enter for maintenance" prompt. The live rootfs is a RAM overlay mounted
+   ## by the initrd (rd.live.* on the kernel cmdline) and needs no disk fstab; systemd mounts
+   ## proc/sys/dev/run automatically. (Regression from the seed-from-raw-image change: a
+   ## freshly-debootstrapped live image had the empty fstab restored here.)
+   printf '%s\n' "# UNCONFIGURED FSTAB FOR BASE SYSTEM
+# Emptied by build-steps.d/3600_convert-raw-to-iso: the live rootfs is seeded from the raw VM
+# image, whose root-disk + EFI System Partition mounts (by UUID) do not exist in a live boot
+# and would fail local-fs.target -> emergency.target. The live rootfs is a RAM overlay
+# (initrd, rd.live.*); systemd mounts proc/sys/dev/run automatically -- no disk fstab needed." \
+      | $SUDO_TO_ROOT tee -- "${CHROOT_FOLDER}/etc/fstab" >/dev/null
+
    ## Suppress generation of a MOK when DKMS modules are installed.
    $SUDO_TO_ROOT mkdir --parents -- "${target_dkms_suppress_mok_snippet%/*}"
    $SUDO_TO_ROOT cp --verbose -- "$source_dkms_suppress_mok_snippet" "$target_dkms_suppress_mok_snippet"
