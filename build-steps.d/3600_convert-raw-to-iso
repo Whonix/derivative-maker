@@ -367,11 +367,7 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
    ## by the initrd (rd.live.* on the kernel cmdline) and needs no disk fstab; systemd mounts
    ## proc/sys/dev/run automatically. (Regression from the seed-from-raw-image change: a
    ## freshly-debootstrapped live image had the empty fstab restored here.)
-   printf '%s\n' "# UNCONFIGURED FSTAB FOR BASE SYSTEM
-# Emptied by build-steps.d/3600_convert-raw-to-iso: the live rootfs is seeded from the raw VM
-# image, whose root-disk + EFI System Partition mounts (by UUID) do not exist in a live boot
-# and would fail local-fs.target -> emergency.target. The live rootfs is a RAM overlay
-# (initrd, rd.live.*); systemd mounts proc/sys/dev/run automatically -- no disk fstab needed." \
+   printf '%s\n' "# UNCONFIGURED FSTAB FOR BASE SYSTEM" \
       | $SUDO_TO_ROOT tee -- "${CHROOT_FOLDER}/etc/fstab" >/dev/null
 
    ## Suppress generation of a MOK when DKMS modules are installed.
