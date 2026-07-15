@@ -21,7 +21,7 @@
 ## matching qemu-user / kernel machine name (uname -m style). Used for
 ## binfmt_misc handler names ('qemu-<machine>'), cross-build emulation, and the
 ## 'qemu-system-<machine>' binary that dm-qemu boots. Prints the machine name on
-## stdout; returns non-zero for an unmapped architecture.
+## stdout. A non-zero exit status signals an unmapped architecture.
 dist_build_arch_to_qemu_machine() {
    case "${1}" in
       amd64)
