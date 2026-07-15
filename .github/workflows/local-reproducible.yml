@@ -4,14 +4,14 @@ name: Reproducible
 ## Repo-private native reproducibility lane (G-A-005 'local-' prefix): builds
 ## the same image TWICE as two INDEPENDENT jobs (separate runner VMs, the
 ## reproducible-builds gold standard -- not one job building twice), then a
-## third job compares the two images with diffoscope via
-## help-steps/reproducible-compare, applying the expected-to-differ allowlist.
+## third job compares the two images with diffoscope via developer-meta-files'
+## dm-reproducible-compare, applying the expected-to-differ allowlist.
 ## The compare job's conclusion IS the reproducibility pass/fail signal: green
 ## == bit-for-bit reproducible, red == a difference remains after the allowlist.
 ## Until the images are fully reproducible this lane is EXPECTED to be red; that
 ## red is the honest "not there yet" signal and the diffoscope report artifact
 ## says exactly what still differs. All build logic reuses ci/github-build and
-## all compare logic lives in ci/reproducible-compare-artifacts (rule 7), so the
+## all compare logic lives in developer-meta-files' dm-reproducible-compare-artifacts, so the
 ## shell stays lint-covered and locally runnable. See
 ## agents/github-actions-security.md for the pinning / permissions patterns.
 
@@ -139,8 +139,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ## Only help-steps/ and ci/ scripts are needed for the comparison.
-          submodules: false
+          ## The comparator lives in the developer-meta-files submodule
+          ## (dm-reproducible-compare-artifacts + dm-reproducible-compare + the
+          ## allowlist), so the submodule must be checked out.
+          submodules: recursive
           fetch-depth: 1
           persist-credentials: false
 
@@ -169,7 +171,7 @@ jobs:
         env:
           REPORT: reproducible-report.html
           TARGET: ${{ env.REPRO_TARGET }}
-        run: ./ci/reproducible-compare-artifacts --target "${TARGET}" --dir-a build-a --dir-b build-b --output "${REPORT}"
+        run: ./packages/kicksecure/developer-meta-files/usr/bin/dm-reproducible-compare-artifacts --target "${TARGET}" --dir-a build-a --dir-b build-b --output "${REPORT}"
 
       - name: Upload diffoscope report
         if: always()

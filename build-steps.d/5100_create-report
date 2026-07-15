@@ -6,7 +6,7 @@
 ## AI-Assisted
 
 ## Verify a built image reproduces, by comparing it against a reference build
-## with diffoscope (via 'help-steps/reproducible-compare').
+## with diffoscope (via developer-meta-files' 'dm-reproducible-compare').
 ##
 ## Image reproducibility is verified the way Debian and Tails do it (there is
 ## no upstream image-level rebuilder daemon; rebuilderd et al. are package/
@@ -73,7 +73,7 @@ compare_target() {
    ## reproducible-compare returns 1 when the artifacts differ; record it, do
    ## not fail the build on non-reproducibility.
    compare_exit_code="0"
-   "$dist_source_help_steps_folder/reproducible-compare" \
+   "$dist_developer_meta_files_folder/usr/bin/dm-reproducible-compare" \
       --output "$report_out" \
       "$reference_artifact" \
       "$artifact" \
@@ -107,7 +107,7 @@ main() {
    if [ "${dist_build_reproducible_reference_folder:-}" = "" ]; then
       true "${bold}${cyan}INFO: dist_build_reproducible_reference_folder is unset, so there is no reference \
 build to compare against; skipping. To verify reproducibility, build a reference, then rebuild with \
-dist_build_reproducible_reference_folder pointing at it (or run 'help-steps/reproducible-compare' on two \
+dist_build_reproducible_reference_folder pointing at it (or run 'dm-reproducible-compare' on two \
 build outputs directly).${reset}"
       return 0
    fi
