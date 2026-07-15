@@ -18,6 +18,12 @@
 ## serial console. '--fast' additionally appends 'mitigations=off' so a pure-TCG host (no KVM,
 ## e.g. a nested Qubes VM) reaches userspace in minutes instead of not at all; do NOT use --fast
 ## for a security-fidelity test. KVM is used automatically when /dev/kvm is present.
+##
+## style-ok: no-has -- dm-qemu is a self-contained boot-tester meant to run on a bare CI
+## runner (just qemu + xorriso + bash); it deliberately does NOT source derivative-maker's
+## helper-scripts, so it uses 'command -v' rather than the 'has' helper.
+## style-ok: no-safe-rm -- for the same reason it must not depend on the 'safe-rm' helper; the
+## only removal is its OWN mktemp workdir (a fixed, self-created path), removed with 'rm -rf'.
 
 set -o errexit
 set -o nounset
@@ -31,6 +37,10 @@ usage() {
 Usage: dm-qemu --iso PATH [options]
 
   --iso PATH          the ISO to boot (required)
+  --arch ARCH         guest architecture: amd64/x86_64 (default: the host arch) or
+                      arm64/aarch64. Selects the qemu binary, machine type and serial
+                      console device, so an arm64 ISO can be boot-tested (cross-arch runs
+                      under TCG; KVM is used only when guest arch == host arch).
   --serial-log PATH   capture the serial console here (default: <iso>.serial-boot.log)
   --timeout SECS      hard qemu time limit (default 1800)
   --verbose           strip 'quiet'/'loglevel=0'/'splash' and DIRECT-boot the kernel so kernel +
@@ -38,6 +48,9 @@ Usage: dm-qemu --iso PATH [options]
   --fast              also append 'mitigations=off' for pure-TCG speed (NOT a fidelity test)
   --entry NAME        which live menu entry's cmdline to use for --verbose:
                       user (default) | sysmaint | unrestricted
+  --accel MODE        acceleration: auto (default; KVM when guest arch == host arch and
+                      /dev/kvm is usable, else TCG) | kvm (force, error if unavailable) |
+                      tcg (force emulation)
   --memory MB         guest RAM in MB (default 3072)
   --smp N             guest vCPUs (default 4)
   --extra-append STR  extra kernel cmdline appended in --verbose mode
@@ -55,6 +68,15 @@ With --emit-argv: exit 0 after printing the argv (nothing is booted).
 EOF
 }
 
+## EXIT-trap target (R-051: traps call a named function, never an inline string). Removes the
+## kernel/initrd extraction workdir; only set as the trap when NOT in --emit-argv mode, where
+## the caller owns the workdir instead. 'rm' (not safe-rm) per the no-safe-rm waiver above.
+## Invoked only indirectly via 'trap', hence unreachable to shellcheck (SC2317).
+# shellcheck disable=SC2317
+dm_qemu_cleanup_workdir() {
+   rm -rf -- "${work_dir}"
+}
+
 iso=''
 serial_log=''
 timeout_secs='1800'
@@ -65,10 +87,14 @@ memory='3072'
 smp='4'
 extra_append=''
 emit_argv='false'
+arch=''
+accel='auto'
 
 while [ "$#" -gt 0 ]; do
    case "$1" in
       --iso)          iso="${2:?--iso needs a value}"; shift 2 ;;
+      --arch)         arch="${2:?--arch needs a value}"; shift 2 ;;
+      --accel)        accel="${2:?--accel needs a value}"; shift 2 ;;
       --serial-log)   serial_log="${2:?--serial-log needs a value}"; shift 2 ;;
       --timeout)      timeout_secs="${2:?--timeout needs a value}"; shift 2 ;;
       --verbose)      verbose='true'; shift ;;
@@ -79,7 +105,10 @@ while [ "$#" -gt 0 ]; do
       --smp)          smp="${2:?--smp needs a value}"; shift 2 ;;
       --extra-append) extra_append="${2:?--extra-append needs a value}"; shift 2 ;;
       --help|-h)      usage; exit 0 ;;
-      --)             shift; break ;;
+      --)
+         shift
+         break
+         ;;
       -*)             printf 'dm-qemu: unknown option: %s\n' "$1" >&2; exit 2 ;;
       *)              break ;;
    esac
@@ -89,19 +118,93 @@ done
 [ -r "${iso}" ] || { printf 'dm-qemu: ISO not readable: %s\n' "${iso}" >&2; exit 2; }
 [ -n "${serial_log}" ] || serial_log="${iso}.serial-boot.log"
 
-command -v qemu-system-x86_64 >/dev/null || { printf 'dm-qemu: qemu-system-x86_64 not installed\n' >&2; exit 2; }
+## Reuse the canonical Debian-arch -> qemu machine-name map (single source of truth, shared
+## with help-steps/variables) instead of re-encoding it here. The fragment is side-effect
+## free (no dependency on help-steps/pre), so sourcing it drags in no build context.
+dm_qemu_dir="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
+# shellcheck source=help-steps/arch-to-qemu-machine.bsh
+source "${dm_qemu_dir}/arch-to-qemu-machine.bsh"
+
+## Default the guest arch to the host's (so a plain 'dm-qemu --iso ...' just works); pass
+## --arch to boot-test a cross-arch ISO (e.g. an arm64 image on an amd64 host, under TCG).
+## --arch takes a Debian arch (amd64, arm64, ...), matching dist_build_target_arch; the
+## uname-style aliases x86_64/aarch64 are accepted too.
+if [ -z "${arch}" ]; then
+   case "$(uname -m)" in
+      x86_64)  arch='amd64' ;;
+      aarch64) arch='arm64' ;;
+      *)       arch="$(uname -m)" ;;
+   esac
+fi
+case "${arch}" in
+   x86_64)  arch='amd64' ;;
+   aarch64) arch='arm64' ;;
+esac
+
+## qemu binary from the shared map ('qemu-system-<machine>'). The machine-name doubles as the
+## arch token compared against the host's 'uname -m' for the KVM decision below.
+guest_machine="$(dist_build_arch_to_qemu_machine "${arch}")" \
+   || { printf 'dm-qemu: unsupported --arch %s\n' "${arch}" >&2; exit 2; }
+qemu_bin="qemu-system-${guest_machine}"
+
+## Board (machine type) and serial-console device are qemu/board specifics NOT in the shared
+## arch map, so they stay here. Only the arches wired for boot-testing are known; another arch
+## resolves to a qemu binary but not yet to a board + console.
+case "${guest_machine}" in
+   x86_64)
+      machine='q35'
+      ## x86 serial: 8250 UART at ttyS0.
+      serial_console='ttyS0,115200n8'
+      ;;
+   aarch64)
+      ## 'virt' is qemu's generic arm64 board; it has no legacy VGA and, with --verbose,
+      ## boots the extracted kernel directly (-kernel) so no UEFI firmware is needed.
+      machine='virt'
+      ## arm64 serial: PL011 UART at ttyAMA0 (there is no ttyS0 on 'virt').
+      serial_console='ttyAMA0,115200'
+      ;;
+   *) printf 'dm-qemu: boot-testing not yet wired for arch %s (no machine type + serial console mapping)\n' "${arch}" >&2; exit 2 ;;
+esac
+
+command -v "${qemu_bin}" >/dev/null || { printf 'dm-qemu: %s not installed (needed for --arch %s)\n' "${qemu_bin}" "${arch}" >&2; exit 2; }
 command -v xorriso >/dev/null || { printf 'dm-qemu: xorriso not installed (needed to read the ISO)\n' >&2; exit 2; }
 
-## KVM is ~20x faster than TCG emulation; use it when the host exposes it.
-accel_opts=(-cpu max)
-if [ -e /dev/kvm ] && [ -w /dev/kvm ]; then
-   accel_opts=(-enable-kvm -cpu host)
-   printf 'dm-qemu: using KVM acceleration\n' >&2
-else
-   printf 'dm-qemu: no /dev/kvm -- using slow TCG emulation%s\n' "$([ "${fast}" = 'true' ] && printf ' (--fast: mitigations=off)')" >&2
+## Acceleration: 'auto' (default) uses KVM when the guest arch equals the host arch AND
+## /dev/kvm is usable (GitHub CI and bare metal often expose it; a nested VM like this one may
+## not), else TCG. --accel kvm forces KVM (errors if unavailable); --accel tcg forces
+## emulation. KVM cannot cross-accelerate, so an arm64 guest on an amd64 host is always TCG.
+host_machine="$(uname -m)"
+kvm_usable='false'
+if [ "${guest_machine}" = "${host_machine}" ] && [ -e /dev/kvm ] && [ -w /dev/kvm ]; then
+   kvm_usable='true'
 fi
+case "${accel}" in
+   kvm)
+      [ "${kvm_usable}" = 'true' ] || { printf 'dm-qemu: --accel kvm requested but KVM is unavailable (guest %s vs host %s, /dev/kvm)\n' "${guest_machine}" "${host_machine}" >&2; exit 2; }
+      accel_opts=(-enable-kvm -cpu host)
+      printf 'dm-qemu: KVM acceleration (forced) (%s on %s)\n' "${guest_machine}" "${host_machine}" >&2
+      ;;
+   tcg)
+      accel_opts=(-cpu max)
+      printf 'dm-qemu: TCG emulation (forced, slow)%s\n' "$([ "${fast}" = 'true' ] && printf ' (--fast)')" >&2
+      ;;
+   auto)
+      if [ "${kvm_usable}" = 'true' ]; then
+         accel_opts=(-enable-kvm -cpu host)
+         printf 'dm-qemu: KVM acceleration (auto-detected) (%s on %s)\n' "${guest_machine}" "${host_machine}" >&2
+      else
+         accel_opts=(-cpu max)
+         if [ "${guest_machine}" != "${host_machine}" ]; then
+            printf 'dm-qemu: cross-arch (%s guest on %s host) -- TCG emulation (slow)%s\n' "${guest_machine}" "${host_machine}" "$([ "${fast}" = 'true' ] && printf ', --fast')" >&2
+         else
+            printf 'dm-qemu: no usable /dev/kvm -- TCG emulation (slow)%s\n' "$([ "${fast}" = 'true' ] && printf ' (--fast: mitigations=off)')" >&2
+         fi
+      fi
+      ;;
+   *) printf 'dm-qemu: --accel must be auto|kvm|tcg: %s\n' "${accel}" >&2; exit 2 ;;
+esac
 
-qemu_opts=(-machine q35 "${accel_opts[@]}" -m "${memory}" -smp "${smp}" -nographic -no-reboot -vga none)
+qemu_opts=(-machine "${machine}" "${accel_opts[@]}" -m "${memory}" -smp "${smp}" -nographic -no-reboot -vga none)
 
 if [ "${verbose}" = 'true' ]; then
    ## Extract the kernel, initrd and grub.cfg from the ISO, derive the chosen entry's cmdline,
@@ -110,7 +213,7 @@ if [ "${verbose}" = 'true' ]; then
    ## In --emit-argv mode the extracted kernel/initrd must OUTLIVE this process (the external
    ## driver spawns qemu against them), so the caller owns the workdir -- do not auto-clean it.
    if [ "${emit_argv}" != 'true' ]; then
-      trap 'rm -rf -- "${work_dir}"' EXIT
+      trap dm_qemu_cleanup_workdir EXIT
    fi
 
    xorriso -osirrox on -indev "${iso}" -extract /boot/grub/grub.cfg "${work_dir}/grub.cfg" >/dev/null 2>&1 \
@@ -149,12 +252,30 @@ if [ "${verbose}" = 'true' ]; then
    if [ "${fast}" = 'true' ]; then
       cmdline="${cmdline} mitigations=off"
    fi
-   ## Ensure a serial console is present even if the entry somehow lacked it, and add the extra.
-   full_append="console=ttyS0,115200n8 ${cmdline} systemd.log_level=info ${extra_append}"
+   ## Ensure the arch-correct serial console is present even if the entry somehow lacked it
+   ## (or carried an x86 ttyS0 on an arm64 image), and add the extra cmdline.
+   full_append="console=${serial_console} ${cmdline} systemd.log_level=info ${extra_append}"
 
    printf 'dm-qemu: verbose direct-boot of %s (entry=%s, fast=%s, timeout=%ss)\n' "${kernel_iso_path##*/}" "${entry}" "${fast}" "${timeout_secs}" >&2
    qemu_opts+=(-kernel "${work_dir}/vmlinuz" -initrd "${work_dir}/initrd.img" -append "${full_append}" -cdrom "${iso}")
 else
+   ## Plain GRUB boot (no direct kernel). On arm64 there is no BIOS, so 'virt' needs UEFI
+   ## firmware to run the ISO's GRUB-efi; locate an edk2 build or fail with a clear hint to
+   ## use --verbose (which direct-boots the kernel and needs no firmware). x86 uses SeaBIOS.
+   if [ "${guest_machine}" = 'aarch64' ]; then
+      arm_uefi=''
+      for arm_uefi_candidate in \
+         /usr/share/AAVMF/AAVMF_CODE.fd \
+         /usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
+         /usr/share/edk2/aarch64/QEMU_EFI.fd; do
+         if [ -r "${arm_uefi_candidate}" ]; then
+            arm_uefi="${arm_uefi_candidate}"
+            break
+         fi
+      done
+      [ -n "${arm_uefi}" ] || { printf 'dm-qemu: arm64 plain boot needs edk2 UEFI firmware (install qemu-efi-aarch64) or use --verbose\n' >&2; exit 2; }
+      qemu_opts+=(-bios "${arm_uefi}")
+   fi
    printf 'dm-qemu: plain GRUB boot of %s over serial (production-silent kernel; use --verbose for kernel output)\n' "${iso##*/}" >&2
    qemu_opts+=(-cdrom "${iso}" -boot d)
 fi
@@ -167,14 +288,14 @@ if [ "${emit_argv}" = 'true' ]; then
    if [ "${verbose}" = 'true' ]; then
       printf 'dm-qemu: emit-argv workdir (caller owns cleanup): %s\n' "${work_dir}" >&2
    fi
-   printf '%s\n' qemu-system-x86_64
+   printf '%s\n' "${qemu_bin}"
    printf '%s\n' "${qemu_opts[@]}"
    exit 0
 fi
 
 : > "${serial_log}"
 qemu_rc=0
-timeout "${timeout_secs}" qemu-system-x86_64 "${qemu_opts[@]}" < /dev/null > "${serial_log}" 2>&1 || qemu_rc="$?"
+timeout "${timeout_secs}" "${qemu_bin}" "${qemu_opts[@]}" < /dev/null > "${serial_log}" 2>&1 || qemu_rc="$?"
 
 reached="$(grep -ioE 'login:|Reached target|systemd\[1\]|Welcome to' "${serial_log}" 2>/dev/null | sort -u | tr '\n' ' ')"
 printf 'dm-qemu: boot ended (qemu rc=%s); serial=%s bytes; reached: %s\n' "${qemu_rc}" "$(wc -c < "${serial_log}" 2>/dev/null || printf 0)" "${reached:-<none>}" >&2
