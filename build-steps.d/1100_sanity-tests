@@ -8,6 +8,15 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## style-ok: no-safe-rm -- this is the sanity/bootstrap step that INSTALLS safe-rm (it is in
+## required_packages_list below), so nothing here can depend on safe-rm yet; the few removals
+## use plain 'rm --force'.
+## style-ok: allow-echo -- the only 'echo' occurrences are example commands quoted INSIDE
+## operator-facing diagnostic message strings (e.g. "run: sudo losetup --all ; echo $?"), not
+## echo used as a command.
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -335,6 +344,9 @@ Recommendation:
    true
 }
 
+## Disabled manual-debugging helper: everything after 'return 0' is intentionally dead code
+## kept for manual reproduction, hence unreachable to shellcheck (SC2317).
+# shellcheck disable=SC2317
 mount-test() {
    ## TODO
    return 0
@@ -493,6 +505,9 @@ install_required_packages() {
          "${DIST_APTGETOPT_WITHOUT_APT_CACHE[@]}" \
          update
 
+   ## SC2086: intentional word-splitting of $apt_unattended_opts and the space-separated
+   ## $required_packages_list into individual apt-get arguments.
+   # shellcheck disable=SC2086
    $SUDO_TO_ROOT \
       apt-get \
          "${DIST_APTGETOPT_WITHOUT_APT_CACHE[@]}" \
@@ -507,6 +522,8 @@ check_required_packages_installed() {
    required_packages_list="git time curl approx lsb-release fakeroot fasttrack-archive-keyring safe-rm gpg-sq"
    local required_package_item
 
+   ## SC2086: intentional word-splitting of the space-separated package list.
+   # shellcheck disable=SC2086
    for required_package_item in $required_packages_list ; do
       ## 'dpkg-query' does not exit non-zero if package is absent on the system.
       if [ "$(dpkg-query --show --showformat='${Version}' "$required_package_item")" = "" ] ; then
