@@ -128,7 +128,18 @@ export HOMEVAR_VBOX_TEMP
 
 [ -n "${HOMEVAR:-}" ] || HOMEVAR="/home/$user_name"
 export HOMEVAR
-[ -n "${binary_build_folder_dist:-}" ] || binary_build_folder_dist="$HOMEVAR/derivative-binary"
+## '--build-slot NAME' (parse-cmd) isolates this build's entire output tree AND cowbuilder chroots
+## under a per-slot subfolder ('derivative-binary/<slot>'), so several builds can run concurrently
+## on a resourceful host without colliding. There is no unslotted layout: the default slot is
+## "main", so every build lives under 'derivative-binary/main' uniformly. An explicit
+## 'binary_build_folder_dist' override still wins.
+[ -n "${dist_build_slot:-}" ] || dist_build_slot="main"
+export dist_build_slot
+if [ -n "${binary_build_folder_dist:-}" ]; then
+   true "INFO: using explicitly set binary_build_folder_dist='$binary_build_folder_dist'"
+else
+   binary_build_folder_dist="$HOMEVAR/derivative-binary/$dist_build_slot"
+fi
 export binary_build_folder_dist
 
 MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
@@ -1596,7 +1607,17 @@ export make_cross_build_platform_list
 ## chroots. Overridable so the (multi-gigabyte) chroots can be relocated off a
 ## small or volatile root filesystem (e.g. onto persistent '/rw' storage on
 ## Qubes). Exported so child build tools (genmkfile) inherit it.
-[ -v cowbuilder_cache_dir ] || cowbuilder_cache_dir="/var/cache/pbuilder"
+##
+## The chroots live alongside the slot's output tree ('<binary_build_folder_dist>/pbuilder',
+## i.e. 'derivative-binary/<slot>/pbuilder', default '.../main/pbuilder') rather than a shared
+## '/var/cache/pbuilder', because two concurrent builds sharing one 'base.cow' would wipe/collide
+## -- the one fatal collision for parallel whole-image builds. An explicit override still wins
+## (e.g. to relocate the multi-gigabyte chroots onto persistent '/rw' storage on Qubes).
+if [ -n "${cowbuilder_cache_dir:-}" ]; then
+   true "INFO: using explicitly set cowbuilder_cache_dir='$cowbuilder_cache_dir'"
+else
+   cowbuilder_cache_dir="$binary_build_folder_dist/pbuilder"
+fi
 export cowbuilder_cache_dir
 
 ## Translate a Debian architecture (dpkg --print-architecture style, e.g. the
@@ -1818,6 +1839,7 @@ env_vars_keep_list="
    dist_build_raw
    dist_build_iso
    dist_build_serial_console_enable
+   dist_build_slot
    dist_build_utm
    dist_build_install_to_root
    dist_build_source_run
