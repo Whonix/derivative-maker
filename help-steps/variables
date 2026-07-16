@@ -128,7 +128,16 @@ export HOMEVAR_VBOX_TEMP
 
 [ -n "${HOMEVAR:-}" ] || HOMEVAR="/home/$user_name"
 export HOMEVAR
-[ -n "${binary_build_folder_dist:-}" ] || binary_build_folder_dist="$HOMEVAR/derivative-binary"
+## '--build-slot NAME' (parse-cmd) isolates this build's entire output tree under a per-slot
+## subfolder so several builds can run concurrently without colliding. An explicit
+## 'binary_build_folder_dist' override still wins; otherwise a slot appends '/<slot>'.
+if [ -n "${binary_build_folder_dist:-}" ]; then
+   true "INFO: using explicitly set binary_build_folder_dist='$binary_build_folder_dist'"
+elif [ -n "${dist_build_slot:-}" ]; then
+   binary_build_folder_dist="$HOMEVAR/derivative-binary/$dist_build_slot"
+else
+   binary_build_folder_dist="$HOMEVAR/derivative-binary"
+fi
 export binary_build_folder_dist
 
 MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
@@ -1596,7 +1605,18 @@ export make_cross_build_platform_list
 ## chroots. Overridable so the (multi-gigabyte) chroots can be relocated off a
 ## small or volatile root filesystem (e.g. onto persistent '/rw' storage on
 ## Qubes). Exported so child build tools (genmkfile) inherit it.
-[ -v cowbuilder_cache_dir ] || cowbuilder_cache_dir="/var/cache/pbuilder"
+##
+## Under '--build-slot NAME' the chroots live alongside that slot's output tree
+## ('<binary_build_folder_dist>/pbuilder') rather than the shared '/var/cache/pbuilder',
+## because two concurrent builds sharing one 'base.cow' would wipe/collide -- the one fatal
+## collision for parallel whole-image builds. An explicit override still wins.
+if [ -v cowbuilder_cache_dir ]; then
+   true "INFO: using explicitly set cowbuilder_cache_dir='$cowbuilder_cache_dir'"
+elif [ -n "${dist_build_slot:-}" ]; then
+   cowbuilder_cache_dir="$binary_build_folder_dist/pbuilder"
+else
+   cowbuilder_cache_dir="/var/cache/pbuilder"
+fi
 export cowbuilder_cache_dir
 
 ## Translate a Debian architecture (dpkg --print-architecture style, e.g. the
@@ -1818,6 +1838,7 @@ env_vars_keep_list="
    dist_build_raw
    dist_build_iso
    dist_build_serial_console_enable
+   dist_build_slot
    dist_build_utm
    dist_build_install_to_root
    dist_build_source_run

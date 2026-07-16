@@ -147,6 +147,9 @@ Optional Parameters:
   --vmsize [size]          : Set VM disk size (e.g., --vmsize 200G).
 
   --freshness [option]     : Choose between 'frozen' (frozen sources) or 'current' (current sources).
+  --build-slot [name]      : Isolate this build under derivative-binary/<name> (its own output tree
+                             and cowbuilder chroots) so multiple builds can run concurrently on a
+                             resourceful host. Name chars: [A-Za-z0-9_-]. Default: unset (shared tree).
   --connection [option]    : Select 'clearnet' for clearnet apt sources or 'onion' for onion apt sources.
   --repo [true|false]      : Enable or disable derivative remote repository (default: false).
 
@@ -414,6 +417,26 @@ dist_build_one_parse_cmd() {
                   printf '%s\n' "${red}${bold}ERROR: supported options for --freshness are 'frozen' or 'current'.${reset}"
                   exit 1
                fi
+               shift 2
+               ;;
+           --build-slot)
+               ## Isolate this build's output tree AND its cowbuilder chroots under a per-slot
+               ## subfolder ('derivative-binary/<slot>' + '<slot>/pbuilder'), so multiple builds
+               ## can run concurrently on a resourceful host without colliding. Applied in
+               ## help-steps/variables. Restricted to a single safe path component.
+               if [ -z "${2:-}" ]; then
+                  printf '%s\n' "${red}${bold}ERROR: --build-slot requires a non-empty name.${reset}"
+                  exit 1
+               fi
+               case "${2}" in
+                  -* | *[!A-Za-z0-9_-]*)
+                     printf '%s\n' "${red}${bold}ERROR: --build-slot name '${2}' is invalid: use [A-Za-z0-9_-] only, no leading '-'.${reset}"
+                     exit 1
+                     ;;
+               esac
+               dist_build_slot="${2}"
+               export dist_build_slot
+               true "${cyan}INFO: --build-slot ${dist_build_slot} chosen (isolated build tree + cowbuilder cache).${reset}"
                shift 2
                ;;
            --connection)
