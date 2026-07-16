@@ -37,10 +37,11 @@ usage() {
 Usage: dm-qemu --iso PATH [options]
 
   --iso PATH          the ISO to boot (required)
-  --arch ARCH         guest architecture: amd64/x86_64 (default: the host arch) or
-                      arm64/aarch64. Selects the qemu binary, machine type and serial
-                      console device, so an arm64 ISO can be boot-tested (cross-arch runs
-                      under TCG; KVM is used only when guest arch == host arch).
+  --arch ARCH         guest Debian architecture (amd64, arm64, ...; default: the host's
+                      'dpkg --print-architecture'). Selects the qemu binary, machine type
+                      and serial console via the shared help-steps arch map, so an arm64 ISO
+                      can be boot-tested (cross-arch runs under TCG; KVM only when guest arch
+                      == host arch).
   --serial-log PATH   capture the serial console here (default: <iso>.serial-boot.log)
   --timeout SECS      hard qemu time limit (default 1800)
   --verbose           strip 'quiet'/'loglevel=0'/'splash' and DIRECT-boot the kernel so kernel +
@@ -125,46 +126,23 @@ dm_qemu_dir="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
 # shellcheck source=help-steps/arch-to-qemu-machine.bsh
 source "${dm_qemu_dir}/arch-to-qemu-machine.bsh"
 
-## Default the guest arch to the host's (so a plain 'dm-qemu --iso ...' just works); pass
-## --arch to boot-test a cross-arch ISO (e.g. an arm64 image on an amd64 host, under TCG).
-## --arch takes a Debian arch (amd64, arm64, ...), matching dist_build_target_arch; the
-## uname-style aliases x86_64/aarch64 are accepted too.
-if [ -z "${arch}" ]; then
-   case "$(uname -m)" in
-      x86_64)  arch='amd64' ;;
-      aarch64) arch='arm64' ;;
-      *)       arch="$(uname -m)" ;;
-   esac
-fi
-case "${arch}" in
-   x86_64)  arch='amd64' ;;
-   aarch64) arch='arm64' ;;
-esac
+## Default the guest arch to the HOST's Debian architecture via 'dpkg --print-architecture' --
+## the same source help-steps/variables and parse-cmd use for host_architecture -- so no
+## uname->arch table is needed here. --arch takes a Debian arch (amd64, arm64, ...), matching
+## dist_build_target_arch; pass it to boot-test a cross-arch ISO (arm64 on amd64 runs TCG).
+host_arch="$(dpkg --print-architecture)"
+[ -n "${arch}" ] || arch="${host_arch}"
 
-## qemu binary from the shared map ('qemu-system-<machine>'). The machine-name doubles as the
-## arch token compared against the host's 'uname -m' for the KVM decision below.
+## All three arch->qemu mappings come from the shared help-steps fragment (single source of
+## truth): the qemu binary ('qemu-system-<machine>'), the '-machine' board type, and the serial
+## console device. An arch the fragment does not map is not wired for boot-testing.
 guest_machine="$(dist_build_arch_to_qemu_machine "${arch}")" \
    || { printf 'dm-qemu: unsupported --arch %s\n' "${arch}" >&2; exit 2; }
 qemu_bin="qemu-system-${guest_machine}"
-
-## Board (machine type) and serial-console device are qemu/board specifics NOT in the shared
-## arch map, so they stay here. Only the arches wired for boot-testing are known; another arch
-## resolves to a qemu binary but not yet to a board + console.
-case "${guest_machine}" in
-   x86_64)
-      machine='q35'
-      ## x86 serial: 8250 UART at ttyS0.
-      serial_console='ttyS0,115200n8'
-      ;;
-   aarch64)
-      ## 'virt' is qemu's generic arm64 board; it has no legacy VGA and, with --verbose,
-      ## boots the extracted kernel directly (-kernel) so no UEFI firmware is needed.
-      machine='virt'
-      ## arm64 serial: PL011 UART at ttyAMA0 (there is no ttyS0 on 'virt').
-      serial_console='ttyAMA0,115200'
-      ;;
-   *) printf 'dm-qemu: boot-testing not yet wired for arch %s (no machine type + serial console mapping)\n' "${arch}" >&2; exit 2 ;;
-esac
+machine="$(dist_build_arch_to_qemu_machine_type "${arch}")" \
+   || { printf 'dm-qemu: boot-testing not wired for arch %s (no qemu machine type)\n' "${arch}" >&2; exit 2; }
+serial_console="$(dist_build_arch_to_serial_console "${arch}")" \
+   || { printf 'dm-qemu: boot-testing not wired for arch %s (no serial console)\n' "${arch}" >&2; exit 2; }
 
 command -v "${qemu_bin}" >/dev/null || { printf 'dm-qemu: %s not installed (needed for --arch %s)\n' "${qemu_bin}" "${arch}" >&2; exit 2; }
 command -v xorriso >/dev/null || { printf 'dm-qemu: xorriso not installed (needed to read the ISO)\n' >&2; exit 2; }
@@ -173,16 +151,15 @@ command -v xorriso >/dev/null || { printf 'dm-qemu: xorriso not installed (neede
 ## /dev/kvm is usable (GitHub CI and bare metal often expose it; a nested VM like this one may
 ## not), else TCG. --accel kvm forces KVM (errors if unavailable); --accel tcg forces
 ## emulation. KVM cannot cross-accelerate, so an arm64 guest on an amd64 host is always TCG.
-host_machine="$(uname -m)"
 kvm_usable='false'
-if [ "${guest_machine}" = "${host_machine}" ] && [ -e /dev/kvm ] && [ -w /dev/kvm ]; then
+if [ "${arch}" = "${host_arch}" ] && [ -e /dev/kvm ] && [ -w /dev/kvm ]; then
    kvm_usable='true'
 fi
 case "${accel}" in
    kvm)
-      [ "${kvm_usable}" = 'true' ] || { printf 'dm-qemu: --accel kvm requested but KVM is unavailable (guest %s vs host %s, /dev/kvm)\n' "${guest_machine}" "${host_machine}" >&2; exit 2; }
+      [ "${kvm_usable}" = 'true' ] || { printf 'dm-qemu: --accel kvm requested but KVM is unavailable (guest %s vs host %s, /dev/kvm)\n' "${arch}" "${host_arch}" >&2; exit 2; }
       accel_opts=(-enable-kvm -cpu host)
-      printf 'dm-qemu: KVM acceleration (forced) (%s on %s)\n' "${guest_machine}" "${host_machine}" >&2
+      printf 'dm-qemu: KVM acceleration (forced) (%s on %s)\n' "${arch}" "${host_arch}" >&2
       ;;
    tcg)
       accel_opts=(-cpu max)
@@ -191,11 +168,11 @@ case "${accel}" in
    auto)
       if [ "${kvm_usable}" = 'true' ]; then
          accel_opts=(-enable-kvm -cpu host)
-         printf 'dm-qemu: KVM acceleration (auto-detected) (%s on %s)\n' "${guest_machine}" "${host_machine}" >&2
+         printf 'dm-qemu: KVM acceleration (auto-detected) (%s on %s)\n' "${arch}" "${host_arch}" >&2
       else
          accel_opts=(-cpu max)
-         if [ "${guest_machine}" != "${host_machine}" ]; then
-            printf 'dm-qemu: cross-arch (%s guest on %s host) -- TCG emulation (slow)%s\n' "${guest_machine}" "${host_machine}" "$([ "${fast}" = 'true' ] && printf ', --fast')" >&2
+         if [ "${arch}" != "${host_arch}" ]; then
+            printf 'dm-qemu: cross-arch (%s guest on %s host) -- TCG emulation (slow)%s\n' "${arch}" "${host_arch}" "$([ "${fast}" = 'true' ] && printf ', --fast')" >&2
          else
             printf 'dm-qemu: no usable /dev/kvm -- TCG emulation (slow)%s\n' "$([ "${fast}" = 'true' ] && printf ' (--fast: mitigations=off)')" >&2
          fi
