@@ -286,7 +286,9 @@ fi
 qemu_rc=0
 timeout "${timeout_secs}" "${qemu_bin}" "${qemu_opts[@]}" < /dev/null > "${serial_log}" 2>&1 || qemu_rc="$?"
 
-reached="$(grep -ioE 'login:|Reached target|systemd\[1\]|Welcome to' "${serial_log}" 2>/dev/null | sort -u | tr '\n' ' ')"
+## '|| true': a fully-failed boot produces none of the markers, so grep exits 1, which under
+## 'set -e -o pipefail' would abort the assignment here and bypass the FAIL / exit-5 reporting below.
+reached="$(grep -ioE 'login:|Reached target|systemd\[1\]|Welcome to' "${serial_log}" 2>/dev/null | sort -u | tr '\n' ' ' || true)"
 printf 'dm-qemu: boot ended (qemu rc=%s); serial=%s bytes; reached: %s\n' "${qemu_rc}" "$(wc -c < "${serial_log}" 2>/dev/null || printf 0)" "${reached:-<none>}" >&2
 
 if printf '%s' "${reached}" | grep -qiE 'login:|Welcome to'; then

@@ -57,7 +57,9 @@ EOF
 ## $1 = field name, $2 = file, $3 = occurrence (1-based).
 deb822_field() {
    local field="$1" file="$2" occurrence="$3"
-   grep -E "^${field}:" -- "${file}" | sed -n "${occurrence}p" | sed -E "s/^${field}:[[:space:]]*//"
+   ## '|| true': grep exits 1 when the field is absent, which under 'set -e -o pipefail' would abort
+   ## the caller's "$(deb822_field ...)" assignment before its empty-result check can run.
+   grep -E "^${field}:" -- "${file}" | sed -n "${occurrence}p" | sed -E "s/^${field}:[[:space:]]*//" || true
 }
 
 ## True (exit 0) if snapshot ${1} serves ${archive} ${suite}'s Release with HTTP 200.
@@ -74,11 +76,15 @@ snapshot_serves() {
 ## (debian) and the security suite (debian-security), scanning this month then last month.
 ## $1 = primary suite, $2 = security suite. Non-zero if none found.
 latest_valid_snapshot() {
-   local suite="$1" security_suite="$2" year month listing timestamp
+   local suite="$1" security_suite="$2" year month listing timestamp anchor
+   ## Anchor month arithmetic on the 15th: 'date --date="-1 month"' on the 31st of a month that
+   ## follows a shorter one (e.g. May 31 -> "April 31" -> May 1) rolls over and would scan the
+   ## current month twice and skip the previous one. Every month has a 15th, so this is exact.
+   anchor="$(date --utc +%Y-%m-15)"
    for months_back in 0 1; do
       ## Current or previous UTC month. 'date' arithmetic keeps this dependency-free.
-      year="$(date --utc --date="-${months_back} month" +%Y)"
-      month="$(date --utc --date="-${months_back} month" +%m)"
+      year="$(date --utc --date="${anchor} -${months_back} month" +%Y)"
+      month="$(date --utc --date="${anchor} -${months_back} month" +%m)"
       listing="$(curl --silent --show-error --location --max-time 60 \
          "${SNAPSHOT_BASE}/debian/?year=${year}&month=${month}" 2>/dev/null || true)"
       ## Newest first.
