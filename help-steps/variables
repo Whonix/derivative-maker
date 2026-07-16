@@ -128,17 +128,20 @@ export HOMEVAR_VBOX_TEMP
 
 [ -n "${HOMEVAR:-}" ] || HOMEVAR="/home/$user_name"
 export HOMEVAR
-## '--build-slot NAME' (parse-cmd) isolates this build's entire output tree AND cowbuilder chroots
-## under a per-slot subfolder ('derivative-binary/<slot>'), so several builds can run concurrently
-## on a resourceful host without colliding. There is no unslotted layout: the default slot is
-## "main", so every build lives under 'derivative-binary/main' uniformly. An explicit
-## 'binary_build_folder_dist' override still wins.
-[ -n "${dist_build_slot:-}" ] || dist_build_slot="main"
-export dist_build_slot
+## '--build-slot NAME' (parse-cmd, OPTIONAL) isolates this build's entire output tree AND cowbuilder
+## chroots under a per-slot subfolder ('derivative-binary/<slot>'), so several builds can run
+## concurrently on a resourceful host without colliding. UNSET by default: without a slot the layout
+## is the historical 'derivative-binary/<version>' -- defaulting the slot to "main" was reverted
+## because the extra '/main/' path level broke code hardcoding 'derivative-binary/<version>' (e.g.
+## ci/github-build's live-build / cowbuilder scratch cleanup). An explicit 'binary_build_folder_dist'
+## override still wins.
+export dist_build_slot="${dist_build_slot:-}"
 if [ -n "${binary_build_folder_dist:-}" ]; then
    true "INFO: using explicitly set binary_build_folder_dist='$binary_build_folder_dist'"
-else
+elif [ -n "${dist_build_slot:-}" ]; then
    binary_build_folder_dist="$HOMEVAR/derivative-binary/$dist_build_slot"
+else
+   binary_build_folder_dist="$HOMEVAR/derivative-binary"
 fi
 export binary_build_folder_dist
 
@@ -1608,17 +1611,19 @@ export make_cross_build_platform_list
 ## small or volatile root filesystem (e.g. onto persistent '/rw' storage on
 ## Qubes). Exported so child build tools (genmkfile) inherit it.
 ##
-## Per-slot ('/var/cache/pbuilder/<slot>', default '.../main') so concurrent whole-image builds
-## in different --build-slot slots do not share one 'base.cow' (which they would wipe/collide on).
-## Deliberately NOT under '$binary_build_folder_dist': the chroots are root-owned build SCRATCH,
-## not output -- placing them inside the artifact tree makes the CI upload-artifact scan fail with
-## EACCES on the 0700 chroot dirs (e.g. 'base.cow_<arch>/etc/credstore'), and they are not a useful
-## artifact. Keeping them in '/var/cache/pbuilder' also preserves the base.cow cache across builds.
-## An explicit override still wins (e.g. relocate onto persistent '/rw' storage on Qubes).
+## Under an explicit '--build-slot' the chroots go to a per-slot '/var/cache/pbuilder/<slot>' so
+## concurrent whole-image builds in different slots do not share one 'base.cow' (which they would
+## wipe/collide on); without a slot the historical shared '/var/cache/pbuilder' is used. Deliberately
+## NOT under '$binary_build_folder_dist': the chroots are root-owned build SCRATCH, not output --
+## placing them in the artifact tree makes the CI upload-artifact scan fail with EACCES on the 0700
+## chroot dirs. '/var/cache/pbuilder' also preserves the base.cow cache across builds. An explicit
+## override still wins (e.g. relocate onto persistent '/rw' storage on Qubes).
 if [ -n "${cowbuilder_cache_dir:-}" ]; then
    true "INFO: using explicitly set cowbuilder_cache_dir='$cowbuilder_cache_dir'"
-else
+elif [ -n "${dist_build_slot:-}" ]; then
    cowbuilder_cache_dir="/var/cache/pbuilder/$dist_build_slot"
+else
+   cowbuilder_cache_dir="/var/cache/pbuilder"
 fi
 export cowbuilder_cache_dir
 

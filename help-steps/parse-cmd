@@ -149,7 +149,8 @@ Optional Parameters:
   --freshness [option]     : Choose between 'frozen' (frozen sources) or 'current' (current sources).
   --build-slot [name]      : Build under derivative-binary/<name> (its own output tree and
                              cowbuilder chroots) so multiple builds can run concurrently on a
-                             resourceful host. Name chars: [A-Za-z0-9_-]. Default: main.
+                             resourceful host. Name chars: [A-Za-z0-9_-]. Default: unset (shared
+                             derivative-binary/<version> layout).
   --connection [option]    : Select 'clearnet' for clearnet apt sources or 'onion' for onion apt sources.
   --repo [true|false]      : Enable or disable derivative remote repository (default: false).
 
