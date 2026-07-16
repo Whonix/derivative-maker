@@ -39,6 +39,7 @@ convert_raw_to_qcow2() {
       convert \
          -p \
          -O qcow2 \
+         -o compat=1.1 \
          -o cluster_size=2M \
          -o extended_l2=on,cluster_size=128k \
          -o preallocation=metadata \
