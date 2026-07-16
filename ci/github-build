@@ -29,6 +29,7 @@ shopt -s shift_verbose
 arch=""
 target="virtualbox"
 flavor="kicksecure-cli"
+freshness=""
 while [ "$#" -gt 0 ]; do
    case "$1" in
       --arch)
@@ -53,6 +54,14 @@ while [ "$#" -gt 0 ]; do
             exit 1
          fi
          flavor="$2"
+         shift 2
+         ;;
+      --freshness)
+         if [ "$#" -lt 2 ]; then
+            printf '%s\n' "${BASH_SOURCE[0]}: --freshness requires a value" >&2
+            exit 1
+         fi
+         freshness="$2"
          shift 2
          ;;
       *)
@@ -161,15 +170,33 @@ if [ "${target}" = "iso" ]; then
    serial_args=(--serial-console-enable true)
 fi
 
+## Optional apt freshness passthrough. Unset -> derivative-maker's own default. '--freshness
+## frozen' pins the snapshot.debian.org timestamp (build_sources/debian_stable_frozen_*), so two
+## independent builds pull identical package versions -- required for a meaningful reproducibility
+## comparison. The value is validated by help-steps/parse-cmd, not duplicated here.
+freshness_args=()
+if [ -n "${freshness}" ]; then
+   freshness_args=(--freshness "${freshness}")
+fi
+
+## '--remote-derivative-packages false': build the Kicksecure/Whonix derivative packages
+## LOCALLY from the source tree instead of pulling prebuilt ones from the remote repo. A
+## reproducible build must not embed opaque prebuilt packages -- a third party can only
+## reproduce the image if every derivative package is built from the same source. Trade-off: the
+## build is slower (it compiles all derivative packages) in exchange for being reproducible.
+##
+## '--unsafe-io true': eatmydata elides fsync in the disposable cowbuilder chroot -- repro-safe
+## (no byte that lands in a .deb/.iso changes; SOURCE_DATE_EPOCH still enforces determinism).
 ./derivative-maker \
    --flavor "${flavor}" \
    --target "${target}" \
    "${type_args[@]}" \
    "${serial_args[@]}" \
+   "${freshness_args[@]}" \
    --arch "${arch}" \
    --allow-uncommitted true \
    --allow-untagged true \
    --freedom false \
    --repo true \
-   --remote-derivative-packages true \
+   --remote-derivative-packages false \
    --unsafe-io true

@@ -1627,48 +1627,12 @@ else
 fi
 export cowbuilder_cache_dir
 
-## Translate a Debian architecture (dpkg --print-architecture style, e.g. the
-## values in make_cross_build_platform_list / dist_build_target_arch) to the
-## matching qemu-user / kernel machine name (uname -m style). Used for
-## binfmt_misc handler names ('qemu-<machine>') and cross-build emulation.
-## Prints the machine name on stdout; returns non-zero for an unmapped
-## architecture.
-dist_build_arch_to_qemu_machine() {
-   case "${1}" in
-      amd64)
-         printf '%s' "x86_64"
-         ;;
-      arm64)
-         printf '%s' "aarch64"
-         ;;
-      ## Both 32-bit ARM variants use the same emulator.
-      armel)
-         printf '%s' "arm"
-         ;;
-      armhf)
-         printf '%s' "arm"
-         ;;
-      mipsel)
-         printf '%s' "mipsel"
-         ;;
-      mips64el)
-         printf '%s' "mips64el"
-         ;;
-      ## The emulator for ppc64el really is ppc64le. This is not a typo.
-      ppc64el)
-         printf '%s' "ppc64le"
-         ;;
-      riscv64)
-         printf '%s' "riscv64"
-         ;;
-      s390x)
-         printf '%s' "s390x"
-         ;;
-      *)
-         return 1
-         ;;
-   esac
-}
+## The Debian-arch -> qemu machine-name map (dist_build_arch_to_qemu_machine) lives in a
+## standalone, side-effect-free fragment so help-steps/dm-qemu (headless ISO boot-testing) can
+## reuse the SAME mapping without sourcing the whole build context. Single source of truth --
+## do not re-inline it here. Used for binfmt_misc handler names ('qemu-<machine>'), cross-build
+## emulation, and dm-qemu's 'qemu-system-<machine>' binary.
+source "${dist_source_help_steps_folder}/arch-to-qemu-machine.bsh"
 
 set_cowbuilder_folders() {
    cow_folder="$cowbuilder_cache_dir/cow.cow_${dist_build_multiarch_package_item}"

@@ -23,15 +23,21 @@
 ##    - See note above!
 ##    - See note above!
 
+## THE REPRODUCIBILITY PIN. The snapshot.debian.org timestamp below is what makes a
+## '--freshness frozen' build reproducible: a third party who builds from this exact commit
+## gets the same package versions. approx (127.0.0.1:9977 -> debian-frozen) is a generic,
+## UNPINNED pass-through to snapshot.debian.org; the timestamp is a path segment HERE, so this
+## file is the single reviewable place the pin changes. Bump it (to a newer valid snapshot)
+## with dm-maintenance, not by hand and not in approx.conf.
 Types: deb
-URIs: http://127.0.0.1:9977/debian-frozen
+URIs: http://127.0.0.1:9977/debian-frozen/20260709T201930Z
 Suites: trixie
 Components: main contrib non-free non-free-firmware
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
 Types: deb
-URIs: http://127.0.0.1:9977/debian-security-frozen
+URIs: http://127.0.0.1:9977/debian-security-frozen/20260709T201930Z
 Suites: trixie-security
 Components: main contrib non-free non-free-firmware
 Enabled: yes

@@ -28,7 +28,18 @@ DOCKER_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
 SOURCE_VOLUME="$( dirname -- "${DOCKER_DIR}" )"
 BINARY_VOLUME="$HOME/binary_mnt"
 CACHER_VOLUME="$HOME/approx_cache_mnt"
+## Persist the auto-generated local APT signing key across builds. sq (sequoia) keeps
+## the SECRET key in ~/.local/share/sequoia/keystore (the softkeys backend) and the
+## certificates in ~/.local/share/pgp.cert.d, so KEY_VOLUME is mounted at ~/.local/share
+## (see the --volume below). A prior mount at ~/.gnupg persisted nothing (that folder
+## holds only gpg-agent sockets here), so help-steps/signing-key-create regenerated a
+## fresh key every run (a new fingerprint each build), breaking sign-and-tag re-run-safety
+## and leaving residue tags. signing-key-create is idempotent: with the store persisted it
+## reuses the same key. GNUPG_VOLUME additionally persists ~/.gnupg for gpg-agent /
+## Qubes split-gpg-2 setups that DO route secret keys through gpg-agent (no-op here, where
+## sq uses the softkeys backend, but harmless and correct for those configurations).
 KEY_VOLUME="$HOME/.key_mnt"
+GNUPG_VOLUME="$HOME/.gnupg_mnt"
 IMG="Kicksecure/derivative-maker-docker"
 ## Arch-qualify the image tag so an amd64 and an arm64 image can never collide
 ## in a shared docker store or image cache. The image is built natively on the
@@ -71,6 +82,7 @@ volume_prepare() {
     "${CACHER_VOLUME}" "101:102" "770"
     "${BINARY_VOLUME}" "${HOST_USER}:${HOST_USER}" "770"
     "${KEY_VOLUME}" "${HOST_USER}:${HOST_USER}" "700"
+    "${GNUPG_VOLUME}" "${HOST_USER}:${HOST_USER}" "700"
   )
 
   while (( ${#VOLUMES[@]} > 0 )); do
@@ -176,13 +188,15 @@ sudo \
       "${docker_run_opts[@]}" \
       --rm \
       --privileged \
+      --volume /dev:/dev \
       --env 'flavor_meta_packages_to_install=' \
       --env 'install_package_list=' \
       --env 'DERIVATIVE_APT_REPOSITORY_OPTS=' \
       --volume "${SOURCE_VOLUME}:/home/${DOCKER_USER}/derivative-maker" \
       --volume "${BINARY_VOLUME}:/home/${DOCKER_USER}/derivative-binary" \
       --volume "${CACHER_VOLUME}:/var/cache/approx-derivative-maker" \
-      --volume "${KEY_VOLUME}:/home/${DOCKER_USER}/.gnupg" \
+      --volume "${KEY_VOLUME}:/home/${DOCKER_USER}/.local/share" \
+      --volume "${GNUPG_VOLUME}:/home/${DOCKER_USER}/.gnupg" \
       "${image_ref}" \
         sudo \
           --non-interactive \

@@ -1,0 +1,96 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Single source of truth for the Debian-architecture -> qemu machine-name map.
+##
+## Sourced by BOTH help-steps/variables (build-time cross emulation / binfmt
+## handler names) and help-steps/dm-qemu (headless ISO boot-testing), so the
+## mapping is defined exactly once. This fragment defines ONLY a function and
+## must stay free of side effects and of any dependency on help-steps/pre, so a
+## standalone tool (dm-qemu) can source it without dragging in the whole build
+## context. Do not add a 'set'/'shopt' preamble here -- a sourced fragment must
+## not change the caller's shell options.
+##
+## style-ok: no-strict -- sourced-only fragment; a top-level 'set -o errexit'/
+## 'nounset'/'pipefail' would leak into (and could kill) the sourcing shell.
+
+## Translate a Debian architecture (dpkg --print-architecture style, e.g. the
+## values in make_cross_build_platform_list / dist_build_target_arch) to the
+## matching qemu-user / kernel machine name (uname -m style). Used for
+## binfmt_misc handler names ('qemu-<machine>'), cross-build emulation, and the
+## 'qemu-system-<machine>' binary that dm-qemu boots. Prints the machine name on
+## stdout. A non-zero exit status signals an unmapped architecture.
+dist_build_arch_to_qemu_machine() {
+   case "${1}" in
+      amd64)
+         printf '%s' "x86_64"
+         ;;
+      arm64)
+         printf '%s' "aarch64"
+         ;;
+      ## Both 32-bit ARM variants use the same emulator.
+      armel)
+         printf '%s' "arm"
+         ;;
+      armhf)
+         printf '%s' "arm"
+         ;;
+      mipsel)
+         printf '%s' "mipsel"
+         ;;
+      mips64el)
+         printf '%s' "mips64el"
+         ;;
+      ## The emulator for ppc64el really is ppc64le. This is not a typo.
+      ppc64el)
+         printf '%s' "ppc64le"
+         ;;
+      riscv64)
+         printf '%s' "riscv64"
+         ;;
+      s390x)
+         printf '%s' "s390x"
+         ;;
+      *)
+         return 1
+         ;;
+   esac
+}
+
+## Translate a Debian architecture to the qemu '-machine' board TYPE dm-qemu boots it on.
+## Board choice is a qemu specific (not a uname/binfmt concern), kept next to the machine-name
+## map so all arch->qemu data lives in one help-steps fragment. Only the arches wired for
+## headless boot-testing are mapped; prints the machine type on stdout, non-zero if unmapped.
+dist_build_arch_to_qemu_machine_type() {
+   case "${1}" in
+      amd64)
+         printf '%s' "q35"
+         ;;
+      ## 'virt' is qemu's generic arm64 board: no legacy VGA, and it boots '-kernel' directly.
+      arm64)
+         printf '%s' "virt"
+         ;;
+      *)
+         return 1
+         ;;
+   esac
+}
+
+## Translate a Debian architecture to its serial-console device (the kernel 'console=' value)
+## for a headless boot: the 8250 UART ttyS0 on x86, the PL011 UART ttyAMA0 on arm64 ('virt'
+## has no ttyS0). Prints the console spec on stdout; non-zero if the architecture is unmapped.
+dist_build_arch_to_serial_console() {
+   case "${1}" in
+      amd64)
+         printf '%s' "ttyS0,115200n8"
+         ;;
+      arm64)
+         printf '%s' "ttyAMA0,115200"
+         ;;
+      *)
+         return 1
+         ;;
+   esac
+}

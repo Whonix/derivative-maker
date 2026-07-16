@@ -8,6 +8,15 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## style-ok: no-safe-rm -- this is the sanity/bootstrap step that INSTALLS safe-rm (it is in
+## required_packages_list below), so nothing here can depend on safe-rm yet; the few removals
+## use plain 'rm --force'.
+## style-ok: allow-echo -- the only 'echo' occurrences are example commands quoted INSIDE
+## operator-facing diagnostic message strings (e.g. "run: sudo losetup --all ; echo $?"), not
+## echo used as a command.
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -335,6 +344,9 @@ Recommendation:
    true
 }
 
+## Disabled manual-debugging helper: everything after 'return 0' is intentionally dead code
+## kept for manual reproduction, hence unreachable to shellcheck (SC2317).
+# shellcheck disable=SC2317
 mount-test() {
    ## TODO
    return 0
@@ -363,6 +375,69 @@ mount-test() {
    $SUDO_TO_ROOT mount
 
    true
+}
+
+check-build-primitives() {
+   ## Fail FAST on a broken build /dev / mount BEFORE the expensive stages. These
+   ## primitives break silently and only surface ~45min into a build -- the container's
+   ## isolated /dev hides freshly-created loop/device-mapper nodes, so kpartx in
+   ## create-raw-image (step 3200) fails; and a non-functional /dev/null makes every
+   ## '> /dev/null' in the live-build binary stage (step 3600) fail. Catching them here
+   ## (step 1100) turns a 45-minute dead-end into a few-second, clearly-explained abort.
+   local loop_test_file loop_dev loop_rc mount_test_dir
+
+   ## 1) /dev/null must be a writable character device.
+   if [ ! -c /dev/null ]; then
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: /dev/null is not a character device on \
+the build host. Every '> /dev/null' in the build (chroot operations, live-build's binary \
+stage) will fail. Fix the build environment's /dev.${reset}"
+   fi
+   if ! printf 'test\n' > /dev/null 2>&1; then
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: writing to /dev/null failed -- the \
+build's chroot operations will fail. Fix /dev on the build host.${reset}"
+   fi
+
+   ## 2) A newly-created loop device's /dev node must actually APPEAR. In a container
+   ## with an isolated /dev this is exactly what fails: losetup 'succeeds' but the node
+   ## is missing, so kpartx in create-raw-image cannot see the partitions. The fix is a
+   ## host /dev in the container ('docker run --privileged --volume /dev:/dev').
+   ## Create the backing file (and the mount dir below) as ROOT via mktemp: security-misc
+   ## sets fs.protected_regular=2, which blocks even root from opening a file it does not
+   ## own for writing inside the sticky /tmp -- so a user-owned mktemp file + '$SUDO_TO_ROOT
+   ## truncate' fails with EACCES. Root-owned (owner == opener) is allowed.
+   loop_test_file="$($SUDO_TO_ROOT mktemp)"
+   $SUDO_TO_ROOT truncate --size=10M -- "$loop_test_file"
+   loop_rc=0
+   loop_dev="$($SUDO_TO_ROOT losetup --find --show -- "$loop_test_file" 2>/dev/null)" || loop_rc="$?"
+   if [ "$loop_rc" != "0" ] || [ -z "${loop_dev:-}" ]; then
+      $SUDO_TO_ROOT rm --force -- "$loop_test_file"
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: could not allocate a loop device \
+(losetup --find --show). In a container the build needs a host /dev + privileges \
+('docker run --privileged --volume /dev:/dev'); otherwise create-raw-image (kpartx) fails \
+~45min in.${reset}"
+   fi
+   if [ ! -b "$loop_dev" ]; then
+      $SUDO_TO_ROOT losetup --detach "$loop_dev" 2>/dev/null || true
+      $SUDO_TO_ROOT rm --force -- "$loop_test_file"
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: loop device '$loop_dev' was allocated \
+but its /dev node is MISSING -- the container /dev is isolated. kpartx in create-raw-image \
+would fail. Provide a host /dev ('docker run --privileged --volume /dev:/dev').${reset}"
+   fi
+   $SUDO_TO_ROOT losetup --detach "$loop_dev"
+   $SUDO_TO_ROOT rm --force -- "$loop_test_file"
+
+   ## 3) mount must work -- the build does many bind/loop mounts.
+   mount_test_dir="$($SUDO_TO_ROOT mktemp --directory)"
+   if ! $SUDO_TO_ROOT mount --types tmpfs --options size=1M -- tmpfs "$mount_test_dir" 2>/dev/null; then
+      $SUDO_TO_ROOT rmdir -- "$mount_test_dir" 2>/dev/null || true
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: a tmpfs mount failed -- the build's \
+bind/loop mounts will fail. The container needs --privileged (or the appropriate mount \
+capabilities).${reset}"
+   fi
+   $SUDO_TO_ROOT umount -- "$mount_test_dir"
+   $SUDO_TO_ROOT rmdir -- "$mount_test_dir"
+
+   true "${bold}${cyan}INFO: build-primitives check OK (/dev/null, loop-device node, mount).${reset}"
 }
 
 check-copy-vms-into-raw() {
@@ -430,6 +505,9 @@ install_required_packages() {
          "${DIST_APTGETOPT_WITHOUT_APT_CACHE[@]}" \
          update
 
+   ## SC2086: intentional word-splitting of $apt_unattended_opts and the space-separated
+   ## $required_packages_list into individual apt-get arguments.
+   # shellcheck disable=SC2086
    $SUDO_TO_ROOT \
       apt-get \
          "${DIST_APTGETOPT_WITHOUT_APT_CACHE[@]}" \
@@ -444,6 +522,8 @@ check_required_packages_installed() {
    required_packages_list="git time curl approx lsb-release fakeroot fasttrack-archive-keyring safe-rm gpg-sq"
    local required_package_item
 
+   ## SC2086: intentional word-splitting of the space-separated package list.
+   # shellcheck disable=SC2086
    for required_package_item in $required_packages_list ; do
       ## 'dpkg-query' does not exit non-zero if package is absent on the system.
       if [ "$(dpkg-query --show --showformat='${Version}' "$required_package_item")" = "" ] ; then
@@ -467,6 +547,7 @@ main() {
    check-stray-loop-devices "$@"
    check-stray-mounts "$@"
    mount-test "$@"
+   check-build-primitives "$@"
    check-copy-vms-into-raw "$@"
    check_required_packages_installed "$@"
 
