@@ -147,9 +147,9 @@ Optional Parameters:
   --vmsize [size]          : Set VM disk size (e.g., --vmsize 200G).
 
   --freshness [option]     : Choose between 'frozen' (frozen sources) or 'current' (current sources).
-  --build-slot [name]      : Isolate this build under derivative-binary/<name> (its own output tree
-                             and cowbuilder chroots) so multiple builds can run concurrently on a
-                             resourceful host. Name chars: [A-Za-z0-9_-]. Default: unset (shared tree).
+  --build-slot [name]      : Build under derivative-binary/<name> (its own output tree and
+                             cowbuilder chroots) so multiple builds can run concurrently on a
+                             resourceful host. Name chars: [A-Za-z0-9_-]. Default: main.
   --connection [option]    : Select 'clearnet' for clearnet apt sources or 'onion' for onion apt sources.
   --repo [true|false]      : Enable or disable derivative remote repository (default: false).
 
