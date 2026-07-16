@@ -405,10 +405,15 @@ dist_build_one_parse_cmd() {
                ;;
            --freshness)
                if [ "${2:-}" = "frozen" ]; then
-                  printf '%s\n' "${red}${bold}ERROR: Using frozen sources is currently not implemented!${reset}"
-                  exit 1
+                  ## 'frozen' pins APT to a snapshot.debian.org timestamp for a reproducible
+                  ## build. The pin (the timestamp) lives in build_sources/*_frozen_*.sources;
+                  ## approx stays a generic pass-through (not pinned). buildconfig.d/25_apt_sources.conf
+                  ## selects the frozen sources file from this variable.
+                  export dist_build_apt_freshness="frozen"
+                  true "${cyan}INFO: Using frozen (snapshot.debian.org) sources -- reproducible build.${reset}"
                elif [ "${2:-}" = "current" ]; then
                   ## default
+                  export dist_build_apt_freshness="current"
                   true "${cyan}INFO: Using current sources.${reset}"
                else
                   printf '%s\n' "${red}${bold}ERROR: supported options for --freshness are 'frozen' or 'current'.${reset}"

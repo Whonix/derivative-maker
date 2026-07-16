@@ -270,10 +270,10 @@ mmdebstrap \
    --customize-hook='ls -la -- "$1" || true' \
    --customize-hook='realpath -- "$1" || true' \
    --customize-hook='printf "%s\n" "----------"' \
-   --customize-hook='cat -- "$1/etc/apt/sources.list.d/0000debian_stable_current_clearnet.sources" || true' \
+   --customize-hook='cat -- "$1${dist_mmdebstrap_build_sources_list_primary}" || true' \
    --customize-hook='cat -- "$1/etc/apt/apt.conf.d/99mmdebstrap" || true' \
    --customize-hook='printf "%s\n" "----------"' \
-   --customize-hook='rm --force --verbose -- "$1/etc/apt/sources.list.d/0000debian_stable_current_clearnet.sources"' \
+   --customize-hook='rm --force --verbose -- "$1${dist_mmdebstrap_build_sources_list_primary}"' \
    --customize-hook='rm --force --verbose -- "$1/etc/apt/apt.conf.d/99mmdebstrap"' \
    --customize-hook='printf "%s\n" "----------"' \
    --customize-hook='printf "%s\n" "mmdebstrap hooks END"' \
