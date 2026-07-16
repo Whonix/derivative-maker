@@ -61,17 +61,27 @@ usage() {
 
 ## Hash every regular file under a directory as 'sha256  <prefix><relative-path>',
 ## sorted by path. Uses sudo because image trees contain root-owned, 0700 entries.
+##
+## Hashing is BATCHED: one 'sudo bash -c' does the whole tree via 'find -print0 | xargs -0
+## sha256sum', instead of a 'sudo sha256sum' per file. Per-file was ~56 files/sec -- 70+ minutes
+## for a ~140k-file rootfs -- because each file paid a fresh sudo + process spawn; batching brings a
+## full rootfs to ~2 minutes. NUL-delimited find|xargs keeps paths with spaces intact (sha256sum
+## only escapes names containing a backslash or newline, which system images do not have). The
+## per-file relative path from 'find .' is './rel'; strip the leading './' and prepend the prefix.
 manifest_tree() {
-   local root="$1" prefix="$2" rel
-   sudo --non-interactive find "$root" -type f -printf '%P\n' \
-      | LC_ALL=C sort \
-      | while IFS='' read -r rel; do
-           printf '%s  %s%s\n' "$(sudo --non-interactive sha256sum -- "$root/$rel" | cut -d' ' -f1)" "$prefix" "$rel"
-        done
+   local root="$1" prefix="$2" line sha rel
+   sudo --non-interactive bash -c 'cd -- "$1" || exit 1; find . -type f -print0 | xargs -0 -r sha256sum' _ "$root" \
+      | while IFS='' read -r line; do
+           sha="${line%%  *}"
+           rel="${line#*  }"
+           rel="${rel#./}"
+           printf '%s  %s%s\n' "$sha" "$prefix" "$rel"
+        done \
+      | LC_ALL=C sort --key=2
 }
 
 do_generate() {
-   local image="" output="" deep="false" sign_key="" sqfs
+   local image="" output="" deep="false" sign_key="" sqfs work_parent=""
    while [ "$#" -gt 0 ]; do
       case "$1" in
          --image) image="${2:-}" ; shift 2 ;;
@@ -97,9 +107,15 @@ do_generate() {
 
    ## Optional descent into the compressed rootfs.
    if [ "$deep" = "true" ]; then
+      ## Extract next to the OUTPUT manifest (caller-chosen, normally /home), NOT the default
+      ## $TMPDIR: a rootfs unsquashfs is >1 GiB and the default /tmp is often a small tmpfs that
+      ## ENOSPC-truncates the extraction (and thus the manifest) silently.
+      work_parent="$(dirname -- "$output")"
       while IFS='' read -r sqfs; do
-         manifest_work_dir="$(mktemp --directory)"
-         sudo --non-interactive unsquashfs -no-progress -dest "$manifest_work_dir/root" -- "$sqfs" >/dev/null
+         manifest_work_dir="$(mktemp --directory --tmpdir="$work_parent")"
+         ## No '--' before "$sqfs": unsquashfs has no end-of-options separator and treats a literal
+         ## '--' as the FILESYSTEM argument (prints SYNTAX and extracts nothing -> empty manifest).
+         sudo --non-interactive unsquashfs -no-progress -dest "$manifest_work_dir/root" "$sqfs" >/dev/null
          manifest_tree "$manifest_work_dir/root" "squashfs:${sqfs#"$manifest_mount_point"/}!" >> "$output"
          sudo --non-interactive rm --recursive --force -- "$manifest_work_dir"
          manifest_work_dir=""
