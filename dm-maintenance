@@ -1,0 +1,178 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## dm-maintenance: periodic maintenance tasks for the derivative-maker source tree.
+##
+## Tasks (first positional argument):
+##   update-frozen-snapshot   Bump the pinned snapshot.debian.org timestamp in
+##                            build_sources/debian_stable_frozen_clearnet.sources to the newest
+##                            snapshot that still serves the pinned suite (trixie + trixie-security),
+##                            so a '--freshness frozen' reproducible build tracks a recent, valid
+##                            snapshot instead of rotting on an old one. The pin is a URI path
+##                            segment ('.../debian-frozen/<TIMESTAMP>'); approx stays generic.
+##
+## Options:
+##   --dry-run                Show what would change; write nothing.
+##
+## This runs on the operator / build host over clearnet (it queries snapshot.debian.org). It
+## edits only version-controlled files, leaving a reviewable diff -- commit it so a third party
+## can reproduce at that exact snapshot.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## style-ok: no-has -- standalone operator tool; does not source derivative-maker helper-scripts.
+## style-ok: no-safe-rm -- makes no removals; it rewrites one file via a mktemp + mv.
+
+MYDIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+
+SNAPSHOT_BASE='http://snapshot.debian.org/archive'
+FROZEN_SOURCES="${MYDIR}/build_sources/debian_stable_frozen_clearnet.sources"
+
+dry_run='false'
+
+usage() {
+   cat -- <<'EOF'
+Usage: dm-maintenance [--dry-run] <task>
+
+Tasks:
+  update-frozen-snapshot   Bump the pinned snapshot.debian.org timestamp to the newest snapshot
+                           that still serves the pinned suite (build_sources/*_frozen_*.sources).
+
+Options:
+  --dry-run                Show what would change; write nothing.
+  --help, -h               This help.
+EOF
+}
+
+## Extract a field value (e.g. the first 'Suites:' or 'URIs:' line's value) from a deb822 file.
+## $1 = field name, $2 = file, $3 = occurrence (1-based).
+deb822_field() {
+   local field="$1" file="$2" occurrence="$3"
+   grep -E "^${field}:" -- "${file}" | sed -n "${occurrence}p" | sed -E "s/^${field}:[[:space:]]*//"
+}
+
+## True (exit 0) if snapshot ${1} serves ${archive} ${suite}'s Release with HTTP 200.
+## $1 = timestamp, $2 = archive (debian|debian-security), $3 = suite.
+snapshot_serves() {
+   local timestamp="$1" archive="$2" suite="$3" code
+   code="$(curl --silent --show-error --location --output /dev/null \
+      --write-out '%{http_code}' --max-time 60 \
+      "${SNAPSHOT_BASE}/${archive}/${timestamp}/dists/${suite}/Release" 2>/dev/null)" || return 1
+   [ "${code}" = "200" ]
+}
+
+## Print the newest snapshot timestamp (YYYYMMDDTHHMMSSZ) that serves BOTH the primary suite
+## (debian) and the security suite (debian-security), scanning this month then last month.
+## $1 = primary suite, $2 = security suite. Non-zero if none found.
+latest_valid_snapshot() {
+   local suite="$1" security_suite="$2" year month listing timestamp
+   for months_back in 0 1; do
+      ## Current or previous UTC month. 'date' arithmetic keeps this dependency-free.
+      year="$(date --utc --date="-${months_back} month" +%Y)"
+      month="$(date --utc --date="-${months_back} month" +%m)"
+      listing="$(curl --silent --show-error --location --max-time 60 \
+         "${SNAPSHOT_BASE}/debian/?year=${year}&month=${month}" 2>/dev/null || true)"
+      ## Newest first.
+      while read -r timestamp; do
+         [ -n "${timestamp}" ] || continue
+         if snapshot_serves "${timestamp}" 'debian' "${suite}" \
+            && snapshot_serves "${timestamp}" 'debian-security' "${security_suite}"; then
+            printf '%s\n' "${timestamp}"
+            return 0
+         fi
+      done < <(printf '%s\n' "${listing}" | grep -oE '[0-9]{8}T[0-9]{6}Z' | sort --unique --reverse)
+   done
+   return 1
+}
+
+update_frozen_snapshot() {
+   [ -r "${FROZEN_SOURCES}" ] || { printf 'dm-maintenance: frozen sources file not found: %s\n' "${FROZEN_SOURCES}" >&2; return 1; }
+
+   local suite security_suite current_ts new_ts
+   suite="$(deb822_field 'Suites' "${FROZEN_SOURCES}" 1)"
+   security_suite="$(deb822_field 'Suites' "${FROZEN_SOURCES}" 2)"
+   if [ -z "${suite}" ] || [ -z "${security_suite}" ]; then
+      printf 'dm-maintenance: could not read Suites from %s\n' "${FROZEN_SOURCES}" >&2
+      return 1
+   fi
+
+   ## The pinned timestamp appears as a URI path segment '.../debian-frozen/<TIMESTAMP>'.
+   current_ts="$(grep -oE '/debian-frozen/[0-9]{8}T[0-9]{6}Z' -- "${FROZEN_SOURCES}" | head -n1 | grep -oE '[0-9]{8}T[0-9]{6}Z' || true)"
+   [ -n "${current_ts}" ] || { printf 'dm-maintenance: no pinned timestamp found in %s\n' "${FROZEN_SOURCES}" >&2; return 1; }
+
+   printf 'dm-maintenance: current pin %s (suite %s / %s); querying snapshot.debian.org ...\n' \
+      "${current_ts}" "${suite}" "${security_suite}" >&2
+   new_ts="$(latest_valid_snapshot "${suite}" "${security_suite}")" \
+      || { printf 'dm-maintenance: no snapshot serving both suites found in the last two months\n' >&2; return 1; }
+
+   if [ "${new_ts}" = "${current_ts}" ]; then
+      printf 'dm-maintenance: already at the newest valid snapshot (%s); nothing to do.\n' "${current_ts}"
+      return 0
+   fi
+
+   if [ "${dry_run}" = 'true' ]; then
+      printf 'dm-maintenance: DRY-RUN -- would bump %s -> %s in %s\n' "${current_ts}" "${new_ts}" "${FROZEN_SOURCES}"
+      return 0
+   fi
+
+   ## Rewrite atomically (mktemp + mv). Replace the exact old timestamp token (it appears only in
+   ## the two frozen URIs), leaving the rest of the file untouched.
+   local tmp
+   tmp="$(mktemp)"
+   sed "s|${current_ts}|${new_ts}|g" -- "${FROZEN_SOURCES}" > "${tmp}"
+   mv -- "${tmp}" "${FROZEN_SOURCES}"
+   printf 'dm-maintenance: bumped frozen snapshot pin %s -> %s in %s\n' "${current_ts}" "${new_ts}" "${FROZEN_SOURCES}"
+   printf 'dm-maintenance: review and commit the diff so the new pin is reproducible.\n'
+}
+
+task=''
+while [ "$#" -gt 0 ]; do
+   case "$1" in
+      --dry-run)
+         dry_run='true'
+         shift
+         ;;
+      --help|-h)
+         usage
+         exit 0
+         ;;
+      --)
+         shift
+         break
+         ;;
+      -*)
+         printf 'dm-maintenance: unknown option: %s\n' "$1" >&2
+         exit 2
+         ;;
+      *)
+         task="$1"
+         shift
+         break
+         ;;
+   esac
+done
+
+case "${task}" in
+   update-frozen-snapshot)
+      update_frozen_snapshot
+      ;;
+   '')
+      printf 'dm-maintenance: no task given\n' >&2
+      usage >&2
+      exit 2
+      ;;
+   *)
+      printf 'dm-maintenance: unknown task: %s\n' "${task}" >&2
+      usage >&2
+      exit 2
+      ;;
+esac
