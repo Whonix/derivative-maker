@@ -1608,15 +1608,17 @@ export make_cross_build_platform_list
 ## small or volatile root filesystem (e.g. onto persistent '/rw' storage on
 ## Qubes). Exported so child build tools (genmkfile) inherit it.
 ##
-## The chroots live alongside the slot's output tree ('<binary_build_folder_dist>/pbuilder',
-## i.e. 'derivative-binary/<slot>/pbuilder', default '.../main/pbuilder') rather than a shared
-## '/var/cache/pbuilder', because two concurrent builds sharing one 'base.cow' would wipe/collide
-## -- the one fatal collision for parallel whole-image builds. An explicit override still wins
-## (e.g. to relocate the multi-gigabyte chroots onto persistent '/rw' storage on Qubes).
+## Per-slot ('/var/cache/pbuilder/<slot>', default '.../main') so concurrent whole-image builds
+## in different --build-slot slots do not share one 'base.cow' (which they would wipe/collide on).
+## Deliberately NOT under '$binary_build_folder_dist': the chroots are root-owned build SCRATCH,
+## not output -- placing them inside the artifact tree makes the CI upload-artifact scan fail with
+## EACCES on the 0700 chroot dirs (e.g. 'base.cow_<arch>/etc/credstore'), and they are not a useful
+## artifact. Keeping them in '/var/cache/pbuilder' also preserves the base.cow cache across builds.
+## An explicit override still wins (e.g. relocate onto persistent '/rw' storage on Qubes).
 if [ -n "${cowbuilder_cache_dir:-}" ]; then
    true "INFO: using explicitly set cowbuilder_cache_dir='$cowbuilder_cache_dir'"
 else
-   cowbuilder_cache_dir="$binary_build_folder_dist/pbuilder"
+   cowbuilder_cache_dir="/var/cache/pbuilder/$dist_build_slot"
 fi
 export cowbuilder_cache_dir
 
