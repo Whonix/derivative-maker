@@ -441,23 +441,18 @@ create_derivative_distribution_debian_packages() {
       return 0
    fi
 
-   ## Concurrency: only parallelize with cowbuilder, where each build runs in its own isolated,
-   ## per-slot chroot ('$make_cow_suffix' gives each worker its own 'cow.cow_<arch>.<slot>'
-   ## snapshot; the read-only 'base.cow_<arch>' is shared safely). Without cowbuilder, builds share
-   ## the host apt/dpkg lock and 'deb-build-dep' installs on the host, so stay serial. Package
-   ## builds are independent (no derivative package build-depends on a sibling), so no dependency
-   ## ordering is needed; 'reprepro' (shared, locked DB) is deferred to Phase 3.
+   ## Concurrency: parallel package builds are OPT-IN via 'dist_build_package_jobs=N' (serial by
+   ## default). Parallelism REQUIRES the genmkfile 'make_cow_suffix' support (each worker its own
+   ## 'cow.cow_<arch>.<slot>' snapshot; the read-only 'base.cow_<arch>' is shared safely). Until the
+   ## genmkfile submodule pointer is bumped to a commit carrying that support, leaving the default
+   ## serial keeps builds correct (a bumped-but-unsupported genmkfile would make N workers share one
+   ## 'cow.cow_<arch>' and collide). Only meaningful with cowbuilder (isolated per-build chroot);
+   ## without it, builds share the host apt/dpkg lock, so stay serial. Package builds are independent
+   ## (no derivative package build-depends on a sibling) so no ordering is needed; 'reprepro' (shared,
+   ## locked DB) is deferred to Phase 3. To enable, e.g. 'dist_build_package_jobs=4'; cap ~nproc-2.
    local max_jobs=1
-   if [ "${make_use_cowbuilder:-}" = "true" ]; then
-      if [ -n "${dist_build_package_jobs:-}" ]; then
-         max_jobs="$dist_build_package_jobs"
-      else
-         local ncpu
-         ncpu="$(nproc 2>/dev/null || printf '%s' 2)"
-         max_jobs="$(( ncpu - 2 ))"
-         if [ "$max_jobs" -lt 1 ]; then max_jobs=1 ; fi
-         if [ "$max_jobs" -gt 4 ]; then max_jobs=4 ; fi
-      fi
+   if [ "${make_use_cowbuilder:-}" = "true" ] && [ -n "${dist_build_package_jobs:-}" ]; then
+      max_jobs="$dist_build_package_jobs"
    fi
    true "${cyan}INFO: building packages with up to ${max_jobs} parallel job(s).${reset}"
 
