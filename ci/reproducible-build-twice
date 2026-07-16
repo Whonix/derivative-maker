@@ -38,6 +38,7 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
+shopt -s shift_verbose
 
 ## style-ok: no-has
 
@@ -57,12 +58,35 @@ freshness="frozen"
 output_dir=""
 while [ "$#" -gt 0 ]; do
    case "$1" in
-      --target) target="${2:-}" ; shift 2 ;;
-      --flavor) flavor="${2:-}" ; shift 2 ;;
-      --arch) arch="${2:-}" ; shift 2 ;;
-      --freshness) freshness="${2:-}" ; shift 2 ;;
-      --output-dir) output_dir="${2:-}" ; shift 2 ;;
-      *) printf '%s\n' "${0##*/}: unexpected argument: $1" >&2 ; usage ;;
+      --target)
+         [ "$#" -ge 2 ] || usage
+         target="$2"
+         shift 2
+         ;;
+      --flavor)
+         [ "$#" -ge 2 ] || usage
+         flavor="$2"
+         shift 2
+         ;;
+      --arch)
+         [ "$#" -ge 2 ] || usage
+         arch="$2"
+         shift 2
+         ;;
+      --freshness)
+         [ "$#" -ge 2 ] || usage
+         freshness="$2"
+         shift 2
+         ;;
+      --output-dir)
+         [ "$#" -ge 2 ] || usage
+         output_dir="$2"
+         shift 2
+         ;;
+      *)
+         printf '%s\n' "${0##*/}: unexpected argument: $1" >&2
+         usage
+         ;;
    esac
 done
 
