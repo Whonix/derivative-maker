@@ -1613,7 +1613,7 @@ export make_cross_build_platform_list
 ## '/var/cache/pbuilder', because two concurrent builds sharing one 'base.cow' would wipe/collide
 ## -- the one fatal collision for parallel whole-image builds. An explicit override still wins
 ## (e.g. to relocate the multi-gigabyte chroots onto persistent '/rw' storage on Qubes).
-if [ -v cowbuilder_cache_dir ]; then
+if [ -n "${cowbuilder_cache_dir:-}" ]; then
    true "INFO: using explicitly set cowbuilder_cache_dir='$cowbuilder_cache_dir'"
 else
    cowbuilder_cache_dir="$binary_build_folder_dist/pbuilder"

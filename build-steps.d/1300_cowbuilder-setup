@@ -149,6 +149,12 @@ cowbuilder_setup_do() {
       if [ "${skip:-}" = "true" ]; then
          true "${cyan}INFO: Skipping cowbuilder chroot creation.${reset}"
       else
+         ## Ensure the cowbuilder cache dir exists before 'cowbuilder --create'. The default is
+         ## now '$binary_build_folder_dist/pbuilder' (derivative-binary/<slot>/pbuilder), which --
+         ## unlike the pbuilder package's pre-created '/var/cache/pbuilder' -- does not exist yet;
+         ## cowbuilder fails ("Could not create basepath") if the parent of '$base_folder' is
+         ## missing. Harmless when it already exists (e.g. an explicit /var/cache/pbuilder override).
+         $SUDO_TO_ROOT mkdir --parents -- "$cowbuilder_cache_dir"
          if [ -d "$base_folder" ]; then
             $SUDO_TO_ROOT "$dist_source_help_steps_folder/umount_kill.sh" "$base_folder"
             $SUDO_TO_ROOT safe-rm --recursive --force -- "$base_folder"
