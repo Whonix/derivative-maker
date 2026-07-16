@@ -171,4 +171,5 @@ fi
    --allow-untagged true \
    --freedom false \
    --repo true \
-   --remote-derivative-packages true
+   --remote-derivative-packages true \
+   --unsafe-io true
