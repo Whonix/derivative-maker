@@ -452,6 +452,12 @@ create_derivative_distribution_debian_packages() {
    ## locked DB) is deferred to Phase 3. To enable, e.g. 'dist_build_package_jobs=4'; cap ~nproc-2.
    local max_jobs=1
    if [ "${make_use_cowbuilder:-}" = "true" ] && [ -n "${dist_build_package_jobs:-}" ]; then
+      ## Reject a non-positive-integer job count: 0 / negative / non-numeric creates no slots, and
+      ## the free-slot loop below would then spin forever on 'wait -n' with no children to reap.
+      case "${dist_build_package_jobs}" in
+         '' | *[!0-9]* | 0* )
+            error "dist_build_package_jobs must be a positive integer (got: '${dist_build_package_jobs}')." ;;
+      esac
       max_jobs="$dist_build_package_jobs"
    fi
    true "${cyan}INFO: building packages with up to ${max_jobs} parallel job(s).${reset}"
