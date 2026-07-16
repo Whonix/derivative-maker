@@ -258,6 +258,10 @@ fi
 ## This is because otherwise 99mmdebstrap results in not installing 'Recommends:' packages, which
 ## are actually a dependency for a fully functional ISO with functional login.
 
+## SC2016: the --customize-hook strings are single-quoted ON PURPOSE. '$1' (the chroot dir) and
+## '${dist_mmdebstrap_build_sources_list_primary}' must expand at HOOK-RUN time inside mmdebstrap
+## (with its environment), NOT when this wrapper builds the command line.
+# shellcheck disable=SC2016
 mmdebstrap \
    --verbose \
    --debug \
