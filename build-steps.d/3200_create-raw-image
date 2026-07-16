@@ -230,7 +230,7 @@ create-debian-raw-image() {
                   $use_vmefi_maybe \
                   --force \
                   --hostname "$dist_build_hostname" \
-                  --password "changeme" \
+                  --nopassword \
                   --release "$dist_build_apt_stable_release" \
                   --keep_src_list \
                   --verbose \
