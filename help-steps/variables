@@ -1598,7 +1598,7 @@ export cowbuilder_cache_dir
 ## reuse the SAME mapping without sourcing the whole build context. Single source of truth --
 ## do not re-inline it here. Used for binfmt_misc handler names ('qemu-<machine>'), cross-build
 ## emulation, and dm-qemu's 'qemu-system-<machine>' binary.
-source "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/arch-to-qemu-machine.bsh"
+source "${dist_source_help_steps_folder}/arch-to-qemu-machine.bsh"
 
 set_cowbuilder_folders() {
    cow_folder="$cowbuilder_cache_dir/cow.cow_${dist_build_multiarch_package_item}"
