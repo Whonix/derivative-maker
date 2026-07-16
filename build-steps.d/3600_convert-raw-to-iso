@@ -153,6 +153,15 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    ## Sanity test.
    test -n "${dist_build_hostname}"
 
+   ## '--serial-console-enable true': add a serial console (ttyS0) to the live
+   ## boot cmdline so the kernel, dracut and systemd log to the serial line and
+   ## the ISO can be driven headless (e.g. under qemu with '-nographic'). Keep
+   ## 'console=tty0' last so the normal display stays the primary console.
+   serial_console_cmdline=""
+   if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
+      serial_console_cmdline=" console=ttyS0,115200n8 console=tty0"
+   fi
+
    printf '%s\n' "#!/bin/sh
 
 lb config noauto \\
@@ -165,7 +174,7 @@ lb config noauto \\
    --archive-areas 'main contrib non-free non-free-firmware' \\
    --backports true \\
    --binary-image iso-hybrid \\
-   --bootappend-live 'rd.live.overlay.overlayfs=1 boot=live components splash live-config.hostname=${dist_build_hostname} rd.live.image root=live:CDLABEL=${dist_build_type_short} rd.live.dir=live rd.live.squashimg=filesystem.squashfs' \\
+   --bootappend-live 'rd.live.overlay.overlayfs=1 boot=live components splash live-config.hostname=${dist_build_hostname} rd.live.image root=live:CDLABEL=${dist_build_type_short} rd.live.dir=live rd.live.squashimg=filesystem.squashfs${serial_console_cmdline}' \\
    --bootappend-live-failsafe 'none' \\
    --cache false \\
    --checksums md5 \\
@@ -267,6 +276,22 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
    mkdir --parents -- 'includes.installer/usr/share/themes/Clearlooks/gtk-2.0'
    cp -- "${source_code_folder_dist}/live-build-data/d-i-theme/gtkrc" includes.installer/usr/share/themes/Clearlooks/gtk-2.0/gtkrc
    sed -i "s|@DIST_NAME@|${dist_build_type_short_pretty}|; s|@DIST_VERSION@|${dist_build_version}|;" bootloaders/grub-pc/splash.svg
+
+   ## '--serial-console-enable true': make the GRUB boot MENU itself reachable
+   ## over the serial line (in addition to the display), so the ISO can be
+   ## driven headless from the GRUB menu onward, not just after the kernel
+   ## starts. grub.cfg's first line 'source /boot/grub/config.cfg' runs
+   ## 'terminal_output gfxterm', so this must be added AFTER that source (append
+   ## to the end) and use '--append' -- otherwise gfxterm clobbers the serial
+   ## output terminal. '--append' keeps the graphical terminal and ADDS serial,
+   ## so the menu renders to both.
+   if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
+      printf '%s\n' \
+         'serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1' \
+         'terminal_input --append serial' \
+         'terminal_output --append serial' \
+         >> bootloaders/grub-pc/grub.cfg
+   fi
 
    ## d-i config
    cp -- "${source_code_folder_dist}/live-build-data/preseed.cfg" includes.installer/preseed.cfg
