@@ -72,10 +72,10 @@ case "${arch}" in
 esac
 
 case "${target}" in
-   virtualbox | iso)
+   virtualbox | iso | qcow2)
       ;;
    *)
-      printf '%s\n' "${BASH_SOURCE[0]}: --target <virtualbox|iso> is required (got: '${target}')" >&2
+      printf '%s\n' "${BASH_SOURCE[0]}: --target <virtualbox|iso|qcow2> is required (got: '${target}')" >&2
       exit 1
       ;;
 esac
@@ -149,7 +149,7 @@ trap iso_workdir_cleanup EXIT
 ## implicit_dist_type_host), so '--type vm' is passed only for the VM
 ## target.
 type_args=()
-if [ "${target}" = "virtualbox" ]; then
+if [ "${target}" = "virtualbox" ] || [ "${target}" = "qcow2" ]; then
    type_args=(--type vm)
 fi
 
