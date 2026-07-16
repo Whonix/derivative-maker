@@ -55,6 +55,10 @@ Usage: dm-qemu --iso PATH [options]
   --memory MB         guest RAM in MB (default 3072)
   --smp N             guest vCPUs (default 4)
   --extra-append STR  extra kernel cmdline appended in --verbose mode
+  --qmp PATH          add a QMP control socket ('-qmp unix:PATH,server,nowait'), so a driver
+                      can graceful-shutdown the guest (system_powerdown) and read the QMP
+                      SHUTDOWN event to tell a guest reboot from a poweroff -- what the serial
+                      console cannot do reliably. The driver connects after qemu starts.
   --emit-argv         build the qemu command (incl. --verbose kernel/initrd extraction) but do
                       NOT run it: print the argv one token per line to stdout for an external
                       driver (e.g. a pexpect boot-login harness) to spawn, and leave the
@@ -90,12 +94,14 @@ extra_append=''
 emit_argv='false'
 arch=''
 accel='auto'
+qmp=''
 
 while [ "$#" -gt 0 ]; do
    case "$1" in
       --iso)          iso="${2:?--iso needs a value}"; shift 2 ;;
       --arch)         arch="${2:?--arch needs a value}"; shift 2 ;;
       --accel)        accel="${2:?--accel needs a value}"; shift 2 ;;
+      --qmp)          qmp="${2:?--qmp needs a value}"; shift 2 ;;
       --serial-log)   serial_log="${2:?--serial-log needs a value}"; shift 2 ;;
       --timeout)      timeout_secs="${2:?--timeout needs a value}"; shift 2 ;;
       --verbose)      verbose='true'; shift ;;
@@ -182,6 +188,12 @@ case "${accel}" in
 esac
 
 qemu_opts=(-machine "${machine}" "${accel_opts[@]}" -m "${memory}" -smp "${smp}" -nographic -no-reboot -vga none)
+
+## Optional QMP control socket (unix, server, non-blocking): qemu listens, the driver connects
+## after start. 'nowait' so qemu does not block on a QMP client before booting.
+if [ -n "${qmp}" ]; then
+   qemu_opts+=(-qmp "unix:${qmp},server,nowait")
+fi
 
 if [ "${verbose}" = 'true' ]; then
    ## Extract the kernel, initrd and grub.cfg from the ISO, derive the chosen entry's cmdline,
