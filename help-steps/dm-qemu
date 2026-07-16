@@ -291,11 +291,14 @@ timeout "${timeout_secs}" "${qemu_bin}" "${qemu_opts[@]}" < /dev/null > "${seria
 reached="$(grep -ioE 'login:|Reached target|systemd\[1\]|Welcome to' "${serial_log}" 2>/dev/null | sort -u | tr '\n' ' ' || true)"
 printf 'dm-qemu: boot ended (qemu rc=%s); serial=%s bytes; reached: %s\n' "${qemu_rc}" "$(wc -c < "${serial_log}" 2>/dev/null || printf 0)" "${reached:-<none>}" >&2
 
-if printf '%s' "${reached}" | grep -qiE 'login:|Welcome to'; then
+if printf '%s' "${reached}" | grep -qiE 'login:'; then
    printf 'dm-qemu: PASS -- reached a login prompt\n' >&2
    exit 0
 fi
-if printf '%s' "${reached}" | grep -qiE 'Reached target|systemd\[1\]'; then
+## 'Welcome to ...' is emitted by systemd at the START of userspace boot, long before a login
+## prompt, so it proves "kernel + systemd started" (PARTIAL), NOT "reached login" -- a guest that
+## prints it and then stalls before login must not read as PASS.
+if printf '%s' "${reached}" | grep -qiE 'Reached target|systemd\[1\]|Welcome to'; then
    printf 'dm-qemu: PARTIAL -- kernel + systemd booted but no login prompt within %ss\n' "${timeout_secs}" >&2
    exit 5
 fi
