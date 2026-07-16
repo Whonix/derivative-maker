@@ -1,0 +1,156 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Build ONE target TWICE with identical inputs and compare the two images for
+## bit-for-bit reproducibility. This is the dev-runnable local equivalent of the
+## local-reproducible CI workflow (two independent builds + a compare): a
+## developer can reproduce, and iterate on, a reproducibility failure on their own
+## machine without a CI round-trip.
+##
+## Usage:
+##   ci/reproducible-build-twice --target <iso|virtualbox|qcow2> \
+##       [--flavor FLAVOR] [--arch amd64] [--freshness frozen] [--output-dir DIR]
+##
+## --target      image type to build twice (iso | virtualbox | qcow2).
+## --flavor      derivative flavor; defaults per target (iso -> kicksecure-lxqt,
+##               virtualbox/qcow2 -> kicksecure-cli).
+## --arch        build architecture (default amd64).
+## --freshness   passed through to the build (default 'frozen': pins the Debian
+##               snapshot, without which two builds diverge on package versions).
+## --output-dir  where the two images + report are collected (default a fresh
+##               directory beside the repo). Needs a few GB free.
+##
+## The two builds run SEQUENTIALLY, never concurrently: two full image builds at
+## once exhaust RAM/disk on a modest host. The verdict is a whole-file sha256
+## comparison of the two images (equal == bit-for-bit reproducible, for any
+## target). On a mismatch, and for a mountable image (iso), it additionally runs
+## 'reproducible-manifest --deep' on each build to LOCALIZE the difference to the
+## specific in-image file(s), which is what you then go and fix.
+##
+## Exit: 0 reproducible, 1 differ, 2 usage error, 3 a build failed.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+
+## style-ok: no-has
+
+MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
+source_code_folder_dist="$( cd -- "$MYDIR/.." && pwd )"
+
+usage() {
+   printf '%s\n' "Usage:
+  ${0##*/} --target <iso|virtualbox|qcow2> [--flavor FLAVOR] [--arch amd64] [--freshness frozen] [--output-dir DIR]" >&2
+   exit 2
+}
+
+target=""
+flavor=""
+arch="amd64"
+freshness="frozen"
+output_dir=""
+while [ "$#" -gt 0 ]; do
+   case "$1" in
+      --target) target="${2:-}" ; shift 2 ;;
+      --flavor) flavor="${2:-}" ; shift 2 ;;
+      --arch) arch="${2:-}" ; shift 2 ;;
+      --freshness) freshness="${2:-}" ; shift 2 ;;
+      --output-dir) output_dir="${2:-}" ; shift 2 ;;
+      *) printf '%s\n' "${0##*/}: unexpected argument: $1" >&2 ; usage ;;
+   esac
+done
+
+case "$target" in
+   iso)
+      artifact_glob="*.iso"
+      [ -n "$flavor" ] || flavor="kicksecure-lxqt"
+      ;;
+   virtualbox)
+      artifact_glob="*.ova"
+      [ -n "$flavor" ] || flavor="kicksecure-cli"
+      ;;
+   qcow2)
+      artifact_glob="*.qcow2"
+      [ -n "$flavor" ] || flavor="kicksecure-cli"
+      ;;
+   *)
+      printf '%s\n' "${0##*/}: unknown or missing --target (want iso|virtualbox|qcow2)" >&2
+      usage
+      ;;
+esac
+
+if [ -z "$output_dir" ]; then
+   output_dir="$( mktemp --directory --tmpdir="$( dirname -- "$source_code_folder_dist" )" reproducible-build-twice.XXXXXX )"
+fi
+mkdir --parents -- "$output_dir"
+report="$output_dir/report.txt"
+
+## Remove a prior build's image tree so 'find' below sees only the current build's
+## output. Left deliberately narrow: it clears only the emitted-binary directory.
+clean_binary() {
+   rm --recursive --force -- "$source_code_folder_dist/derivative-binary/"* 2>/dev/null || true
+}
+
+## Run one build and collect its artifact into $output_dir/<tag>/.
+build_one() {
+   local tag="$1" dest="$output_dir/$2" build_rc found
+   printf '%s\n' "=== build ${tag}: ${flavor} ${target} ${arch} (freshness=${freshness}) ==="
+   clean_binary
+   build_rc=0
+   ( cd -- "$source_code_folder_dist" && \
+      ./ci/github-build --arch "$arch" --target "$target" --flavor "$flavor" --freshness "$freshness" ) \
+      || build_rc="$?"
+   if [ "$build_rc" -ne 0 ]; then
+      printf '%s\n' "${0##*/}: build ${tag} failed (exit ${build_rc})" >&2
+      exit 3
+   fi
+   found="$( find "$source_code_folder_dist/derivative-binary" -type f -name "$artifact_glob" | LC_ALL=C sort | head --lines=1 )"
+   if [ -z "$found" ]; then
+      printf '%s\n' "${0##*/}: build ${tag} produced no ${artifact_glob}" >&2
+      exit 3
+   fi
+   mkdir --parents -- "$dest"
+   cp -- "$found" "$dest/"
+   printf '%s\n' "  collected: $dest/$( basename -- "$found" )"
+}
+
+build_one a a
+build_one b b
+
+image_a="$( find "$output_dir/a" -type f -name "$artifact_glob" | head --lines=1 )"
+image_b="$( find "$output_dir/b" -type f -name "$artifact_glob" | head --lines=1 )"
+sha_a="$( sha256sum -- "$image_a" | cut --delimiter=' ' --fields=1 )"
+sha_b="$( sha256sum -- "$image_b" | cut --delimiter=' ' --fields=1 )"
+
+{
+   printf '%s\n' "reproducible-build-twice: $target ($flavor $arch, freshness=$freshness)"
+   printf '  A: %s  sha256 %s\n' "$image_a" "$sha_a"
+   printf '  B: %s  sha256 %s\n' "$image_b" "$sha_b"
+} | tee "$report"
+
+if [ "$sha_a" = "$sha_b" ]; then
+   printf '%s\n' "RESULT: $target is REPRODUCIBLE (bit-for-bit identical)" | tee --append "$report"
+   exit 0
+fi
+
+printf '%s\n' "RESULT: $target DIFFERS (not bit-reproducible)" | tee --append "$report"
+
+## Localize the difference for a mountable image so the developer knows which
+## in-image file to chase. reproducible-manifest --deep also descends into the
+## squashfs rootfs. Best-effort: never let it mask the sha-based verdict above.
+if [ "$target" = "iso" ]; then
+   printf '%s\n' "localizing difference (reproducible-manifest --deep):" | tee --append "$report"
+   "$MYDIR/reproducible-manifest" generate --image "$image_a" --output "$output_dir/a.manifest" --deep || true
+   "$MYDIR/reproducible-manifest" generate --image "$image_b" --output "$output_dir/b.manifest" --deep || true
+   "$MYDIR/reproducible-manifest" compare --a "$output_dir/a.manifest" --b "$output_dir/b.manifest" --output "$output_dir/manifest-diff.txt" >> "$report" 2>&1 || true
+else
+   printf '%s\n' "(container-level diff only; mount/convert $target to localize in-image files)" | tee --append "$report"
+fi
+
+exit 1
