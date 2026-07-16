@@ -153,6 +153,13 @@ if [ "${target}" = "virtualbox" ]; then
    type_args=(--type vm)
 fi
 
+## '--remote-derivative-packages false': build the Kicksecure/Whonix derivative packages
+## LOCALLY from the source tree instead of pulling prebuilt ones from the remote repo. A
+## reproducible build must not embed opaque prebuilt packages -- a third party can only
+## reproduce the image if every derivative package is built from the same source. This is the
+## derivative-maker default (help-steps/variables); it is set explicitly here to document the
+## reproducibility intent and to override any inherited environment. Trade-off: the build is
+## slower (it compiles all derivative packages) in exchange for being reproducible.
 ./derivative-maker \
    --flavor "${flavor}" \
    --target "${target}" \
@@ -162,4 +169,4 @@ fi
    --allow-untagged true \
    --freedom false \
    --repo true \
-   --remote-derivative-packages true
+   --remote-derivative-packages false
