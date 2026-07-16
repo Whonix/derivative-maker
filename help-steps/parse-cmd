@@ -184,7 +184,6 @@ Environment Variables:
 Advanced Options:
   --report [true|false]           : Enable or disable build reports (default: false).
   --serial-console-enable [true|false] : Install serial-console-enable and add a serial console (ttyS0) to the boot cmdline / GRUB menu, so the image can be driven headless over serial (default: false).
-  --verifiable [true|false]       : Toggle file deletion in cleanup script for verifiable builds (default: false).
   --sanity-tests [true|false]     : Enable or disable chroot script sanity tests for faster build speed (default: false).
   --retry-max [attempts]          : Set maximum retry attempts. (default: 2)
   --retry-wait [seconds]          : Set wait time between retry attempts.
@@ -570,19 +569,6 @@ dist_build_one_parse_cmd() {
                   export dist_build_serial_console_enable="false"
                else
                   printf '%s\n' "${red}${bold}ERROR: supported options for --serial-console-enable are 'true' or 'false'.${reset}"
-                  exit 1
-               fi
-               shift 2
-               ;;
-           --verifiable)
-               if [ "${2:-}" = "true" ]; then
-                  true "${cyan}INFO: Building verifiable.${reset}"
-                  export dist_build_script_verifiable="true"
-               elif [ "${2:-}" = "false" ]; then
-                  true "${cyan}INFO: Not building verifiable.${reset}"
-                  export dist_build_script_verifiable="false"
-               else
-                  printf '%s\n' "${red}${bold}ERROR: supported options for --verifiable are 'true' or 'false'.${reset}"
                   exit 1
                fi
                shift 2
