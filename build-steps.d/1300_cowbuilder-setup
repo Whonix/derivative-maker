@@ -72,7 +72,11 @@ cowbuilder_setup_do() {
          if $SUDO_TO_ROOT mount | grep -- "$cowbuilder_cache_dir" | grep -- tmpfs ; then
             true "INFO: '$cowbuilder_cache_dir' already tmpfs."
          else
-            $SUDO_TO_ROOT mount -t tmpfs -o size=2G none "$cowbuilder_cache_dir"
+            ## RAM-proportional cap ('size=50%') rather than a hardcoded 2G: base.cow (~1G) plus a
+            ## cow snapshot for a larger flavor (e.g. kicksecure-lxqt) can exceed 2G and fail with
+            ## ENOSPC on the tmpfs. tmpfs consumes only the RAM actually written, so 50% adds
+            ## headroom without reserving memory and scales across build hosts.
+            $SUDO_TO_ROOT mount -t tmpfs -o size=50% none "$cowbuilder_cache_dir"
          fi
       fi
    fi
@@ -166,10 +170,18 @@ cowbuilder_setup_do() {
          ## '--mirror "$dist_build_apt_sources_mirror"' should be only cosmetic,
          ## because of mmdebstrap wrapper and hooks.
          ##
+         ## 'env --unset=LD_PRELOAD': under '--unsafe-io true', help-steps/variables sets a global
+         ## LD_PRELOAD=.../libeatmydata.so. That library does NOT exist in the fresh chroot this
+         ## '--create' bootstraps, so ld.so fails to preload it and the bootstrap's apt aborts. Unset
+         ## it just for the bootstrap; eatmydata itself is installed INTO the base chroot via
+         ## '--extrapackages' below, so the later per-package 'cowbuilder --build' (which keeps
+         ## LD_PRELOAD) finds libeatmydata inside the chroot. No-op when LD_PRELOAD is unset.
+         ##
          ## Duplicate --extrapackages to prevent removal by pbuilder.
          $SUDO_TO_ROOT \
             ${COWBUILDER_PREFIX:-} \
                ${UNSHARE_PID_NS:-} \
+               env --unset=LD_PRELOAD \
                cowbuilder \
                   --architecture "$dist_build_multiarch_package_item" \
                   --configfile "$dist_build_pbuilder_config_file" \
