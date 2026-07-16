@@ -95,7 +95,10 @@ latest_valid_snapshot() {
 }
 
 update_frozen_snapshot() {
-   [ -r "${FROZEN_SOURCES}" ] || { printf 'dm-maintenance: frozen sources file not found: %s\n' "${FROZEN_SOURCES}" >&2; return 1; }
+   if [ ! -r "${FROZEN_SOURCES}" ]; then
+      printf 'dm-maintenance: frozen sources file not found: %s\n' "${FROZEN_SOURCES}" >&2
+      return 1
+   fi
 
    local suite security_suite current_ts new_ts
    suite="$(deb822_field 'Suites' "${FROZEN_SOURCES}" 1)"
@@ -107,12 +110,17 @@ update_frozen_snapshot() {
 
    ## The pinned timestamp appears as a URI path segment '.../debian-frozen/<TIMESTAMP>'.
    current_ts="$(grep -oE '/debian-frozen/[0-9]{8}T[0-9]{6}Z' -- "${FROZEN_SOURCES}" | head -n1 | grep -oE '[0-9]{8}T[0-9]{6}Z' || true)"
-   [ -n "${current_ts}" ] || { printf 'dm-maintenance: no pinned timestamp found in %s\n' "${FROZEN_SOURCES}" >&2; return 1; }
+   if [ -z "${current_ts}" ]; then
+      printf 'dm-maintenance: no pinned timestamp found in %s\n' "${FROZEN_SOURCES}" >&2
+      return 1
+   fi
 
    printf 'dm-maintenance: current pin %s (suite %s / %s); querying snapshot.debian.org ...\n' \
       "${current_ts}" "${suite}" "${security_suite}" >&2
-   new_ts="$(latest_valid_snapshot "${suite}" "${security_suite}")" \
-      || { printf 'dm-maintenance: no snapshot serving both suites found in the last two months\n' >&2; return 1; }
+   if ! new_ts="$(latest_valid_snapshot "${suite}" "${security_suite}")"; then
+      printf 'dm-maintenance: no snapshot serving both suites found in the last two months\n' >&2
+      return 1
+   fi
 
    if [ "${new_ts}" = "${current_ts}" ]; then
       printf 'dm-maintenance: already at the newest valid snapshot (%s); nothing to do.\n' "${current_ts}"
