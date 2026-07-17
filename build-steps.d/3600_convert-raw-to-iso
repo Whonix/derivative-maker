@@ -283,9 +283,9 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
    ## bind-mounted during 'lb binary' (so /dev/null works for grub-install; see the /dev
    ## unmount note further down), so mksquashfs would otherwise pack the host's /dev -- the
    ## build-host disk UUIDs (dev/disk/by-uuid -> xvd*, dev/block) and a per-build-varying
-   ## dev/disk/by-diskseq/<loop-seq> symlink that was the sole remaining bit-for-bit
-   ## reproducibility difference between two frozen builds. live-build feeds config/rootfs/excludes
-   ## to mksquashfs as '-wildcards -ef'; the empty /dev directory itself is kept.
+   ## dev/disk/by-diskseq/<loop-seq> symlink -- non-reproducible runtime state, and a privacy
+   ## leak of the build host's storage layout. live-build feeds config/rootfs/excludes to
+   ## mksquashfs as '-wildcards -ef'; the empty /dev directory itself is kept.
    mkdir --parents -- rootfs
    cp -- "${source_code_folder_dist}/live-build-data/live-build-config/rootfs-excludes" rootfs/excludes
 
