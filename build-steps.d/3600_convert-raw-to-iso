@@ -611,6 +611,20 @@ Not running any chroot scripts.${reset}"
    ## the bind-mount simply shadows equivalents, so behaviour there is unchanged.
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/run"
 
+   ## The binary stage re-runs live-build's chroot_archives (another apt update), so
+   ## re-apply the same Check-Valid-Until normalization as before 'lb chroot': any
+   ## frozen source re-created in the chroot since (initializer-dist chroot scripts,
+   ## the debian.sources restore) may carry 'Check-Valid-Until: no' again and clash
+   ## with live-build's fieldless base source under Error-Mode=any. Diagnostic first
+   ## so a recurrence names the offending file.
+   printf 'DIAG: chroot frozen apt sources before lb binary:\n' >&2
+   $SUDO_TO_ROOT grep --recursive --files-with-matches --extended-regexp 'debian-frozen|127\.0\.0\.1:9977' "${CHROOT_FOLDER}/etc/apt/sources.list.d/" 2>/dev/null \
+      | while IFS='' read -r frozen_source; do
+           printf '  %s: Check-Valid-Until lines=%s\n' "${frozen_source##*/}" "$($SUDO_TO_ROOT grep --count 'Check-Valid-Until' -- "${frozen_source}" 2>/dev/null || true)" >&2
+        done || true
+   # shellcheck disable=SC2086
+   $SUDO_TO_ROOT find "${CHROOT_FOLDER}/etc/apt/sources.list.d/" -maxdepth 1 -name '*.sources' -exec sed --in-place -e '/^Check-Valid-Until:/Id' -- {} +
+
    ## Package into an ISO
    # shellcheck disable=SC2086
    if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb binary --verbose --debug; then
