@@ -301,6 +301,13 @@ if [ "${emit_argv}" = 'true' ]; then
 fi
 
 : > "${serial_log}"
+## The guest serial console (the ACTUAL boot output) is redirected to the serial-log FILE
+## below, NOT to this process's stdout/stderr -- which carry only this start line and the
+## end/verdict line. Point the operator at the file up front so a detached/backgrounded run
+## is watched by tailing the right thing (mistaking dm-qemu's quiet stderr for "stuck" is an
+## easy trap): tail -f "${serial_log}".
+printf 'dm-qemu: booting; serial console -> %s\n' "${serial_log}" >&2
+printf 'dm-qemu: watch the boot LIVE with: tail -f %s  (this stderr shows only start + verdict)\n' "${serial_log}" >&2
 qemu_rc=0
 timeout "${timeout_secs}" "${qemu_bin}" "${qemu_opts[@]}" < /dev/null > "${serial_log}" 2>&1 || qemu_rc="$?"
 
