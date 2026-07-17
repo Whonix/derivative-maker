@@ -134,7 +134,12 @@ build_one() {
       printf '%s\n' "${0##*/}: build ${tag} failed (exit ${build_rc})" >&2
       exit 3
    fi
-   found="$( find "$source_code_folder_dist/derivative-binary" -type f -name "$artifact_glob" | LC_ALL=C sort | head --lines=1 )"
+   ## Take the first match via parameter expansion, not 'head -1': head closes the
+   ## pipe after one line, which would SIGPIPE find/sort (exit 141 under pipefail +
+   ## inherit_errexit) once their output exceeds the pipe buffer, breaking the exit
+   ## contract with no diagnostic.
+   found="$( find "$source_code_folder_dist/derivative-binary" -type f -name "$artifact_glob" | LC_ALL=C sort )"
+   found="${found%%$'\n'*}"
    if [ -z "$found" ]; then
       printf '%s\n' "${0##*/}: build ${tag} produced no ${artifact_glob}" >&2
       exit 3
@@ -147,8 +152,10 @@ build_one() {
 build_one a a
 build_one b b
 
-image_a="$( find "$output_dir/a" -type f -name "$artifact_glob" | head --lines=1 )"
-image_b="$( find "$output_dir/b" -type f -name "$artifact_glob" | head --lines=1 )"
+image_a="$( find "$output_dir/a" -type f -name "$artifact_glob" | LC_ALL=C sort )"
+image_a="${image_a%%$'\n'*}"
+image_b="$( find "$output_dir/b" -type f -name "$artifact_glob" | LC_ALL=C sort )"
+image_b="${image_b%%$'\n'*}"
 sha_a="$( sha256sum -- "$image_a" | cut --delimiter=' ' --fields=1 )"
 sha_b="$( sha256sum -- "$image_b" | cut --delimiter=' ' --fields=1 )"
 
