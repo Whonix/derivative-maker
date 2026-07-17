@@ -153,9 +153,8 @@ if [ "${target}" = "virtualbox" ] || [ "${target}" = "qcow2" ]; then
    type_args=(--type vm)
 fi
 
-## Every CI target gets a serial console so ALL test images can be smoke-boot-tested
-## headless (qemu -nographic) uniformly, not just the ISO. Harmless for a test image;
-## production builds simply omit '--serial-console-enable'.
+## Every CI target gets a serial console so all test images boot-test uniformly over serial
+## (headless qemu -nographic). Test-only; production builds omit '--serial-console-enable'.
 serial_args=(--serial-console-enable true)
 
 ./derivative-maker \
