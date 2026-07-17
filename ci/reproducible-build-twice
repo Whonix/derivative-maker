@@ -144,6 +144,10 @@ build_one() {
       printf '%s\n' "${0##*/}: build ${tag} produced no ${artifact_glob}" >&2
       exit 3
    fi
+   ## Start from a clean $dest: a rerun into the same --output-dir with a different --flavor
+   ## must not leave a stale artifact that the compare's 'find | sort | first' could pick over
+   ## the newly built one. $dest is a dedicated per-tag subdir ($output_dir/a|b), safe to wipe.
+   rm --recursive --force -- "$dest"
    mkdir --parents -- "$dest"
    cp -- "$found" "$dest/"
    printf '%s\n' "  collected: $dest/$( basename -- "$found" )"
