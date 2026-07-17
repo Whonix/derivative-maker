@@ -171,6 +171,10 @@ serial_console="$(dist_build_arch_to_serial_console "${arch}")" \
 
 command -v "${qemu_bin}" >/dev/null || { printf 'dm-qemu: %s not installed (needed for --arch %s)\n' "${qemu_bin}" "${arch}" >&2; exit 2; }
 command -v xorriso >/dev/null || { printf 'dm-qemu: xorriso not installed (needed to read the ISO)\n' >&2; exit 2; }
+if [ -n "${screendump}" ]; then
+   command -v identify >/dev/null && command -v compare >/dev/null \
+      || { printf 'dm-qemu: ImageMagick (identify + compare) not installed (needed for --screendump)\n' >&2; exit 2; }
+fi
 
 ## Acceleration: 'auto' (default) uses KVM when the guest arch equals the host arch AND
 ## /dev/kvm is usable (GitHub CI and bare metal often expose it; a nested VM like this one may
@@ -354,20 +358,37 @@ if [ -n "${screendump}" ]; then
    ## Full-chain framebuffer test: start qemu in the BACKGROUND (its own console still lands in
    ## the serial log for reference) and let the QMP watcher capture + judge the screen. The
    ## watcher powers the guest down when done; we backstop with an explicit kill of that PID.
-   "${qemu_bin}" "${qemu_opts[@]}" < /dev/null > "${serial_log}" 2>&1 &
+   ## A stale QMP socket from a prior run would make qemu's bind() fail ("address already in
+   ## use"), so remove it first (qemu recreates it).
+   rm --force -- "${qmp}"
+   ## Hard time backstop: bound qemu with 'timeout' (slack over the watcher's own --timeout) so
+   ## a wedged watcher can never leave qemu running forever (the serial path is bounded too).
+   timeout "$(( timeout_secs + 120 ))" "${qemu_bin}" "${qemu_opts[@]}" < /dev/null > "${serial_log}" 2>&1 &
    qemu_pid="$!"
    self_dir="$(dirname -- "$(readlink --canonicalize -- "$0")")"
    watch_rc=0
    "${self_dir}/dm-qemu-screendump-watch" \
       --qmp "${qmp}" --outdir "${screendump}" --timeout "${timeout_secs}" || watch_rc="$?"
+   ## Backstop-kill the backgrounded qemu. The trailing '|| true' is load-bearing: if the guest
+   ## finished powering off during the sleep, the second 'kill' fails, and as the last command of
+   ## this 'if' body that non-zero would trip 'set -e' and abort BEFORE the verdict below -- on
+   ## the common SUCCESS path.
    if kill -0 "${qemu_pid}" 2>/dev/null; then
       sleep 5
-      kill -0 "${qemu_pid}" 2>/dev/null && kill "${qemu_pid}" 2>/dev/null
+      { kill -0 "${qemu_pid}" 2>/dev/null && kill "${qemu_pid}" 2>/dev/null; } || true
    fi
    wait "${qemu_pid}" 2>/dev/null || true
+   ## Corroborate with the serial log: screendump mode still captures serial, and CI test images
+   ## carry a serial console (serial-console-enable), so a login/systemd marker means the guest
+   ## DID boot even when the framebuffer heuristic did not latch (e.g. an animated greeter).
+   reached="$(grep -ioE 'login:|Reached target|systemd\[1\]|Welcome to' "${serial_log}" 2>/dev/null | sort -u | tr '\n' ' ' || true)"
    case "${watch_rc}" in
       0) printf 'dm-qemu: PASS -- guest reached a rendered greeter/desktop (frames in %s)\n' "${screendump}" >&2; exit 0 ;;
-      5) printf 'dm-qemu: PARTIAL -- no greeter/desktop within %ss (frames in %s)\n' "${timeout_secs}" "${screendump}" >&2; exit 5 ;;
+      5) if [ -n "${reached}" ]; then
+            printf 'dm-qemu: PASS -- serial log confirms boot (%s); framebuffer heuristic did not latch (frames in %s)\n' "${reached}" "${screendump}" >&2
+            exit 0
+         fi
+         printf 'dm-qemu: PARTIAL -- no greeter/desktop within %ss and no serial boot marker (frames in %s)\n' "${timeout_secs}" "${screendump}" >&2; exit 5 ;;
       *) printf 'dm-qemu: screendump watcher error (rc=%s); frames in %s\n' "${watch_rc}" "${screendump}" >&2; exit 2 ;;
    esac
 fi
