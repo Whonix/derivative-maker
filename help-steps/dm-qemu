@@ -257,20 +257,23 @@ if [ "${verbose}" = 'true' ]; then
    if [ "${fast}" = 'true' ]; then
       cmdline="${cmdline} mitigations=off"
    fi
-   ## Surface the EARLY boot on serial. Without this, the kernel self-decompressor and early
+   ## Surface the EARLY boot on serial. Without this the kernel self-decompressor and early
    ## init -- before the real 8250/PL011 tty driver registers -- are silent on the console, which
-   ## under TCG (no KVM) is minutes of nothing that looks like a hang (and trips a boot-test stall
-   ## watchdog). earlyprintk (x86: the decompressor stub drives the UART directly) covers the
-   ## decompression gap; earlycon covers early init until the real driver takes over; keep_bootcon
-   ## makes the handoff seamless; ignore_loglevel + rd.info keep the kernel and the dracut initramfs
-   ## chatty. Arch-gated: the x86 'earlyprintk=serial,ttyS0' form is invalid on arm64 (PL011).
+   ## under TCG (no KVM) is minutes of silence that looks like a hang. earlyprintk (x86: the
+   ## decompressor stub drives the UART directly) covers the decompression gap; earlycon covers
+   ## early init until the real driver takes over; keep_bootcon makes the handoff seamless;
+   ## ignore_loglevel + rd.info keep the kernel and the dracut initramfs chatty. Arch-gated: the
+   ## x86 'earlyprintk=serial,ttyS0' form is invalid on arm64 (PL011).
    case "${serial_console}" in
       ttyS0*) early_console='earlyprintk=serial,ttyS0,115200 earlycon=ttyS0,115200 keep_bootcon ignore_loglevel rd.info' ;;
       *)      early_console='earlycon keep_bootcon ignore_loglevel rd.info' ;;
    esac
-   ## Ensure the arch-correct serial console is present even if the entry somehow lacked it
-   ## (or carried an x86 ttyS0 on an arm64 image), and add the early-console + extra cmdline.
-   full_append="console=${serial_console} ${early_console} ${cmdline} systemd.log_level=info ${extra_append}"
+   ## printk.time=1 timestamps every line so a long gap is attributable to the phase that caused
+   ## it; initcall_debug logs each initcall and its duration, so a stalled boot names the culprit
+   ## (a "calling X" with no matching "returned X"). Both arch-independent.
+   ## Ensure the arch-correct serial console is present even if the entry somehow lacked it (or
+   ## carried an x86 ttyS0 on an arm64 image), and add the early-console + debug + extra cmdline.
+   full_append="console=${serial_console} ${early_console} printk.time=1 initcall_debug ${cmdline} systemd.log_level=info ${extra_append}"
 
    printf 'dm-qemu: verbose direct-boot of %s (entry=%s, fast=%s, timeout=%ss)\n' "${kernel_iso_path##*/}" "${entry}" "${fast}" "${timeout_secs}" >&2
    qemu_opts+=(-kernel "${work_dir}/vmlinuz" -initrd "${work_dir}/initrd.img" -append "${full_append}" "${usb_iso_opts[@]}")
