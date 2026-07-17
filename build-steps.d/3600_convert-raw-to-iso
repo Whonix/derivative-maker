@@ -403,6 +403,19 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
    $SUDO_TO_ROOT mkdir --parents -- "${target_dracut_disable_config_snippet%/*}"
    $SUDO_TO_ROOT cp --verbose -- "$source_dracut_disable_config_snippet" "$target_dracut_disable_config_snippet"
 
+   ## Remove the frozen build sources mmdebstrap left in the rootfs
+   ## (0000*_frozen_*.sources, which carry 'Check-Valid-Until: no'). The 'lb chroot'
+   ## apt update below re-derives the SAME frozen snapshot mirror as live-build's own
+   ## base source WITHOUT that field, and apt rejects the two inconsistent copies
+   ## ("Conflicting values set for option Check-Valid-Until") under
+   ## APT::Update::Error-Mode=any. Drop the redundant copy HERE, before 'lb chroot',
+   ## so only live-build's source remains; the expired snapshot Release is still
+   ## tolerated via the global Acquire::Check-Valid-Until=false (30_apt_opts.conf,
+   ## frozen-scoped). The blanket sources cleanup further below runs only AFTER
+   ## 'lb chroot' -- too late to prevent this apt failure.
+   # shellcheck disable=SC2086
+   $SUDO_TO_ROOT safe-rm --force -- "${CHROOT_FOLDER}/etc/apt/sources.list.d/0000"*_frozen_*.sources 2>/dev/null || true
+
    ## Build ISO chroot ('lb chroot' installs nothing -- no package lists were
    ## generated; the package set is already in the shared raw image -- so it
    ## only runs the live-specific finishing: live-config, etc.)

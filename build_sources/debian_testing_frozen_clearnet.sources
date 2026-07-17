@@ -29,6 +29,7 @@ Suites: forky
 Components: main contrib non-free non-free-firmware
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+Check-Valid-Until: no
 
 Types: deb
 URIs: http://127.0.0.1:9977/debian-security-frozen
@@ -36,5 +37,6 @@ Suites: forky-security
 Components: main contrib non-free non-free-firmware
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+Check-Valid-Until: no
 
 ## We currently do not need any source packages for builds.
