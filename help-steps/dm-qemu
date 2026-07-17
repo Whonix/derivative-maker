@@ -62,6 +62,13 @@ Usage: dm-qemu --iso PATH [options]
                       can graceful-shutdown the guest (system_powerdown) and read the QMP
                       SHUTDOWN event to tell a guest reboot from a poweroff -- what the serial
                       console cannot do reliably. The driver connects after qemu starts.
+  --screendump DIR    FULL-CHAIN framebuffer test: boot the unmodified image through firmware
+                      -> (shim ->) GRUB -> kernel and watch the GUEST SCREEN over QMP (periodic
+                      PNG screendumps in DIR), deciding boot success from the framebuffer instead
+                      of serial. For images that cannot be instrumented (no serial console, or a
+                      sovereign/measured boot that must not be edited). Mutually exclusive with
+                      --verbose (which serial-boots via -kernel). Auto-creates a QMP socket if
+                      --qmp is not given.
   --emit-argv         build the qemu command (incl. --verbose kernel/initrd extraction) but do
                       NOT run it: print the argv one token per line to stdout for an external
                       driver (e.g. a pexpect boot-login harness) to spawn, and leave the
@@ -98,6 +105,7 @@ emit_argv='false'
 arch=''
 accel='auto'
 qmp=''
+screendump=''
 
 while [ "$#" -gt 0 ]; do
    case "$1" in
@@ -105,6 +113,7 @@ while [ "$#" -gt 0 ]; do
       --arch)         arch="${2:?--arch needs a value}"; shift 2 ;;
       --accel)        accel="${2:?--accel needs a value}"; shift 2 ;;
       --qmp)          qmp="${2:?--qmp needs a value}"; shift 2 ;;
+      --screendump)   screendump="${2:?--screendump needs a value}"; shift 2 ;;
       --serial-log)   serial_log="${2:?--serial-log needs a value}"; shift 2 ;;
       --timeout)      timeout_secs="${2:?--timeout needs a value}"; shift 2 ;;
       --verbose)      verbose='true'; shift ;;
@@ -127,6 +136,13 @@ done
 [ -n "${iso}" ] || { printf 'dm-qemu: --iso is required\n' >&2; usage >&2; exit 2; }
 [ -r "${iso}" ] || { printf 'dm-qemu: ISO not readable: %s\n' "${iso}" >&2; exit 2; }
 [ -n "${serial_log}" ] || serial_log="${iso}.serial-boot.log"
+
+## --screendump (framebuffer, full-chain) and --verbose (serial '-kernel' direct boot) are
+## different, incompatible boot paths.
+if [ -n "${screendump}" ] && [ "${verbose}" = 'true' ]; then
+   printf 'dm-qemu: --screendump and --verbose are mutually exclusive (framebuffer vs serial direct-boot)\n' >&2
+   exit 2
+fi
 
 ## Reuse the canonical Debian-arch -> qemu machine-name map (single source of truth, shared
 ## with help-steps/variables) instead of re-encoding it here. The fragment is side-effect
@@ -190,7 +206,17 @@ case "${accel}" in
    *) printf 'dm-qemu: --accel must be auto|kvm|tcg: %s\n' "${accel}" >&2; exit 2 ;;
 esac
 
-qemu_opts=(-machine "${machine}" "${accel_opts[@]}" -m "${memory}" -smp "${smp}" -nographic -no-reboot -vga none)
+## Screendump mode watches the guest FRAMEBUFFER over QMP (full firmware->GRUB->kernel chain,
+## no serial, no image edits), so it needs a real VGA device and a headless display rather than
+## the serial-only '-nographic -vga none'. It also needs a QMP socket to drive the captures;
+## default one under the screendump dir when the caller did not pass --qmp.
+if [ -n "${screendump}" ]; then
+   mkdir --parents -- "${screendump}"
+   qemu_opts=(-machine "${machine}" "${accel_opts[@]}" -m "${memory}" -smp "${smp}" -display none -vga std -no-reboot)
+   [ -n "${qmp}" ] || qmp="${screendump}/qmp.sock"
+else
+   qemu_opts=(-machine "${machine}" "${accel_opts[@]}" -m "${memory}" -smp "${smp}" -nographic -no-reboot -vga none)
+fi
 
 ## Attach the ISO as an external USB mass-storage device -- a virtual USB stick --
 ## mirroring how users actually install: they write the ISO to a USB stick and boot
@@ -323,6 +349,29 @@ fi
 printf 'dm-qemu: booting; serial console -> %s\n' "${serial_log}" >&2
 printf 'dm-qemu: watch the boot LIVE with: tail -f %s  (this stderr shows only start + verdict)\n' "${serial_log}" >&2
 qemu_rc=0
+
+if [ -n "${screendump}" ]; then
+   ## Full-chain framebuffer test: start qemu in the BACKGROUND (its own console still lands in
+   ## the serial log for reference) and let the QMP watcher capture + judge the screen. The
+   ## watcher powers the guest down when done; we backstop with an explicit kill of that PID.
+   "${qemu_bin}" "${qemu_opts[@]}" < /dev/null > "${serial_log}" 2>&1 &
+   qemu_pid="$!"
+   self_dir="$(dirname -- "$(readlink --canonicalize -- "$0")")"
+   watch_rc=0
+   "${self_dir}/dm-qemu-screendump-watch" \
+      --qmp "${qmp}" --outdir "${screendump}" --timeout "${timeout_secs}" || watch_rc="$?"
+   if kill -0 "${qemu_pid}" 2>/dev/null; then
+      sleep 5
+      kill -0 "${qemu_pid}" 2>/dev/null && kill "${qemu_pid}" 2>/dev/null
+   fi
+   wait "${qemu_pid}" 2>/dev/null || true
+   case "${watch_rc}" in
+      0) printf 'dm-qemu: PASS -- guest reached a rendered greeter/desktop (frames in %s)\n' "${screendump}" >&2; exit 0 ;;
+      5) printf 'dm-qemu: PARTIAL -- no greeter/desktop within %ss (frames in %s)\n' "${timeout_secs}" "${screendump}" >&2; exit 5 ;;
+      *) printf 'dm-qemu: screendump watcher error (rc=%s); frames in %s\n' "${watch_rc}" "${screendump}" >&2; exit 2 ;;
+   esac
+fi
+
 timeout "${timeout_secs}" "${qemu_bin}" "${qemu_opts[@]}" < /dev/null > "${serial_log}" 2>&1 || qemu_rc="$?"
 
 ## '|| true': a fully-failed boot produces none of the markers, so grep exits 1, which under
