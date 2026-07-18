@@ -48,12 +48,11 @@ main() {
        return 0
    fi
 
-   ## In a reproducible build (SOURCE_DATE_EPOCH set) 4350_reimage-raw-reproducible has already
-   ## zeroed free space and re-created the filesystem deterministically. Running zerofree here would
-   ## write to the filesystem again and re-stamp the superblock write time with wall-clock, breaking
-   ## reproducibility -- so skip it.
+   ## Skip when SOURCE_DATE_EPOCH is set: 4350_reimage-raw-reproducible handles free-space zeroing and
+   ## rebuilds the filesystem deterministically, and a zerofree pass here would write to the filesystem
+   ## again and re-stamp the superblock write time with wall-clock, defeating reproducibility.
    if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
-       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because SOURCE_DATE_EPOCH is set (4350_reimage-raw-reproducible already handled free-space zeroing deterministically).${reset}"
+       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because SOURCE_DATE_EPOCH is set (4350_reimage-raw-reproducible zeroes free space deterministically).${reset}"
        return 0
    fi
 

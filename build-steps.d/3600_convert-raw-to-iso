@@ -159,7 +159,7 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    ## 'console=tty0' last so the normal display stays the primary console.
    serial_console_cmdline=""
    if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
-      serial_console_cmdline=" console=ttyS0,115200n8 console=tty0"
+      serial_console_cmdline=" console=tty0 console=ttyS0,115200n8"
    fi
 
    printf '%s\n' "#!/bin/sh
