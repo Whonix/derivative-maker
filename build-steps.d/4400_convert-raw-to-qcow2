@@ -28,6 +28,7 @@ convert_raw_to_qcow2() {
 
    mkdir --parents "${dist_binary_build_folder}"
 
+
    ## Debugging.
    qemu-img \
       info \
