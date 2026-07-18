@@ -1,0 +1,61 @@
+#!/bin/bash
+
+## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Deterministically rebuild the EFI System Partition's FAT inside a raw disk image, IN PLACE via
+## mtools at the partition byte offset -- NO root mount. grub-install populates the ESP through a
+## kernel FAT mount, and the vfat driver stamps each file's FAT directory entry (including a CREATE
+## time that 'touch' cannot set) with the build's WALL-CLOCK time; SOURCE_DATE_EPOCH only affects
+## mkfs.fat, not a live mount. That made the qcow2 / virtualbox images (raw-image path) differ every
+## build (confirmed: first content mismatch 1.55MiB into the ESP). Extract the ESP tree, pin every
+## mtime to SOURCE_DATE_EPOCH, rebuild a fresh mkfs.fat filesystem, mcopy the files back preserving
+## the pinned time, and write the deterministic ESP back over the partition. The ISO is unaffected
+## (live-build builds its own EFI image); this is for the shared grml-debootstrap raw-image path.
+##
+## Usage: normalize-esp-raw <raw-disk-image>
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+
+raw="${1:?usage: normalize-esp-raw <raw-disk-image>}"
+sde="${SOURCE_DATE_EPOCH:?normalize-esp-raw: SOURCE_DATE_EPOCH must be set}"
+export MTOOLS_SKIP_CHECK=1
+
+esp_extract_dir=""
+esp_fresh_image=""
+normalize_esp_cleanup() {
+   rm --recursive --force -- "${esp_extract_dir}" "${esp_fresh_image}"
+}
+trap normalize_esp_cleanup EXIT
+
+## Locate the ESP (EFI System Partition type GUID) offset+size in BYTES from the GPT via a dump --
+## no mount, no python. sfdisk emits sectors; GPT sector size is 512.
+esp_line="$(sfdisk --dump -- "${raw}" | grep --ignore-case 'type=C12A7328' || true)"
+[ -n "${esp_line}" ] || { printf 'normalize-esp-raw: no EFI System Partition in %s\n' "${raw}" >&2; exit 1; }
+start_sectors="$(printf '%s' "${esp_line}" | sed --regexp-extended --quiet 's/.*start=[[:space:]]*([0-9]+).*/\1/p')"
+size_sectors="$(printf '%s' "${esp_line}" | sed --regexp-extended --quiet 's/.*size=[[:space:]]*([0-9]+).*/\1/p')"
+[ -n "${start_sectors}" ] && [ -n "${size_sectors}" ] || { printf 'normalize-esp-raw: could not parse ESP geometry from: %s\n' "${esp_line}" >&2; exit 1; }
+esp_offset=$(( start_sectors * 512 ))
+esp_size=$(( size_sectors * 512 ))
+
+esp_extract_dir="$(mktemp --directory)"
+esp_fresh_image="$(mktemp)"
+
+## Extract every top-level ESP entry (e.g. /EFI), pin all mtimes, rebuild, copy back preserving them.
+mdir --image "${raw}@@${esp_offset}" -b ::/ 2>/dev/null | sed 's#^::/##; s#/$##' | while IFS='' read -r entry; do
+   [ -n "${entry}" ] || continue
+   mcopy -s --image "${raw}@@${esp_offset}" "::/${entry}" "${esp_extract_dir}/"
+done
+find "${esp_extract_dir}" -exec touch --date="@${sde}" -- {} +
+truncate --size="${esp_size}" -- "${esp_fresh_image}"
+mkfs.fat -F32 -n EFI "${esp_fresh_image}" >/dev/null
+for entry in "${esp_extract_dir}"/*; do
+   [ -e "${entry}" ] || continue
+   mcopy -s -m --image "${esp_fresh_image}" "${entry}" ::/
+done
+dd if="${esp_fresh_image}" of="${raw}" bs=4M oflag=seek_bytes seek="${esp_offset}" conv=notrunc status=none
+
+printf 'normalize-esp-raw: rebuilt ESP deterministically (offset=%s size=%s) in %s\n' "${esp_offset}" "${esp_size}" "${raw}" >&2
