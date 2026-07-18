@@ -25,12 +25,16 @@ zerofree_raw() {
    export kpartx_only=true
 
    source "$dist_source_help_steps_folder"/mount-raw
+   ## Tear the kpartx/loop mapping down even if zerofree fails under 'set -e', instead of leaking it
+   ## into later steps and subsequent builds. The trap tolerates being armed before mount_raw.
+   trap '"$dist_source_help_steps_folder"/unmount-raw 2>/dev/null || true' EXIT
    ## provides: dev_mapper_device
    mount_raw
 
    $SUDO_TO_ROOT zerofree -v "$dev_mapper_device"
 
    "$dist_source_help_steps_folder"/unmount-raw "$@"
+   trap - EXIT
 }
 
 main() {
@@ -41,6 +45,15 @@ main() {
 
    if [ "${dist_build_iso:-}" = "true" ]; then
        true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_iso is set to true.${reset}"
+       return 0
+   fi
+
+   ## In a reproducible build (SOURCE_DATE_EPOCH set) 4350_reimage-raw-reproducible has already
+   ## zeroed free space and re-created the filesystem deterministically. Running zerofree here would
+   ## write to the filesystem again and re-stamp the superblock write time with wall-clock, breaking
+   ## reproducibility -- so skip it.
+   if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
+       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because SOURCE_DATE_EPOCH is set (4350_reimage-raw-reproducible already handled free-space zeroing deterministically).${reset}"
        return 0
    fi
 
