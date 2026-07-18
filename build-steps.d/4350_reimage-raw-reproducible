@@ -20,17 +20,15 @@ cd help-steps
 source pre
 source variables
 
-## Reproducible ext4 root filesystem. grml-debootstrap builds a deterministic base image (mke2fs -d +
-## pinned identifiers in its umount_target), but derivative-maker then MOUNTS the raw read-write and
-## rewrites the rootfs (3500_install-packages, 4300_run-chroot-scripts-post-d) through the kernel's
-## ONLINE block allocator, which places the same files on different blocks every build and re-stamps
-## wall-clock superblock timestamps -- re-introducing exactly the non-determinism grml eliminated. The
-## only robust fix is to re-create the filesystem OFFLINE from the FINAL populated tree, once, after
-## all rootfs writes and before the raw is converted to qcow2 / ova. mke2fs -d walks the source
-## directory in alphabetical order (create_inode.c scandir/alphasort) and allocates deterministically.
-## This runs between 4300 (last rootfs write) and 4400_convert-raw-to-qcow2 (first export). It also
-## zeroes the partition first so free-block slack is deterministic, which makes 4400_zerofree-raw
-## redundant (that step is gated off when SOURCE_DATE_EPOCH is set -- keep the two skip sets mirrored).
+## Reproducible ext4 root filesystem. The root filesystem is created by grml-debootstrap and then
+## modified by derivative-maker's later steps (3500_install-packages, 4300_run-chroot-scripts-post-d),
+## which mount it read-write and write files through the kernel's ONLINE block allocator -- placing the
+## same files on different blocks per build and stamping wall-clock superblock timestamps. Re-create
+## the filesystem OFFLINE from the final populated tree so its block layout is deterministic: mke2fs -d
+## walks the source directory in alphabetical order (create_inode.c scandir/alphasort) and allocates
+## deterministically. This step runs after 4300 (the last rootfs write) and before
+## 4400_convert-raw-to-qcow2 (the first image export). It also zeroes the partition so free-block slack
+## is deterministic; 4400_zerofree-raw is skipped when SOURCE_DATE_EPOCH is set.
 
 ## Best-effort teardown, invoked from an EXIT trap so a failure under 'set -e' never leaks the
 ## read-only mount, the root-owned staging tree (a full rootfs copy), or the kpartx/loop mapping.
@@ -103,11 +101,10 @@ reimage_raw() {
    rmdir "$reimage_mnt"
    reimage_mnt=""
 
-   ## Strip runtime artifacts that late chroot teardown REGENERATED after 80_cleanup already
-   ## truncated /var/log (so 80_cleanup cannot catch them): the update-alternatives log and the
-   ## ldconfig auxiliary cache both embed the build's wall-clock time in their CONTENT (their mtimes
-   ## are already pinned to SOURCE_DATE_EPOCH, which is why the file manifest missed them). Both are
-   ## regenerated at runtime as needed. This is the last point before the deterministic re-image.
+   ## Strip runtime artifacts whose CONTENT embeds the build's wall-clock time (their mtimes are pinned
+   ## to SOURCE_DATE_EPOCH, so a file manifest does not flag them): the update-alternatives log and the
+   ## ldconfig auxiliary cache. Both are written by late chroot activity that runs after 80_cleanup
+   ## truncates /var/log, and both are regenerated at runtime as needed.
    $SUDO_TO_ROOT truncate -s 0 -- "$reimage_tree/var/log/alternatives.log" 2>/dev/null || true
    $SUDO_TO_ROOT rm --force -- "$reimage_tree/var/cache/ldconfig/aux-cache"
 
@@ -148,8 +145,7 @@ reimage_raw() {
    ## Pin the superblock timestamps mke2fs stamps from wall-clock. debugfs set_super_value field names
    ## have NO 's_' prefix. IMPORTANT: debugfs exits 0 even when set_super_value fails internally (e.g.
    ## an unknown field on an older e2fsprogs), so exit-code checking is NOT enough. Capture stderr and
-   ## fail the build if debugfs reports an error -- this is the only thing pinning these fields and
-   ## zerofree no longer backstops it, so a silent failure must not ship a non-reproducible image.
+   ## fail the build if debugfs reports an error -- these writes are the only thing pinning these fields.
    ## Times are passed as hex because debugfs misparses large decimals.
    sde_hex="$(printf '0x%x' "$SOURCE_DATE_EPOCH")"
    for sde_cmd in "set_super_value mtime ${sde_hex}" \
