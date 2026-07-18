@@ -162,15 +162,17 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
       serial_console_cmdline=" console=tty0 console=ttyS0,115200n8"
    fi
 
-   ## Test-only cmdline-injection placeholder. The grub.cfg SMBIOS reader (added to grub.cfg
-   ## further below) fills ${dm_smbios_extra} from an SMBIOS Type 11 'dm-cmdline=' string that a
-   ## boot-tester sets via 'qemu -smbios' ('dm-qemu --smbios-append'), so the kernel cmdline can
-   ## be injected through the FULL firmware -> GRUB -> kernel chain with NO image edit. Kept in
-   ## SINGLE quotes so THIS build shell does not expand it -- it must reach grub.cfg literally as
-   ## '${dm_smbios_extra}' for GRUB to expand at boot. Gated to serial-console-enable (test) images
-   ## only; the injected cmdline is not signature-verified, so it must never ship in production.
+   ## '--smbios true' (default): add a '${dm_smbios_extra}' placeholder to the kernel cmdline; the
+   ## grub.cfg SMBIOS reader (added further below) fills it from an SMBIOS Type 11 'dm-cmdline='
+   ## string a boot-tester passes via 'qemu -smbios' ('dm-qemu --smbios-append'), so extra kernel
+   ## cmdline can be injected through the full firmware -> GRUB -> kernel chain with no image edit.
+   ## Kept in SINGLE quotes so this build shell does not expand it; it must reach grub.cfg literally
+   ## as '${dm_smbios_extra}' for GRUB to expand at boot. With no SMBIOS string set (the normal
+   ## case) the placeholder expands to empty. The injected cmdline is not signature-verified, so
+   ## '--smbios false' drops both the placeholder and the reader.
    dm_smbios_cmdline=""
-   if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
+   if [ "${dist_build_smbios:-}" = "true" ]; then
+      # shellcheck disable=SC2016 # ${dm_smbios_extra} must stay literal for GRUB to expand at boot.
       dm_smbios_cmdline=' ${dm_smbios_extra}'
    fi
 
@@ -324,14 +326,18 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
          'terminal_input --append serial' \
          'terminal_output --append serial' \
          >> bootloaders/grub-pc/grub.cfg
-      ## Test-only real-chain cmdline reader (pairs with ${dm_smbios_cmdline} in the bootappend):
-      ## read an SMBIOS Type 11 OEM string (qemu -smbios type=11,value=dm-cmdline=...; offset 5 is
-      ## the first Type 11 string) and, if it carries the 'dm-cmdline=' sentinel, expose the rest
-      ## as ${dm_smbios_extra} for the kernel line. Runs at parse time (top level), so the value is
-      ## set before any menuentry body executes. The smbios module is in Debian's signed grub, so
-      ## this works on BIOS, EFI, and EFI+Secure-Boot; with no SMBIOS string set (production/real
-      ## hardware) the reader is a no-op and ${dm_smbios_extra} stays empty. NOT signature-verified,
-      ## hence gated to test images.
+   fi
+
+   ## '--smbios true' (default): real-chain cmdline reader (pairs with ${dm_smbios_cmdline} in the
+   ## bootappend). Read an SMBIOS Type 11 OEM string (qemu -smbios type=11,value=dm-cmdline=...;
+   ## offset 5 is the first Type 11 string) and, if it carries the 'dm-cmdline=' sentinel, expose
+   ## the rest as ${dm_smbios_extra} for the kernel line. Runs at parse time (top level), so the
+   ## value is set before any menuentry body executes. The smbios module is in Debian's signed
+   ## grub, so this works on BIOS, EFI, and EFI+Secure-Boot; with no SMBIOS string set (the normal
+   ## case) the reader is a no-op and ${dm_smbios_extra} stays empty. The injected cmdline is not
+   ## signature-verified, so '--smbios false' omits the reader.
+   if [ "${dist_build_smbios:-}" = "true" ]; then
+      # shellcheck disable=SC2016 # grub vars ${dm_smbios_oem}/${dm_smbios_extra} must stay literal for GRUB.
       printf '%s\n' \
          'insmod smbios' \
          'smbios --type 11 --get-string 5 --set dm_smbios_oem' \
