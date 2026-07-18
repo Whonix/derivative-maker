@@ -1,0 +1,214 @@
+#!/usr/bin/python3 -u
+
+## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## dm-qemu screendump boot-watcher.
+##
+## Drives a running qemu instance over its QMP socket to capture periodic PNG
+## screendumps of the GUEST FRAMEBUFFER, and decides whether the guest reached a
+## rendered greeter/desktop -- WITHOUT touching the image or needing a serial console.
+##
+## This is the boot-test path for the FULL firmware -> (shim ->) GRUB -> kernel ->
+## userspace chain when the cmdline cannot be instrumented: qemu '-append' only works
+## with '-kernel' direct boot, and a "sovereign boot" image must not be edited to add a
+## serial console. So instead of reading serial, we WATCH the screen.
+##
+## Detection is a best-effort heuristic (no OCR available): a rendered greeter/desktop is
+## color-RICH and SETTLED (few pixels change between frames), and appears only AFTER a
+## minimum boot time (so an early, static, themed GRUB menu -- which is also rich+settled --
+## is not mistaken for a booted desktop). Two consecutive rich+settled frames past that
+## minimum => "up". The heuristic is imperfect by nature (a stuck colorful screen can pass,
+## an animated greeter may never "settle"); EVERY frame + its metrics are saved so the
+## operator can eyeball the result, and dm-qemu ALSO corroborates against the serial log when
+## the image exposes one. Tune --colors-min / --diff-max / --min-up from the logged numbers.
+##
+## Exit: 0 guest reached a greeter/desktop; 5 timed out without one; 2 setup error
+## (no QMP, no ImageMagick, or no frame ever captured).
+
+import argparse
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import time
+
+
+def log(message):
+    sys.stderr.write("dm-qemu-screendump-watch: " + message + "\n")
+    sys.stderr.flush()
+
+
+class Qmp:
+    ## Minimal QMP client: connect (WITH RETRY, since qemu may still be binding the socket, or a
+    ## stale socket from a prior run lingers a moment -- a one-shot connect would spuriously fail
+    ## and make dm-qemu kill a healthy qemu), read the greeting, negotiate capabilities, then
+    ## issue synchronous commands (screendump returns only after qemu has written the file).
+    def __init__(self, path, deadline):
+        self.sock = None
+        last_err = None
+        while time.time() < deadline:
+            if os.path.exists(path):
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.settimeout(60)
+                try:
+                    sock.connect(path)
+                    self.sock = sock
+                    break
+                except OSError as exc:
+                    last_err = exc
+                    sock.close()
+            time.sleep(1)
+        if self.sock is None:
+            raise ConnectionError("QMP connect failed for %s: %s" % (path, last_err))
+        self.buf = b""
+        self._read_json()                      # greeting
+        self.command("qmp_capabilities")
+
+    def _read_json(self):
+        while b"\n" not in self.buf:
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise ConnectionError("QMP socket closed")
+            self.buf += chunk
+        line, self.buf = self.buf.split(b"\n", 1)
+        return json.loads(line.decode("utf-8", "replace"))
+
+    def command(self, execute, arguments=None):
+        message = {"execute": execute}
+        if arguments:
+            message["arguments"] = arguments
+        self.sock.sendall((json.dumps(message) + "\n").encode("utf-8"))
+        ## Skip asynchronous events (they carry "event", never a top-level return/error).
+        while True:
+            reply = self._read_json()
+            if "return" in reply or "error" in reply:
+                return reply
+
+    def close(self):
+        try:
+            if self.sock is not None:
+                self.sock.close()
+        except OSError:
+            pass
+
+
+def frame_metrics(png, prev_png):
+    ## colors = distinct colors ('identify %k'); a rendered GUI is in the thousands, an early
+    ## text/black console in the tens. diff = pixels changed vs the previous frame
+    ## ('compare -metric AE', small fuzz to ignore a blinking cursor/clock). Both bounded by a
+    ## timeout (a wedged ImageMagick must not hang the watcher). Missing binaries are preflighted
+    ## in main(); still catch OSError defensively so we never traceback out with the wrong exit.
+    colors = 0
+    try:
+        out = subprocess.run(["identify", "-format", "%k", "--", png],
+                             capture_output=True, text=True, timeout=60)
+        if out.returncode == 0 and out.stdout.strip().isdigit():
+            colors = int(out.stdout.strip())
+    except (OSError, subprocess.SubprocessError):
+        colors = 0
+    diff = None
+    if prev_png:
+        try:
+            cmp_proc = subprocess.run(
+                ["compare", "-metric", "AE", "-fuzz", "5%", "--", prev_png, png, "null:"],
+                capture_output=True, text=True, timeout=60)
+            ## 'compare' exit: 0 identical, 1 differ (metric on stderr), >=2 ERROR -- notably when
+            ## the two frames have DIFFERENT DIMENSIONS (routine across a boot-time modeset:
+            ## firmware -> GRUB gfxmode -> kernel KMS). Trust the metric ONLY on 0/1; on an error
+            ## the frames are not comparable, so treat as a large change (unsettled) rather than
+            ## scraping a bogus number (a file/line in the error text) that could read as "settled".
+            if cmp_proc.returncode in (0, 1):
+                token = cmp_proc.stderr.strip().split()[0] if cmp_proc.stderr.strip() else "0"
+                diff = int(float(token))
+            else:
+                diff = None
+        except (OSError, subprocess.SubprocessError, ValueError):
+            diff = None
+    return colors, diff
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--qmp", required=True)
+    parser.add_argument("--outdir", required=True)
+    parser.add_argument("--timeout", type=int, default=1800)
+    parser.add_argument("--interval", type=int, default=15)
+    parser.add_argument("--colors-min", type=int, default=200)
+    parser.add_argument("--diff-max", type=int, default=2000)
+    parser.add_argument("--min-up", type=int, default=60,
+                        help="do not declare 'up' before this many seconds (skips the early GRUB menu)")
+    args = parser.parse_args()
+
+    ## Preflight ImageMagick: without it the heuristic cannot run -- a setup error (2), not a
+    ## traceback (dm-qemu also checks, but stay self-contained).
+    for tool in ("identify", "compare"):
+        if shutil.which(tool) is None:
+            log("ImageMagick '%s' not found -- screendump detection needs it" % tool)
+            return 2
+
+    os.makedirs(args.outdir, exist_ok=True)
+    started = time.time()
+    deadline = started + args.timeout
+
+    try:
+        ## qemu gets up to 60s (bounded by the overall deadline) to create + bind the socket.
+        qmp = Qmp(args.qmp, min(deadline, started + 60))
+    except (OSError, ConnectionError, ValueError) as exc:
+        log("QMP unavailable: " + str(exc))
+        return 2
+
+    verdict = "timeout"
+    prev = None
+    settled = 0
+    index = 0
+    captured = 0
+    try:
+        while time.time() < deadline:
+            time.sleep(args.interval)
+            png = os.path.join(args.outdir, "frame-%04d.png" % index)
+            try:
+                reply = qmp.command("screendump", {"filename": png, "format": "png"})
+            except socket.timeout:
+                log("screendump timed out this interval; retrying")
+                continue
+            except (OSError, ConnectionError, ValueError) as exc:
+                log("QMP screendump failed (guest may have powered off): " + str(exc))
+                break
+            if "error" in reply or not os.path.exists(png) or os.path.getsize(png) == 0:
+                log("screendump produced no frame: " + json.dumps(reply))
+                continue
+            captured += 1
+            colors, diff = frame_metrics(png, prev)
+            elapsed = int(time.time() - started)
+            log("frame %04d t=%ds colors=%d diff=%s" % (index, elapsed, colors, diff))
+            ## Rich AND settled AND past the minimum boot time => count toward "up".
+            if elapsed >= args.min_up and colors >= args.colors_min \
+                    and diff is not None and diff <= args.diff_max:
+                settled += 1
+                if settled >= 2:
+                    verdict = "up"
+                    log("reached a rendered greeter/desktop at frame %04d (t=%ds)" % (index, elapsed))
+                    break
+            else:
+                settled = 0
+            prev = png
+            index += 1
+        try:
+            qmp.command("system_powerdown")
+        except (OSError, ConnectionError, ValueError):
+            pass
+    finally:
+        qmp.close()
+
+    if captured == 0:
+        log("RESULT: setup-error (no frame ever captured; %s)" % args.outdir)
+        return 2
+    log("RESULT: %s (%d frames in %s)" % (verdict, captured, args.outdir))
+    return 0 if verdict == "up" else 5
+
+
+if __name__ == "__main__":
+    sys.exit(main())

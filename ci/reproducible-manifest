@@ -113,6 +113,10 @@ do_generate() {
       work_parent="$(dirname -- "$output")"
       while IFS='' read -r sqfs; do
          manifest_work_dir="$(mktemp --directory --tmpdir="$work_parent")"
+         ## Defense-in-depth: 'set -o errexit' already aborts on a mktemp failure, but guard the
+         ## value explicitly so an empty one can never reach 'unsquashfs -dest' below as
+         ## '-dest /root' -- a root-owned extraction that could corrupt the host's /root.
+         [ -n "$manifest_work_dir" ] || { printf '%s\n' "${0##*/}: mktemp failed in $work_parent" >&2; exit 1; }
          ## No '--' before "$sqfs": unsquashfs has no end-of-options separator and treats a literal
          ## '--' as the FILESYSTEM argument (prints SYNTAX and extracts nothing -> empty manifest).
          sudo --non-interactive unsquashfs -no-progress -dest "$manifest_work_dir/root" "$sqfs" >/dev/null

@@ -25,6 +25,7 @@ on:
         options:
           - virtualbox
           - iso
+          - qcow2
       flavor:
         description: "Flavor (use kicksecure-lxqt with target iso)."
         type: choice

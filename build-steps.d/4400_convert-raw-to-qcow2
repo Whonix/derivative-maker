@@ -40,7 +40,7 @@ convert_raw_to_qcow2() {
       convert \
          -p \
          -O qcow2 \
-         -o cluster_size=2M \
+         -o compat=1.1 \
          -o extended_l2=on,cluster_size=128k \
          -o preallocation=metadata \
          "$binary_image_raw_file" \
