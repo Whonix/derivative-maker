@@ -28,12 +28,6 @@ convert_raw_to_qcow2() {
 
    mkdir --parents "${dist_binary_build_folder}"
 
-   ## Rebuild the raw image's EFI System Partition FAT deterministically before converting to
-   ## qcow2. grub-install populated the ESP through a kernel FAT mount, stamping each file with the
-   ## build's wall-clock time (SOURCE_DATE_EPOCH only reaches mkfs.fat, not a live mount), which
-   ## made the qcow2 differ every build. Confirmed root cause; see help-steps/normalize-esp-raw.
-   "${source_code_folder_dist}/help-steps/normalize-esp-raw" "$binary_image_raw_file"
-
    ## Debugging.
    qemu-img \
       info \
