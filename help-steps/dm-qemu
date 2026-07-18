@@ -69,6 +69,11 @@ Usage: dm-qemu --iso PATH [options]
                       sovereign/measured boot that must not be edited). Mutually exclusive with
                       --verbose (which serial-boots via -kernel). Auto-creates a QMP socket if
                       --qmp is not given.
+  --smbios-append STR extra kernel cmdline injected through the FULL firmware -> GRUB -> kernel
+                      chain via an SMBIOS Type 11 OEM string ('dm-cmdline=STR'), for the plain /
+                      --screendump boot (NOT --verbose, which direct-boots past GRUB). Requires a
+                      TEST-image grub.cfg that reads it (the cooperating reader; smbios module is
+                      in Debian's signed grub, so this works under Secure Boot too).
   --emit-argv         build the qemu command (incl. --verbose kernel/initrd extraction) but do
                       NOT run it: print the argv one token per line to stdout for an external
                       driver (e.g. a pexpect boot-login harness) to spawn, and leave the
@@ -106,6 +111,7 @@ arch=''
 accel='auto'
 qmp=''
 screendump=''
+smbios_append=''
 
 while [ "$#" -gt 0 ]; do
    case "$1" in
@@ -114,6 +120,7 @@ while [ "$#" -gt 0 ]; do
       --accel)        accel="${2:?--accel needs a value}"; shift 2 ;;
       --qmp)          qmp="${2:?--qmp needs a value}"; shift 2 ;;
       --screendump)   screendump="${2:?--screendump needs a value}"; shift 2 ;;
+      --smbios-append) smbios_append="${2:?--smbios-append needs a value}"; shift 2 ;;
       --serial-log)   serial_log="${2:?--serial-log needs a value}"; shift 2 ;;
       --timeout)      timeout_secs="${2:?--timeout needs a value}"; shift 2 ;;
       --verbose)      verbose='true'; shift ;;
@@ -141,6 +148,13 @@ done
 ## different, incompatible boot paths.
 if [ -n "${screendump}" ] && [ "${verbose}" = 'true' ]; then
    printf 'dm-qemu: --screendump and --verbose are mutually exclusive (framebuffer vs serial direct-boot)\n' >&2
+   exit 2
+fi
+## --smbios-append travels through GRUB; --verbose direct-boots the kernel past GRUB, so the
+## SMBIOS reader never runs. Refuse the combination loudly rather than silently dropping it
+## (use --extra-append in --verbose mode instead).
+if [ -n "${smbios_append}" ] && [ "${verbose}" = 'true' ]; then
+   printf 'dm-qemu: --smbios-append needs the GRUB path; it is ignored under --verbose. Use --extra-append for direct boot.\n' >&2
    exit 2
 fi
 
@@ -329,6 +343,17 @@ else
    ## Boot the isohybrid ISO from the emulated USB stick (no '-boot d': there is no
    ## CD; firmware picks the bootable USB device -- SeaBIOS on x86, edk2 on arm64).
    qemu_opts+=("${usb_iso_opts[@]}")
+   ## --smbios-append: pass extra kernel cmdline through the FULL firmware -> GRUB -> kernel
+   ## chain (which qemu '-append' cannot reach -- that only works with '-kernel' direct boot).
+   ## A cooperating, TEST-ONLY grub.cfg reader in the image (insmod smbios; smbios --type 11
+   ## --get-string 5) picks up the 'dm-cmdline=' sentinel from an SMBIOS Type 11 OEM string and
+   ## appends the remainder to the kernel line. SMBIOS is supplied by SeaBIOS (BIOS) and OVMF
+   ## (EFI) alike; the reader's smbios module is in Debian's SIGNED grub, so this works under
+   ## Secure Boot too. Commas in the payload are doubled per qemu's OEM-string escaping. Only
+   ## meaningful on this full-chain path, not --verbose (which direct-boots past GRUB).
+   if [ -n "${smbios_append}" ]; then
+      qemu_opts+=(-smbios "type=11,value=dm-cmdline=${smbios_append//,/,,}")
+   fi
 fi
 
 if [ "${emit_argv}" = 'true' ]; then
