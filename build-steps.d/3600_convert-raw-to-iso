@@ -278,6 +278,17 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
    ## step only packs the already-installed rootfs into an ISO, so 'lb chroot'
    ## has nothing to install.
 
+   ## Exclude runtime /dev from the squashfs. A live image's /dev is populated by devtmpfs at
+   ## boot and must NOT ship the build host's device topology. This step keeps the host /dev
+   ## bind-mounted during 'lb binary' (so /dev/null works for grub-install; see the /dev
+   ## unmount note further down), so mksquashfs would otherwise pack the host's /dev -- the
+   ## build-host disk UUIDs (dev/disk/by-uuid -> xvd*, dev/block) and a per-build-varying
+   ## dev/disk/by-diskseq/<loop-seq> symlink that was the sole remaining bit-for-bit
+   ## reproducibility difference between two frozen builds. live-build feeds config/rootfs/excludes
+   ## to mksquashfs as '-wildcards -ef'; the empty /dev directory itself is kept.
+   mkdir --parents -- rootfs
+   cp -- "${source_code_folder_dist}/live-build-data/live-build-config/rootfs-excludes" rootfs/excludes
+
    ## Branding and GRUB configuration
    mkdir --parents -- bootloaders
    cp --recursive -- "${source_code_folder_dist}/live-build-data/grub-config" bootloaders/grub-pc
@@ -594,6 +605,16 @@ Not running any chroot scripts.${reset}"
    ## and the ERR trap tear it down afterwards. Where the seed already has valid nodes (CI),
    ## the bind-mount simply shadows equivalents, so behaviour there is unchanged.
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/run"
+
+   ## 'lb chroot' ran blkid (via grub-efi install / update-initramfs) BEFORE the tmpfs
+   ## /run mount above, so the build host's per-build loop-device UUIDs were written to
+   ## the on-disk "${CHROOT_FOLDER}/run/blkid/blkid.tab"(.old). The tmpfs shadowed that
+   ## file and the umount above just re-exposed it; 'lb binary' below would pack it into
+   ## filesystem.squashfs, which is the ONLY thing that differs between two frozen builds
+   ## (breaking bit-for-bit reproducibility). initializer-dist's 80_cleanup clears this
+   ## during the rootfs build, but live-build regenerates it here. /run is runtime tmpfs
+   ## state and must be empty in a shipped image, so drop the leaked cache before packing.
+   $SUDO_TO_ROOT safe-rm --recursive --force -- "${CHROOT_FOLDER}/run/blkid"
 
    ## Package into an ISO
    # shellcheck disable=SC2086

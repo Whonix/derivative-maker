@@ -8,14 +8,17 @@
 ## dm-qemu: boot a built derivative-maker ISO headless over the serial console in qemu, for
 ## automated boot-testing (e.g. CI smoke test, or verifying '--serial-console-enable').
 ##
+## The ISO is attached as an emulated external USB stick (usb-storage), matching how
+## users actually install it -- write to a USB stick, boot from it -- rather than an
+## optical -cdrom almost nobody uses now; this also works uniformly on amd64 and arm64.
 ## The live boot is deliberately SILENT in production ('quiet loglevel=0' in the kernel
-## cmdline), so a plain 'qemu -cdrom ISO -nographic' shows the GRUB menu over serial and then
-## nothing -- you cannot tell whether the kernel booted. '--verbose' fixes that: it extracts the
+## cmdline), so a plain GRUB boot over serial shows the GRUB menu and then nothing --
+## you cannot tell whether the kernel booted. '--verbose' fixes that: it extracts the
 ## kernel, initrd and the chosen menu entry's cmdline from the ISO, strips the silencers
 ## ('quiet', 'loglevel=0', 'splash') exactly like the debug-misc package's grub-output-verbose
 ## does, and DIRECT-boots the kernel (qemu -kernel/-initrd/-append) with the ISO attached as the
-## live medium (-cdrom) -- so kernel + systemd + the serial getty login prompt all reach the
-## serial console. '--fast' additionally appends 'mitigations=off' so a pure-TCG host (no KVM,
+## live medium (the USB stick) -- so kernel + systemd + the serial getty login prompt all reach
+## the serial console. '--fast' additionally appends 'mitigations=off' so a pure-TCG host (no KVM,
 ## e.g. a nested Qubes VM) reaches userspace in minutes instead of not at all; do NOT use --fast
 ## for a security-fidelity test. KVM is used automatically when /dev/kvm is present.
 ##
@@ -189,6 +192,19 @@ esac
 
 qemu_opts=(-machine "${machine}" "${accel_opts[@]}" -m "${memory}" -smp "${smp}" -nographic -no-reboot -vga none)
 
+## Attach the ISO as an external USB mass-storage device -- a virtual USB stick --
+## mirroring how users actually install: they write the ISO to a USB stick and boot
+## it (isohybrid ISOs boot as a raw USB block device). This is arch-independent:
+## unlike '-cdrom', which needs an IDE CD controller the arm64 'virt' board lacks, a
+## USB xHCI controller works on amd64 and arm64 alike, so both arches share one
+## media path. 'readonly=on' so qemu never writes back to the built ISO artifact
+## (a live boot overlays its writes in RAM, so the medium stays read-only anyway).
+usb_iso_opts=(
+   -drive "if=none,id=usbstick,format=raw,readonly=on,file=${iso}"
+   -device "qemu-xhci,id=xhci"
+   -device "usb-storage,bus=xhci.0,drive=usbstick,removable=on"
+)
+
 ## Optional QMP control socket (unix, server, non-blocking): qemu listens, the driver connects
 ## after start. 'nowait' so qemu does not block on a QMP client before booting.
 if [ -n "${qmp}" ]; then
@@ -197,7 +213,7 @@ fi
 
 if [ "${verbose}" = 'true' ]; then
    ## Extract the kernel, initrd and grub.cfg from the ISO, derive the chosen entry's cmdline,
-   ## strip the silencers, and direct-boot. The ISO stays attached (-cdrom) as the live medium.
+   ## strip the silencers, and direct-boot. The ISO stays attached (USB stick) as the live medium.
    work_dir="$(mktemp --directory)"
    ## In --emit-argv mode the extracted kernel/initrd must OUTLIVE this process (the external
    ## driver spawns qemu against them), so the caller owns the workdir -- do not auto-clean it.
@@ -246,7 +262,7 @@ if [ "${verbose}" = 'true' ]; then
    full_append="console=${serial_console} ${cmdline} systemd.log_level=info ${extra_append}"
 
    printf 'dm-qemu: verbose direct-boot of %s (entry=%s, fast=%s, timeout=%ss)\n' "${kernel_iso_path##*/}" "${entry}" "${fast}" "${timeout_secs}" >&2
-   qemu_opts+=(-kernel "${work_dir}/vmlinuz" -initrd "${work_dir}/initrd.img" -append "${full_append}" -cdrom "${iso}")
+   qemu_opts+=(-kernel "${work_dir}/vmlinuz" -initrd "${work_dir}/initrd.img" -append "${full_append}" "${usb_iso_opts[@]}")
 else
    ## Plain GRUB boot (no direct kernel). On arm64 there is no BIOS, so 'virt' needs UEFI
    ## firmware to run the ISO's GRUB-efi; locate an edk2 build or fail with a clear hint to
@@ -266,7 +282,9 @@ else
       qemu_opts+=(-bios "${arm_uefi}")
    fi
    printf 'dm-qemu: plain GRUB boot of %s over serial (production-silent kernel; use --verbose for kernel output)\n' "${iso##*/}" >&2
-   qemu_opts+=(-cdrom "${iso}" -boot d)
+   ## Boot the isohybrid ISO from the emulated USB stick (no '-boot d': there is no
+   ## CD; firmware picks the bootable USB device -- SeaBIOS on x86, edk2 on arm64).
+   qemu_opts+=("${usb_iso_opts[@]}")
 fi
 
 if [ "${emit_argv}" = 'true' ]; then

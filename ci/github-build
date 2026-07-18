@@ -198,5 +198,4 @@ fi
    --allow-untagged true \
    --freedom false \
    --repo true \
-   --remote-derivative-packages false \
-   --unsafe-io true
+   --remote-derivative-packages false
