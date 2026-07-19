@@ -38,10 +38,15 @@ true "INFO: Currently running chroot script: ${BASH_SOURCE[0]}"
 ## LANG=C.UTF-8, LANGUAGE=C) travels the same route; checking it here makes
 ## a silent locale passthrough regression fail loud instead of surfacing as
 ## unparseable translated 'VBoxManage' output.
+## 'SOURCE_DATE_EPOCH' is required: the '.ova' reproducibility normalization
+## below derives its deterministic timestamp (and salt) from it. It is set in
+## 'help-steps/variables' and carried in via '$env_vars_keep_list' +
+## '--preserve-env'; fail loud rather than silently produce a non-reproducible
+## '.ova' if it did not make it across.
 for required_var in \
    VMNAME vm_names_to_be_exported vm_multiple HOMEVAR_VBOX_TEMP \
    SUDO_TO_VBOX_TEMP binary_image_ova_file binary_image_vdi_dir \
-   eulafile_user producturl LC_ALL LANG LANGUAGE ; do
+   eulafile_user producturl SOURCE_DATE_EPOCH LC_ALL LANG LANGUAGE ; do
    if [ ! -v "$required_var" ]; then
       printf '%s\n' "ERROR: required variable '$required_var' not present in the chroot environment." >&2
       exit 1
@@ -80,26 +85,13 @@ export_vbox_vm() {
    cp -- "${eulafile_user}" "${eulafile_vbox_temp}"
    chown -- "dm-vbox-temp:dm-vbox-temp" "${eulafile_vbox_temp}"
 
-   ## https://forums.whonix.org/t/allow-us-to-download-the-vm-files-in-a-compressed-format-like-zip-7z-gzip-etc/14210/6
-   ## tar parses TAR_OPTIONS itself, so the embedded single quotes around
-   ## the --mtime value are intentional.
-   ## The fixed --mtime pins every archive member to one deterministic
-   ## timestamp so the exported '.ova' is reproducible (byte-identical across
-   ## builds); the specific 2015 date is an arbitrary constant epoch.
-   # shellcheck disable=SC2089
-   TAR_OPTIONS="\
-      ${TAR_OPTIONS:-}
-      --owner=0 --group=0 --numeric-owner \
-      --mode=go=rX,u+rw,a-s \
-      --sort=name \
-      --sparse \
-      --mtime='2015-10-21 00:00Z' \
-      --xz \
-      "
-   # shellcheck disable=SC2090
-   export TAR_OPTIONS
-   XZ_OPT="${XZ_OPT:-} -9"
-   export XZ_OPT
+   ## Note: 'VBoxManage export' writes the '.ova' tar with its own internal
+   ## code, NOT by invoking '/usr/bin/tar', so 'TAR_OPTIONS' / 'XZ_OPT' do not
+   ## influence it (a former attempt to set them here to pin member mtimes was
+   ## therefore ineffective and has been removed). The '.ova' is made
+   ## byte-for-byte reproducible instead by the deterministic normalization
+   ## pass ('vbox-ova-reproducible-normalize') applied to the exported file
+   ## further below.
 
    true "INFO: vm_names_to_be_exported: $vm_names_to_be_exported"
 
@@ -191,10 +183,37 @@ export_vbox_vm() {
    ## lands on the host).
    mv --verbose -- "${HOMEVAR_VBOX_TEMP}/temp.ova" "${binary_image_ova_file}"
 
+   ## Make the '.ova' bit-for-bit reproducible. 'VBoxManage export' bakes
+   ## random UUIDs (disk / machine / VMDK internal), random NIC MACs, random
+   ## VMDK content ids, a wall-clock 'lastStateChange', and wall-clock tar
+   ## member mtimes into the archive; none can be pinned by an export flag
+   ## (verified: 'createvm --uuid' pins the machine UUID but 'sethduuid' does
+   ## NOT control the export-generated disk UUID). This pass rewrites all of
+   ## them to values derived deterministically from '$SOURCE_DATE_EPOCH' plus a
+   ## per-image salt, and repacks the tar deterministically. Runs directly as
+   ## root (no '$SUDO_TO_VBOX_TEMP'): it needs no VirtualBox registry, and
+   ## '$binary_image_ova_file' is on the bind-mounted host build folder (ample
+   ## space for the unpack/repack; the chroot filesystem is small). Placed
+   ## before the 'import --dry-run' below so that test validates the normalized
+   ## '.ova'. The salt (the '.ova' basename, which carries flavor + version +
+   ## architecture, plus '$SOURCE_DATE_EPOCH') is stable across rebuilds of the
+   ## same commit but differs across images / versions.
+   if [ -v dist_source_help_steps_folder ]; then
+      vbox_ova_normalize_tool="${dist_source_help_steps_folder}/vbox-ova-reproducible-normalize"
+   else
+      vbox_ova_normalize_tool="$(dirname -- "${BASH_SOURCE[0]}")/vbox-ova-reproducible-normalize"
+   fi
+   python3 "${vbox_ova_normalize_tool}" \
+      --ova "${binary_image_ova_file}" \
+      --source-date-epoch "${SOURCE_DATE_EPOCH}" \
+      --salt "$(basename -- "${binary_image_ova_file}"):${SOURCE_DATE_EPOCH}"
+
    ## VirtualBox creates '$binary_image_ova_file' with u+r only, which is
    ## problematic with respect to rsync. Make it world-readable so the
-   ## 'import --dry-run' below (and the host) can read it. The host wrapper
-   ## re-applies ownership ('$user_name') after the chroot returns.
+   ## 'import --dry-run' below (and the host) can read it. Done AFTER the
+   ## normalization pass: that pass repacks the archive into a fresh file
+   ## (atomic rename), which would otherwise drop an earlier chmod. The host
+   ## wrapper re-applies ownership ('$user_name') after the chroot returns.
    chmod ugo+r -- "${binary_image_ova_file}"
 
    sync
