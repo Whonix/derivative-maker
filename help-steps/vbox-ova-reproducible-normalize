@@ -27,20 +27,25 @@
 ##   the KDMV header is touched, never the compressed grain data, and every
 ##   replacement is length-preserving so the extent data stays byte-aligned):
 ##     - CID=xxxxxxxx               : random 32-bit content id.
-##     - ddb.uuid.image="..."       : random image UUID inside the descriptor.
+##     - ddb.uuid.image="..."       : the descriptor's image UUID. This is the
+##                                    SAME medium as the '.ovf' <Disk>, so it is
+##                                    set to that disk's OVF-assigned UUID (VBox
+##                                    keeps the medium UUID in both places; a
+##                                    strict import can reject a mismatch).
 ##
 ##   temp.mf : SHA checksums of the members above; recomputed after patching.
 ##
-##   Outer tar : member mtimes are wall-clock and owner/format vary; the whole
-##   archive is repacked deterministically (fixed mtime from
-##   SOURCE_DATE_EPOCH, numeric 0:0 ownership, ustar format) with the members
-##   in their original order (the '.ovf' stays first, as the OVF spec
-##   requires).
+##   Outer tar : member mtimes are wall-clock, modes vary with the build umask,
+##   and owner/format vary; the whole archive is repacked deterministically
+##   (fixed mtime from SOURCE_DATE_EPOCH, fixed 0644 mode, numeric 0:0
+##   ownership, ustar format) with the members in their original order (the
+##   '.ovf' stays first, as the OVF spec requires).
 ##
-## The machine UUID (createvm --uuid) and the NIC MAC (modifyvm
-## --macaddress1) are pinned deterministically at create time
-## ('pbuilder-chroot-script-create-vbox-vm') and are therefore already stable
-## in the exported '.ovf'; this script deliberately leaves them untouched.
+## The machine UUID and the NIC MACs are also random per build:
+## 'pbuilder-chroot-script-create-vbox-vm' runs 'createvm' without '--uuid' and
+## sets no '--macaddress', so VirtualBox assigns both from its RNG. They are
+## therefore normalized here as well ('<vbox:Machine uuid>' and 'MACAddress'
+## in the '.ovf'), not pinned at create time.
 ##
 ## Invoked from 'help-steps/pbuilder-chroot-script-export-vbox-vm' after the
 ## export and before the 'import --dry-run' sanity test, so that test
@@ -101,10 +106,40 @@ def replace_unique(text, olds, derive):
 
 
 def normalize_ovf(text, salt, epoch):
+    ## <File ovf:id=... ovf:href=...> in <References> maps a file id to the
+    ## archive member name (the .vmdk). Attribute order varies, so pull each
+    ## attribute out of the tag individually.
+    id_to_href = {}
+    for tag in re.findall(r"<File\b[^>]*?>", text):
+        m_id = re.search(r'\bovf:id="([^"]+)"', tag)
+        m_href = re.search(r'\bovf:href="([^"]+)"', tag)
+        if m_id and m_href:
+            id_to_href[m_id.group(1)] = m_href.group(1)
+
+    ## <Disk ... ovf:fileRef=... vbox:uuid=...>: assign each disk a
+    ## deterministic UUID (first-seen order, same indexing replace_unique uses
+    ## below) and record which VMDK member it backs, so that member's
+    ## descriptor can be given the SAME image UUID.
+    disk_uuid_by_href = {}
+    old_disk_uuids = []
+    for tag in re.findall(r"<Disk\b[^>]*?>", text):
+        m_uuid = re.search(r'\bvbox:uuid="([0-9a-fA-F-]{36})"', tag)
+        if not m_uuid:
+            continue
+        old = m_uuid.group(1)
+        if old not in old_disk_uuids:
+            old_disk_uuids.append(old)
+        new = derive_uuid(salt, "disk", old_disk_uuids.index(old))
+        m_ref = re.search(r'\bovf:fileRef="([^"]+)"', tag)
+        if m_ref and m_ref.group(1) in id_to_href:
+            ## Key by bare filename; the lookup below uses the member's
+            ## basename too, so the two agree regardless of any path prefix.
+            disk_uuid_by_href[os.path.basename(id_to_href[m_ref.group(1)])] = new
+
     ## Disk UUID (also appears without braces inside <Image uuid="{...}"/>).
     text = replace_unique(
         text,
-        re.findall(r'<Disk\b[^>]*\bvbox:uuid="([0-9a-fA-F-]{36})"', text),
+        old_disk_uuids,
         lambda i: derive_uuid(salt, "disk", i),
     )
 
@@ -130,10 +165,10 @@ def normalize_ovf(text, salt, epoch):
     ## SOURCE_DATE_EPOCH-derived UTC timestamp (VBox format: 2026-07-19T14:40:39Z).
     stamp = datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     text = re.sub(r'lastStateChange="[^"]*"', 'lastStateChange="%s"' % stamp, text)
-    return text
+    return text, disk_uuid_by_href
 
 
-def patch_vmdk_descriptor(path, salt, index):
+def patch_vmdk_descriptor(path, salt, index, image_uuid):
     ## Patch only the plaintext descriptor embedded in the stream-optimized
     ## VMDK's KDMV header. Read descriptorOffset / descriptorSize (sector
     ## counts) from the header so the compressed grain data is never touched.
@@ -162,10 +197,12 @@ def patch_vmdk_descriptor(path, salt, index):
         new_cid = derive_cid(salt, "cid", index)
         text, n_cid = re.subn(r"(?m)^CID=[0-9a-fA-F]{8}$", "CID=%s" % new_cid, text)
 
-        new_img = derive_uuid(salt, "vmdk", index)
+        ## Set the descriptor image UUID to the disk's OVF-assigned UUID (the
+        ## OVF <Disk> and this VMDK are the same medium; VBox stores that UUID
+        ## in both, and a strict import can reject a mismatch).
         text, n_img = re.subn(
             r'ddb\.uuid\.image="[0-9a-fA-F-]{36}"',
-            'ddb.uuid.image="%s"' % new_img,
+            'ddb.uuid.image="%s"' % image_uuid,
             text,
         )
         if n_cid == 0 or n_img == 0:
@@ -213,11 +250,15 @@ def rewrite_manifest(mf_path, workdir):
         handle.write("\n".join(out_lines) + "\n")
 
 
-def repack(ova_path, workdir, members, epoch):
+def repack(ova_path, workdir, member_names, epoch):
     ## Deterministic tar: original member order (.ovf stays first), fixed mtime
-    ## from SOURCE_DATE_EPOCH, numeric 0:0 ownership, ustar format.
+    ## from SOURCE_DATE_EPOCH, fixed 0644 mode (the exporter sets member modes
+    ## from the build umask, which would otherwise vary the archive), numeric
+    ## 0:0 ownership, ustar format. Every OVA member is a regular file.
     def reset(info):
         info.mtime = epoch
+        info.mode = 0o644
+        info.type = tarfile.REGTYPE
         info.uid = 0
         info.gid = 0
         info.uname = ""
@@ -226,10 +267,9 @@ def repack(ova_path, workdir, members, epoch):
 
     tmp_path = ova_path + ".tmp"
     with tarfile.open(tmp_path, "w", format=tarfile.USTAR_FORMAT) as tar:
-        for name, mode in members:
+        for name in member_names:
             member_path = os.path.join(workdir, name)
             info = tar.gettarinfo(member_path, arcname=name)
-            info.mode = mode
             info = reset(info)
             with open(member_path, "rb") as handle:
                 tar.addfile(info, handle)
@@ -247,11 +287,11 @@ def main():
     salt = args.salt
 
     with tempfile.TemporaryDirectory(dir=os.path.dirname(os.path.abspath(args.ova))) as workdir:
-        ## Preserve the original member order and modes for the repack.
-        members = []
+        ## Preserve the original member order for the repack.
+        member_names = []
         with tarfile.open(args.ova, "r") as tar:
             for info in tar.getmembers():
-                members.append((info.name, info.mode))
+                member_names.append(info.name)
             ## 'filter="data"' guards against path-traversal members and is the
             ## future default (Python 3.14); fall back for interpreters that
             ## predate the argument.
@@ -260,26 +300,33 @@ def main():
             except TypeError:
                 tar.extractall(workdir)
 
-        ovf_names = [n for n, _ in members if n.endswith(".ovf")]
-        vmdk_names = [n for n, _ in members if n.endswith(".vmdk")]
-        mf_names = [n for n, _ in members if n.endswith(".mf")]
+        ovf_names = [n for n in member_names if n.endswith(".ovf")]
+        vmdk_names = [n for n in member_names if n.endswith(".vmdk")]
+        mf_names = [n for n in member_names if n.endswith(".mf")]
         if len(ovf_names) != 1:
             raise SystemExit("ERROR: expected exactly one .ovf, found %r." % ovf_names)
 
         ovf_path = os.path.join(workdir, ovf_names[0])
         with open(ovf_path, "r", encoding="latin-1") as handle:
             ovf_text = handle.read()
-        ovf_text = normalize_ovf(ovf_text, salt, epoch)
+        ovf_text, disk_uuid_by_href = normalize_ovf(ovf_text, salt, epoch)
         with open(ovf_path, "w", encoding="latin-1") as handle:
             handle.write(ovf_text)
 
         for index, vmdk_name in enumerate(sorted(vmdk_names)):
-            patch_vmdk_descriptor(os.path.join(workdir, vmdk_name), salt, index)
+            image_uuid = disk_uuid_by_href.get(os.path.basename(vmdk_name))
+            if image_uuid is None:
+                raise SystemExit(
+                    "ERROR: no OVF <Disk> maps to VMDK member %s." % vmdk_name
+                )
+            patch_vmdk_descriptor(
+                os.path.join(workdir, vmdk_name), salt, index, image_uuid
+            )
 
         for mf_name in mf_names:
             rewrite_manifest(os.path.join(workdir, mf_name), workdir)
 
-        repack(args.ova, workdir, members, epoch)
+        repack(args.ova, workdir, member_names, epoch)
 
     print("INFO: normalized OVA for reproducibility: %s" % args.ova)
 
