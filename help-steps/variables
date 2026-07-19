@@ -1304,14 +1304,6 @@ export dist_build_installer_dist
 [ -n "${dist_build_serial_console_enable:-}" ] || dist_build_serial_console_enable="false"
 export dist_build_serial_console_enable
 
-## Default on; '--smbios false' removes the grub.cfg SMBIOS Type 11 cmdline reader from vm and iso
-## images. The reader lets a boot-tester inject extra kernel cmdline through the real firmware ->
-## GRUB -> kernel chain via 'qemu -smbios' ('dm-qemu --smbios-append') with no image edit; with no
-## SMBIOS string set it is a no-op. The injected cmdline is not signature-verified, so a build that
-## must not accept such injection sets '--smbios false'.
-[ -n "${dist_build_smbios:-}" ] || dist_build_smbios="true"
-export dist_build_smbios
-
 if [ "${dist_build_installer_dist}" = "true" ]; then
    [ -n "${ssh_uploader_account:-}" ] || ssh_uploader_account="root"
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="
@@ -1818,7 +1810,6 @@ env_vars_keep_list="
    dist_build_raw
    dist_build_iso
    dist_build_serial_console_enable
-   dist_build_smbios
    dist_build_slot
    dist_build_utm
    dist_build_install_to_root
