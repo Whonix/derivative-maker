@@ -39,6 +39,13 @@ dist_build_source_run="true"
 
 source pre
 source variables
+## Per-package rebuild detection (dm_package_needs_rebuild); shared with
+## dm-packaging-helper-script's changelog-vs-published-version mechanism. Sourced
+## only for the opt-in --skip-published-packages path, so a normal build does not
+## depend on this helper.
+if [ "${dist_build_skip_published_packages:-}" = "true" ]; then
+   source "$dist_developer_meta_files_folder/usr/libexec/developer-meta-files/reprepro-freshness.bsh"
+fi
 
 cd "$MYDIR"
 cd ..
@@ -429,6 +436,15 @@ create_derivative_distribution_debian_packages() {
          else
             grep -- "Architecture:" "$control_file" || true
             error "unknown Architecture: in $control_file"
+         fi
+         ## Fast local iteration (opt-in): skip a package already published in the
+         ## local reprepro repo at its current changelog version. Off by default,
+         ## so editing a package without bumping debian/changelog is not silently
+         ## skipped. Bump the changelog (or unset the flag) to force a rebuild.
+         if [ "${dist_build_skip_published_packages:-}" = "true" ] \
+            && ! dm_package_needs_rebuild "$item" "$dist_build_apt_codename" "$derivative_name_item"; then
+            true "${cyan}INFO: Skipping up-to-date package $base_name (already published).${reset}"
+            continue
          fi
          package_build_list+=("$item")
       done
