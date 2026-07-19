@@ -18,8 +18,11 @@ set -e
 ## generated grub.cfg is at boot/grub/grub.cfg relative to here, not binary/boot/grub/grub.cfg.
 grub_cfg="boot/grub/grub.cfg"
 if [ ! -f "$grub_cfg" ]; then
-   echo "9000-smbios-grub-reader: $grub_cfg not found (cwd=$(pwd)); skipping." >&2
-   exit 0
+   ## Fail loud: this hook is staged only for iso builds, where the generated grub.cfg always
+   ## exists at binary_hooks time. A missing file is a real error (e.g. a wrong path or reordered
+   ## build), not something to skip silently -- binary_hooks treats a non-zero hook as fatal.
+   echo "9000-smbios-grub-reader: ERROR: $grub_cfg not found (cwd=$(pwd))." >&2
+   exit 1
 fi
 
 ## Idempotent.
@@ -34,14 +37,15 @@ fi
 sed -i -E '/^[[:space:]]*linux(16|efi)?[[:space:]]/ s/$/ ${dm_smbios_extra}/' "$grub_cfg"
 
 ## Append the reader. It runs at parse time (top level), so ${dm_smbios_extra} is set before any
-## menuentry body executes. Read an SMBIOS Type 11 OEM string (qemu -smbios
-## type=11,value=dm-cmdline=...; offset 5 is the first Type 11 string) and, if it carries the
-## 'dm-cmdline=' sentinel, expose the rest as ${dm_smbios_extra}. The regexp and smbios modules are
-## in Debian's signed grub, so this works on BIOS, EFI, and EFI+Secure-Boot.
+## menuentry body executes. Read the SMBIOS Type 1 system serial number (qemu -smbios
+## type=1,serial=dm-cmdline=...; offset 7 is a real string-reference field GRUB can read -- Type 11
+## OEM strings have no such field, offset 5 is past the 5-byte formatted area) and, if it carries
+## the 'dm-cmdline=' sentinel, expose the rest as ${dm_smbios_extra}. The regexp and smbios modules
+## are in Debian's signed grub, so this works on BIOS, EFI, and EFI+Secure-Boot.
 {
    echo 'insmod regexp'
    echo 'insmod smbios'
-   echo 'smbios --type 11 --get-string 5 --set dm_smbios_oem'
+   echo 'smbios --type 1 --get-string 7 --set dm_smbios_oem'
    # shellcheck disable=SC2016 # grub vars ${dm_smbios_oem}/${dm_smbios_extra} must stay literal for GRUB.
    echo 'regexp --set 1:dm_smbios_extra "^dm-cmdline=(.*)" "${dm_smbios_oem}"'
 } >> "$grub_cfg"
