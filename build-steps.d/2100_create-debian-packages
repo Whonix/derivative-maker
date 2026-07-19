@@ -561,6 +561,12 @@ main() {
       return 0
    fi
 
+   ## '--skip-packages': reuse the whole local package repo from the prior build (debug speed-up).
+   if [ "${dist_build_skip_packages:-}" = "true" ]; then
+      true "${bold}${cyan}INFO: --skip-packages, reusing the existing local package repo, skipping ${BASH_SOURCE[0]}. ${reset}"
+      return 0
+   fi
+
    if [ "${dist_build_flavor:-}" = "whonix-custom-workstation" ]; then
       true "${cyan}INFO: Skipping creation of packages for custom workstation.${reset}"
    elif [ "${build_remote_derivative_pkgs:-}" = "true" ]; then
