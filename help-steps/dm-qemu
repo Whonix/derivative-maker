@@ -74,10 +74,11 @@ Usage: dm-qemu --iso PATH [options]
                       --verbose (which serial-boots via -kernel). Auto-creates a QMP socket if
                       --qmp is not given.
   --smbios-append STR extra kernel cmdline injected through the FULL firmware -> GRUB -> kernel
-                      chain via an SMBIOS Type 11 OEM string ('dm-cmdline=STR'), for the plain /
-                      --screendump boot (NOT --verbose, which direct-boots past GRUB). Requires a
-                      TEST-image grub.cfg that reads it (the cooperating reader; smbios module is
-                      in Debian's signed grub, so this works under Secure Boot too).
+                      chain via the SMBIOS Type 1 system serial number ('dm-cmdline=STR'), for the
+                      plain / --screendump boot (NOT --verbose, which direct-boots past GRUB).
+                      Requires an image grub.cfg that reads it (the cooperating reader; smbios
+                      module is in Debian's signed grub, so this works on BIOS and EFI; Secure Boot
+                      lockdown is not yet verified).
   --emit-argv         build the qemu command (incl. --verbose kernel/initrd extraction) but do
                       NOT run it: print the argv one token per line to stdout for an external
                       driver (e.g. a pexpect boot-login harness) to spawn, and leave the
