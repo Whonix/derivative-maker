@@ -185,6 +185,8 @@ Advanced Options:
   --report [true|false]           : Enable or disable build reports (default: false).
   --serial-console-enable [true|false] : Install serial-console-enable and add a serial console (ttyS0) to the boot cmdline / GRUB menu, so the image can be driven headless over serial (default: false).
   --sanity-tests [true|false]     : Enable or disable chroot script sanity tests for faster build speed (default: false).
+  --only-packages "p1 p2"         : Debug speed-up: rebuild ONLY these packages into the persistent local repo (reuse the rest from the prior build). Only safe if omitted packages' source is unchanged.
+  --skip-packages                 : Debug speed-up: skip package building entirely and reuse the whole local package repo from the prior build. Only safe if NO package source changed.
   --retry-max [attempts]          : Set maximum retry attempts. (default: 2)
   --retry-wait [seconds]          : Set wait time between retry attempts.
   --retry-before [script]         : Specify a script to run before retry. [default: none)
@@ -572,6 +574,23 @@ dist_build_one_parse_cmd() {
                   exit 1
                fi
                shift 2
+               ;;
+           --only-packages)
+               ## Debug speed-up: rebuild ONLY these (space-separated) packages into the persistent
+               ## local package repo -- 2100_create-debian-packages honors pkg_list, and buildconfig
+               ## precedence lets this env value win over buildconfig.d/30_pkg_list.conf. Every other
+               ## package is reused from the prior build's repo. Only safe when the omitted packages'
+               ## source is unchanged.
+               export pkg_list="${2:-}"
+               true "${cyan}INFO: --only-packages: rebuilding only '${pkg_list}', reusing the rest.${reset}"
+               shift 2
+               ;;
+           --skip-packages)
+               ## Debug speed-up: skip 2100_create-debian-packages entirely and reuse the whole local
+               ## package repo from the prior build. Only safe when NO package source changed.
+               export dist_build_skip_packages="true"
+               true "${cyan}INFO: --skip-packages: reusing the existing local package repo.${reset}"
+               shift
                ;;
            --sanity-tests)
                if [ "${2:-}" = "true" ]; then
