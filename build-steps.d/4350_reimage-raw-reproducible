@@ -28,7 +28,7 @@ source variables
 ## walks the source directory in alphabetical order (create_inode.c scandir/alphasort) and allocates
 ## deterministically. This step runs after 4300 (the last rootfs write) and before
 ## 4400_convert-raw-to-qcow2 (the first image export). It also zeroes the partition so free-block slack
-## is deterministic; 4400_zerofree-raw is skipped when SOURCE_DATE_EPOCH is set.
+## is deterministic (this reimage supersedes the former zerofree step, now removed).
 
 ## Best-effort teardown, invoked from an EXIT trap so a failure under 'set -e' never leaks the
 ## read-only mount, the root-owned staging tree (a full rootfs copy), or the kpartx/loop mapping.
@@ -120,7 +120,7 @@ reimage_raw() {
    ## space). blkdiscard --zeroout is reliable on loop-backed partitions; on a host without it, fall
    ## back to dd where the expected end-of-device ENOSPC is the ONLY tolerated failure -- any other
    ## error is fatal, because a silent no-op here would leak stale data AND break reproducibility with
-   ## no zerofree backstop under SOURCE_DATE_EPOCH. LC_ALL=C so the ENOSPC message is locale-stable.
+   ## no separate free-space-zeroing backstop (this reimage does it). LC_ALL=C so the ENOSPC message is locale-stable.
    if ! $SUDO_TO_ROOT blkdiscard --zeroout "$dev_mapper_device"; then
       dd_err="$(LC_ALL=C $SUDO_TO_ROOT dd if=/dev/zero of="$dev_mapper_device" bs=1M 2>&1 1>/dev/null)" || true
       case "$dd_err" in
