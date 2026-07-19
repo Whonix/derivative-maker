@@ -45,6 +45,10 @@ Usage: dm-qemu --iso PATH [options]
                       and serial console via the shared help-steps arch map, so an arm64 ISO
                       can be boot-tested (cross-arch runs under TCG; KVM only when guest arch
                       == host arch).
+  --firmware FW        x86 firmware path: 'bios' (SeaBIOS, default), 'efi' (OVMF), or
+                      'efi-secureboot' (OVMF secboot + Microsoft-key vars; validates Debian's
+                      signed shim). Boots the real firmware -> shim -> GRUB -> kernel chain.
+                      Needs the 'ovmf' package. x86 (amd64) only; arm64 already uses UEFI.
   --serial-log PATH   capture the serial console here (default: <iso>.serial-boot.log)
   --timeout SECS      hard qemu time limit (default 1800)
   --verbose           strip 'quiet'/'loglevel=0'/'splash' and DIRECT-boot the kernel so kernel +
@@ -112,12 +116,14 @@ accel='auto'
 qmp=''
 screendump=''
 smbios_append=''
+firmware='bios'
 
 while [ "$#" -gt 0 ]; do
    case "$1" in
       --iso)          iso="${2:?--iso needs a value}"; shift 2 ;;
       --arch)         arch="${2:?--arch needs a value}"; shift 2 ;;
       --accel)        accel="${2:?--accel needs a value}"; shift 2 ;;
+      --firmware)     firmware="${2:?--firmware needs a value}"; shift 2 ;;
       --qmp)          qmp="${2:?--qmp needs a value}"; shift 2 ;;
       --screendump)   screendump="${2:?--screendump needs a value}"; shift 2 ;;
       --smbios-append) smbios_append="${2:?--smbios-append needs a value}"; shift 2 ;;
@@ -184,6 +190,27 @@ serial_console="$(dist_build_arch_to_serial_console "${arch}")" \
    || { printf 'dm-qemu: boot-testing not wired for arch %s (no serial console)\n' "${arch}" >&2; exit 2; }
 
 command -v "${qemu_bin}" >/dev/null || { printf 'dm-qemu: %s not installed (needed for --arch %s)\n' "${qemu_bin}" "${arch}" >&2; exit 2; }
+
+## --firmware: bios (SeaBIOS on x86 / edk2 on arm64, the default), efi (OVMF), or efi-secureboot
+## (OVMF secboot firmware + Microsoft-key vars that validate Debian's MS-signed shim). efi and
+## efi-secureboot are x86 (amd64) only here; arm64 already boots via edk2 UEFI on the plain path.
+case "${firmware}" in
+   bios) : ;;
+   efi|efi-secureboot)
+      if [ "${guest_machine}" != 'x86_64' ]; then
+         printf 'dm-qemu: --firmware %s is x86 (amd64) only; arm64 already uses UEFI\n' "${firmware}" >&2
+         exit 2
+      fi
+      ## Secure Boot requires System Management Mode; the q35 machine supports it.
+      if [ "${firmware}" = 'efi-secureboot' ]; then
+         machine="${machine},smm=on"
+      fi
+      ;;
+   *)
+      printf 'dm-qemu: --firmware must be bios, efi, or efi-secureboot\n' >&2
+      exit 2
+      ;;
+esac
 command -v xorriso >/dev/null || { printf 'dm-qemu: xorriso not installed (needed to read the ISO)\n' >&2; exit 2; }
 if [ -n "${screendump}" ]; then
    if ! command -v identify >/dev/null || ! command -v compare >/dev/null; then
@@ -340,8 +367,38 @@ else
       done
       [ -n "${arm_uefi}" ] || { printf 'dm-qemu: arm64 plain boot needs edk2 UEFI firmware (install qemu-efi-aarch64) or use --verbose\n' >&2; exit 2; }
       qemu_opts+=(-bios "${arm_uefi}")
+   elif [ "${guest_machine}" = 'x86_64' ] && [ "${firmware}" != 'bios' ]; then
+      ## x86 EFI boot via OVMF pflash (SeaBIOS is the default BIOS path). efi-secureboot uses the
+      ## secboot firmware + Microsoft-key vars (which validate Debian's MS-signed shim) plus the
+      ## flash 'secure' property; SMM is set on the machine above.
+      case "${firmware}" in
+         efi)
+            ovmf_code='/usr/share/OVMF/OVMF_CODE_4M.fd'
+            ovmf_vars_src='/usr/share/OVMF/OVMF_VARS_4M.fd'
+            ;;
+         efi-secureboot)
+            ovmf_code='/usr/share/OVMF/OVMF_CODE_4M.secboot.fd'
+            ovmf_vars_src='/usr/share/OVMF/OVMF_VARS_4M.ms.fd'
+            qemu_opts+=(-global 'driver=cfi.pflash01,property=secure,value=on')
+            ;;
+      esac
+      if [ ! -r "${ovmf_code}" ] || [ ! -r "${ovmf_vars_src}" ]; then
+         printf 'dm-qemu: OVMF firmware not found (install the ovmf package) for --firmware %s\n' "${firmware}" >&2
+         exit 2
+      fi
+      ## Writable per-boot copy of the vars flash in an auto-cleaned workdir (the plain path has no
+      ## workdir otherwise; --emit-argv leaves ownership to the caller, mirroring the verbose path).
+      work_dir="$(mktemp --directory)"
+      if [ "${emit_argv}" != 'true' ]; then
+         trap dm_qemu_cleanup_workdir EXIT
+      fi
+      cp -- "${ovmf_vars_src}" "${work_dir}/OVMF_VARS.fd"
+      qemu_opts+=(
+         -drive "if=pflash,format=raw,unit=0,readonly=on,file=${ovmf_code}"
+         -drive "if=pflash,format=raw,unit=1,file=${work_dir}/OVMF_VARS.fd"
+      )
    fi
-   printf 'dm-qemu: plain GRUB boot of %s over serial (production-silent kernel; use --verbose for kernel output)\n' "${iso##*/}" >&2
+   printf 'dm-qemu: plain GRUB boot of %s over serial (firmware=%s; production-silent kernel; use --verbose for kernel output)\n' "${iso##*/}" "${firmware}" >&2
    ## Boot the isohybrid ISO from the emulated USB stick (no '-boot d': there is no
    ## CD; firmware picks the bootable USB device -- SeaBIOS on x86, edk2 on arm64).
    qemu_opts+=("${usb_iso_opts[@]}")
