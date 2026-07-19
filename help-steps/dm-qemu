@@ -77,8 +77,10 @@ Usage: dm-qemu --iso PATH [options]
                       chain via the SMBIOS Type 1 system serial number ('dm-cmdline=STR'), for the
                       plain / --screendump boot (NOT --verbose, which direct-boots past GRUB).
                       Requires an image grub.cfg that reads it (the cooperating reader; smbios
-                      module is in Debian's signed grub, so this works on BIOS and EFI; Secure Boot
-                      lockdown is not yet verified).
+                      module is in Debian's signed grub, so this works on BIOS, EFI, and EFI+Secure
+                      Boot -- SB verified: an injected loglevel=7/plymouth.enable=0 took effect
+                      through OVMF-secboot -> signed shim -> signed grub, GRUB lockdown does not
+                      block the smbios read or cmdline append).
   --emit-argv         build the qemu command (incl. --verbose kernel/initrd extraction) but do
                       NOT run it: print the argv one token per line to stdout for an external
                       driver (e.g. a pexpect boot-login harness) to spawn, and leave the
@@ -411,9 +413,11 @@ else
    ## string-reference field GRUB can read; Type 11 OEM strings have no such field in the formatted
    ## area (offset 5 is past its 5-byte length -> "offset outside the structure"). SMBIOS is
    ## supplied by SeaBIOS (BIOS) and OVMF (EFI) alike; the reader's smbios module is in Debian's
-   ## SIGNED grub. Whether it runs under Secure Boot LOCKDOWN is NOT yet verified (SB boot-to-login
-   ## is; the smbios read/cmdline-append under SB is not) -- do not assume it works under SB until
-   ## tested. Commas in the payload are doubled per qemu's value escaping. Only meaningful on this
+   ## SIGNED grub, so this works on BIOS, EFI, and EFI+Secure-Boot. SB VERIFIED: booting the signed
+   ## SB ISO with '--firmware efi-secureboot --smbios-append "loglevel=7 plymouth.enable=0" --screendump'
+   ## produced a verbose (non-splash) boot on the framebuffer, i.e. the injected cmdline took effect
+   ## through OVMF-secboot -> signed shim -> signed grub -- GRUB lockdown does not block the smbios
+   ## read or the cmdline append. Commas in the payload are doubled per qemu's value escaping. Only meaningful on this
    ## full-chain path, not --verbose (direct boot).
    if [ -n "${smbios_append}" ]; then
       qemu_opts+=(-smbios "type=1,serial=dm-cmdline=${smbios_append//,/,,}")
