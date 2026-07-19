@@ -292,10 +292,6 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
    ## Branding and GRUB configuration
    mkdir --parents -- bootloaders
    cp --recursive -- "${source_code_folder_dist}/live-build-data/grub-config" bootloaders/grub-pc
-   ## live-build binary hooks. 9000-smbios-grub-reader.binary adds the GRUB SMBIOS Type 11 cmdline
-   ## reader to the generated ISO grub.cfg (after live-build writes it, before the ISO is packed).
-   mkdir --parents -- hooks/normal
-   cp -- "${source_code_folder_dist}/live-build-data/hooks"/*.binary hooks/normal/
    mkdir --parents -- includes.installer/usr/share/graphics
    cp -- "${source_code_folder_dist}/live-build-data/d-i-branding"/* includes.installer/usr/share/graphics/
    mkdir --parents -- 'includes.installer/usr/share/themes/Clearlooks/gtk-2.0'
