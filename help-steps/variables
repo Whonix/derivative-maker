@@ -1658,16 +1658,18 @@ mkdir --parents -- "$make_cowbuilder_dist_folder"
 
 ## pbuilder-createbuildenv's post-bootstrap 'apt-get -q "${APTGETOPT[@]}" update' uses pbuilder's
 ## OWN APTGETOPT array, not derivative-maker's DIST_APTGETOPT (renamed to avoid the collision noted
-## above), so APTGETOPT defaults to empty and that create-time apt gets none of the build's apt
-## options. (mmdebstrap's --aptopt covers only the bootstrap phase, not this later apt-get update.)
-## A '--freshness frozen' build pins an expired snapshot Release, so APTGETOPT must carry
-## Acquire::Check-Valid-Until=false or create fails ("Release file ... is expired; E: pbuilder
-## create failed"). Interpolated into the configfile below. Frozen-scoped, matching
-## buildconfig.d/30_apt_opts.conf so a fresh build keeps Valid-Until replay protection.
-pbuilder_aptgetopt_block=""
-if [ "${dist_build_apt_freshness_selected:-}" = "frozen" ]; then
-   pbuilder_aptgetopt_block='APTGETOPT=("-o" "Acquire::Check-Valid-Until=false")
-export APTGETOPT'
+## above), so without this it gets none of the build's apt options. (mmdebstrap's --aptopt covers
+## only the bootstrap phase, not this later apt-get update.) Pass the FULL DIST_APTGETOPT so
+## create-time apt gets the same options as every other apt path -- e.g. APT::Update::Error-Mode=any
+## (fail-loud on any apt error, a security feature) and, for a '--freshness frozen' build,
+## Acquire::Check-Valid-Until=false (the pinned snapshot Release is expired by design; without it
+## create fails "Release file ... is expired; E: pbuilder create failed"). ${...@Q} quotes each
+## element so the array round-trips when pbuilder sources this configfile.
+if [ "${#DIST_APTGETOPT[@]}" -gt 0 ]; then
+   pbuilder_aptgetopt_block="APTGETOPT=(${DIST_APTGETOPT[*]@Q})
+export APTGETOPT"
+else
+   pbuilder_aptgetopt_block=""
 fi
 
 printf "%s\n" "\
