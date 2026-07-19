@@ -184,7 +184,6 @@ Environment Variables:
 Advanced Options:
   --report [true|false]           : Enable or disable build reports (default: false).
   --serial-console-enable [true|false] : Install serial-console-enable and add a serial console (ttyS0) to the boot cmdline / GRUB menu, so the image can be driven headless over serial (default: false).
-  --smbios [true|false]           : Add a grub.cfg SMBIOS Type 11 cmdline reader to vm and iso images, so a boot-tester can inject extra kernel cmdline through the real firmware -> GRUB -> kernel chain via 'qemu -smbios' with no image edit; a no-op when no SMBIOS string is set. Not signature-verified (default: true).
   --sanity-tests [true|false]     : Enable or disable chroot script sanity tests for faster build speed (default: false).
   --retry-max [attempts]          : Set maximum retry attempts. (default: 2)
   --retry-wait [seconds]          : Set wait time between retry attempts.
@@ -570,18 +569,6 @@ dist_build_one_parse_cmd() {
                   export dist_build_serial_console_enable="false"
                else
                   printf '%s\n' "${red}${bold}ERROR: supported options for --serial-console-enable are 'true' or 'false'.${reset}"
-                  exit 1
-               fi
-               shift 2
-               ;;
-           --smbios)
-               if [ "${2:-}" = "true" ]; then
-                  export dist_build_smbios="true"
-               elif [ "${2:-}" = "false" ]; then
-                  true "${cyan}INFO: --smbios false: omitting the grub.cfg SMBIOS cmdline reader.${reset}"
-                  export dist_build_smbios="false"
-               else
-                  printf '%s\n' "${red}${bold}ERROR: supported options for --smbios are 'true' or 'false'.${reset}"
                   exit 1
                fi
                shift 2

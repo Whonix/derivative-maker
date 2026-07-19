@@ -1,0 +1,41 @@
+#!/bin/sh
+
+## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+set -e
+
+## Add a GRUB SMBIOS Type 11 cmdline reader to the live ISO grub.cfg, so a boot-tester can inject
+## extra kernel cmdline through the real firmware -> GRUB -> kernel chain via 'qemu -smbios'
+## ('dm-qemu --smbios-append') with no image edit. Runs as a live-build binary hook, after
+## grub.cfg is generated but before the ISO is packed, editing the generated file directly -- the
+## same approach as the vm chroot-post.d reader (initializer-dist 77_smbios-grub-reader). Editing
+## the generated grub.cfg keeps the placeholder literal; routing it through --bootappend-live would
+## let live-build shell-expand it to empty when it re-sources its stored config. With no SMBIOS
+## string set the reader is a no-op.
+
+grub_cfg="binary/boot/grub/grub.cfg"
+[ -f "$grub_cfg" ] || exit 0
+
+## Idempotent.
+if grep -q 'dm_smbios_extra' "$grub_cfg"; then
+   exit 0
+fi
+
+## Append ' ${dm_smbios_extra}' to every kernel line. Single-quoted so this hook shell does not
+## expand the placeholder; sed writes it literally so GRUB expands it at boot.
+# shellcheck disable=SC2016 # ${dm_smbios_extra} must stay literal for GRUB to expand at boot.
+sed -i -E '/^[[:space:]]*linux(16|efi)?[[:space:]]/ s/$/ ${dm_smbios_extra}/' "$grub_cfg"
+
+## Append the reader. It runs at parse time (top level), so ${dm_smbios_extra} is set before any
+## menuentry body executes. Read an SMBIOS Type 11 OEM string (qemu -smbios
+## type=11,value=dm-cmdline=...; offset 5 is the first Type 11 string) and, if it carries the
+## 'dm-cmdline=' sentinel, expose the rest as ${dm_smbios_extra}. The regexp and smbios modules are
+## in Debian's signed grub, so this works on BIOS, EFI, and EFI+Secure-Boot.
+{
+   echo 'insmod regexp'
+   echo 'insmod smbios'
+   echo 'smbios --type 11 --get-string 5 --set dm_smbios_oem'
+   # shellcheck disable=SC2016 # grub vars ${dm_smbios_oem}/${dm_smbios_extra} must stay literal for GRUB.
+   echo 'regexp --set 1:dm_smbios_extra "^dm-cmdline=(.*)" "${dm_smbios_oem}"'
+} >> "$grub_cfg"
