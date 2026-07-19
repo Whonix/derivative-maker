@@ -14,11 +14,17 @@ set -e
 ## let live-build shell-expand it to empty when it re-sources its stored config. With no SMBIOS
 ## string set the reader is a no-op.
 
-grub_cfg="binary/boot/grub/grub.cfg"
-[ -f "$grub_cfg" ] || exit 0
+## live-build runs binary hooks with cwd=binary/ (binary_hooks: 'cd binary; ../${HOOK}'), so the
+## generated grub.cfg is at boot/grub/grub.cfg relative to here, not binary/boot/grub/grub.cfg.
+grub_cfg="boot/grub/grub.cfg"
+if [ ! -f "$grub_cfg" ]; then
+   echo "9000-smbios-grub-reader: $grub_cfg not found (cwd=$(pwd)); skipping." >&2
+   exit 0
+fi
 
 ## Idempotent.
 if grep -q 'dm_smbios_extra' "$grub_cfg"; then
+   echo "9000-smbios-grub-reader: reader already present in $grub_cfg, nothing to do."
    exit 0
 fi
 
@@ -39,3 +45,5 @@ sed -i -E '/^[[:space:]]*linux(16|efi)?[[:space:]]/ s/$/ ${dm_smbios_extra}/' "$
    # shellcheck disable=SC2016 # grub vars ${dm_smbios_oem}/${dm_smbios_extra} must stay literal for GRUB.
    echo 'regexp --set 1:dm_smbios_extra "^dm-cmdline=(.*)" "${dm_smbios_oem}"'
 } >> "$grub_cfg"
+
+echo "9000-smbios-grub-reader: added SMBIOS cmdline reader to $grub_cfg."
