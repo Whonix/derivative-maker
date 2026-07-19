@@ -185,7 +185,7 @@ Advanced Options:
   --report [true|false]           : Enable or disable build reports (default: false).
   --serial-console-enable [true|false] : Install serial-console-enable and add a serial console (ttyS0) to the boot cmdline / GRUB menu, so the image can be driven headless over serial (default: false).
   --sanity-tests [true|false]     : Enable or disable chroot script sanity tests for faster build speed (default: false).
-  --only-packages "p1 p2"         : Debug speed-up: rebuild ONLY these packages into the persistent local repo (reuse the rest from the prior build). Only safe if omitted packages' source is unchanged.
+  --only-packages 'p1 p2'         : Debug speed-up: rebuild ONLY these packages into the persistent local repo (reuse the rest from the prior build). Only safe if omitted packages' source is unchanged.
   --skip-packages                 : Debug speed-up: skip package building entirely and reuse the whole local package repo from the prior build. Only safe if NO package source changed.
   --retry-max [attempts]          : Set maximum retry attempts. (default: 2)
   --retry-wait [seconds]          : Set wait time between retry attempts.
