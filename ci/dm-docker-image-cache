@@ -41,7 +41,7 @@ fi
 
 ## Must match docker-run's image_ref (it builds "${IMG}:$(uname --machine)").
 image_arch="$(uname --machine)"
-img="Kicksecure/derivative-maker-docker:${image_arch}"
+img="kicksecure/derivative-maker-docker:${image_arch}"
 cache_dir="${HOME}/.dm-docker-image"
 image_tar="${cache_dir}/image.tar"
 

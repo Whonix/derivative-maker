@@ -22,6 +22,7 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 
 HOST_USER="$(id -u)"
+HOST_GROUP="$(id -g)"
 DOCKER_USER="user"
 ## No implicit default command: the caller must pass an explicit command after
 ## '--'. A bare invocation is an error, not a silent full './derivative-maker'
@@ -43,7 +44,7 @@ CACHER_VOLUME="$HOME/approx_cache_mnt"
 ## sq uses the softkeys backend, but harmless and correct for those configurations).
 KEY_VOLUME="$HOME/.key_mnt"
 GNUPG_VOLUME="$HOME/.gnupg_mnt"
-IMG="Kicksecure/derivative-maker-docker"
+IMG="kicksecure/derivative-maker-docker"
 ## Arch-qualify the image tag so an amd64 and an arm64 image can never collide
 ## in a shared docker store or image cache. The image is built natively on the
 ## runner, so its architecture is the host's; 'uname --machine' (e.g. x86_64 /
@@ -80,6 +81,25 @@ print_usage() {
 EOF
 }
 
+die() {
+  print_usage >&2
+  printf '%s\n' "ERROR: $*" >&2
+  exit 1
+}
+
+## Reject a mount source Docker would misinterpret: a NON-absolute path is
+## treated as a named volume (silently not the host directory), and a ':' splits
+## the '-v' spec. Require an absolute, colon-free path.
+validate_mount_path() {
+  case "$1" in
+    /*) ;;
+    *) die "mount path must be an absolute path: $1" ;;
+  esac
+  case "$1" in
+    *:*) die "mount path must not contain a colon: $1" ;;
+  esac
+}
+
 volume_prepare() {
   declare -a -- VOLUMES
 
@@ -88,9 +108,9 @@ volume_prepare() {
   ## literal stays correct. Kept in sync with ci/approx-cache-sidecar.
   VOLUMES=(
     "${CACHER_VOLUME}" "101:102" "770"
-    "${BINARY_VOLUME}" "${HOST_USER}:${HOST_USER}" "770"
-    "${KEY_VOLUME}" "${HOST_USER}:${HOST_USER}" "700"
-    "${GNUPG_VOLUME}" "${HOST_USER}:${HOST_USER}" "700"
+    "${BINARY_VOLUME}" "${HOST_USER}:${HOST_GROUP}" "770"
+    "${KEY_VOLUME}" "${HOST_USER}:${HOST_GROUP}" "700"
+    "${GNUPG_VOLUME}" "${HOST_USER}:${HOST_GROUP}" "700"
   )
 
   while (( ${#VOLUMES[@]} > 0 )); do
@@ -98,6 +118,14 @@ volume_prepare() {
       mkdir --parents -- "${VOLUMES[0]}"
       sudo "${sudo_options_maybe[@]}" -- chown --recursive -- "${VOLUMES[1]}" "${VOLUMES[0]}"
       sudo "${sudo_options_maybe[@]}" -- chmod --recursive -- "${VOLUMES[2]}" "${VOLUMES[0]}"
+    else
+      ## Directory already exists (created by hand, or by an older script version
+      ## with different ownership): fix the TOP-LEVEL owner/mode so the
+      ## in-container writer (e.g. approx uid 101) can use it. Non-recursive on
+      ## purpose -- a recursive pass would rechown a potentially large cache
+      ## every run.
+      sudo "${sudo_options_maybe[@]}" -- chown -- "${VOLUMES[1]}" "${VOLUMES[0]}"
+      sudo "${sudo_options_maybe[@]}" -- chmod -- "${VOLUMES[2]}" "${VOLUMES[0]}"
     fi
 
     VOLUMES=("${VOLUMES[@]:3}")
@@ -107,9 +135,13 @@ volume_prepare() {
 build_docker_image() {
   ## Hoist the subshell out of the command arguments so 'set -o errexit'
   ## catches a failing 'id' instead of silently passing an empty --build-arg.
-  local dm_uid
+  local dm_uid existing_image
   dm_uid="$(id -u)"
-  if [ -z "$(docker images --quiet -- "${image_ref}" 2> /dev/null)" ]; then
+  ## Query the SAME daemon that build/run use (sudo). A non-sudo query can hit a
+  ## different or missing daemon, then wrongly rebuild every run, or skip the
+  ## build and let 'docker run' fall back to pulling the unpinned name.
+  existing_image="$(sudo "${sudo_options_maybe[@]}" -- docker images --quiet -- "${image_ref}" 2> /dev/null)" || true
+  if [ -z "${existing_image}" ]; then
     sudo \
     "${sudo_options_maybe[@]}" \
     -- \
@@ -130,14 +162,20 @@ saw_dashdash="false"
 while true; do
   case "${1:-}" in
     --binary-mount)
+      [ "$#" -ge 2 ] || die "--binary-mount requires a value."
+      validate_mount_path "${2}"
       BINARY_VOLUME="${2}"
       shift 2
       ;;
     --cacher-mount)
+      [ "$#" -ge 2 ] || die "--cacher-mount requires a value."
+      validate_mount_path "${2}"
       CACHER_VOLUME="${2}"
       shift 2
       ;;
     --key-mount)
+      [ "$#" -ge 2 ] || die "--key-mount requires a value."
+      validate_mount_path "${2}"
       KEY_VOLUME="${2}"
       shift 2
       ;;
@@ -151,9 +189,7 @@ while true; do
       break
       ;;
     -*)
-      print_usage >&2
-      printf '%s\n' "ERROR: unknown option: $1" >&2
-      exit 1
+      die "unknown option: $1"
       ;;
     *)
       break
@@ -166,9 +202,7 @@ done
 ## command (no '--'), an unknown option, or no command at all is rejected -- so a
 ## typo is never silently run and there is no implicit default.
 if [ "${saw_dashdash}" != "true" ] || [ "$#" -lt 1 ]; then
-  print_usage >&2
-  printf '%s\n' "ERROR: no command given: pass -- COMMAND [ARGS] (see --help)." >&2
-  exit 1
+  die "no command given: pass -- COMMAND [ARGS] (see --help)."
 fi
 COMMAND="${1}"
 shift
@@ -204,9 +238,10 @@ sudo \
   -- \
     docker \
       run \
-      --name derivative-maker-docker \
+      --name "derivative-maker-docker-${image_arch}-$$" \
       "${docker_run_opts[@]}" \
       --rm \
+      --pull=never \
       --privileged \
       --volume /dev:/dev \
       --env 'flavor_meta_packages_to_install=' \
