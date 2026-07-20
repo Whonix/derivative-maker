@@ -6,6 +6,10 @@ name: Reproducible
 ## reproducible-builds gold standard -- not one job building twice), then a
 ## third job compares the two images with diffoscope via developer-meta-files'
 ## dm-reproducible-compare, applying the expected-to-differ allowlist.
+## This lane also REPLACES the former local-build.yml: the two builds are the
+## build test, so a green run means the image both builds and is reproducible.
+## Kept simple -- one target per run (the default, or a workflow_dispatch choice),
+## not a build-everything matrix, to avoid superfluous builds.
 ## The compare job's conclusion IS the reproducibility pass/fail signal: green
 ## == bit-for-bit reproducible, red == a difference remains after the allowlist.
 ## Until the images are fully reproducible this lane is EXPECTED to be red; that
@@ -33,6 +37,15 @@ on:
         options:
           - kicksecure-cli
           - kicksecure-lxqt
+  ## Also the build gate (this lane replaced local-build.yml): a push to a
+  ## '**ci**' branch or a tag builds the default target TWICE and compares, so a
+  ## green run means both "it builds" and "it is reproducible". Other targets /
+  ## arches stay on-demand via workflow_dispatch to avoid superfluous builds.
+  push:
+    branches:
+      - '**ci**'
+    tags:
+      - '*'
   schedule:
     ## Weekly, Sundays 07:00 UTC (offset from the scorecard lane at 06:00 to
     ## avoid a thundering herd on the shared runner pool).
@@ -85,12 +98,12 @@ jobs:
           ## rule 2: the build only signs/tags locally and never pushes.
           persist-credentials: false
 
-      ## Same disk reclaim as local-build.yml (#96); a vbox/qcow2 dispatch has
-      ## the same runner disk profile as a single build job.
+      ## Reclaim runner disk (#96); a vbox/qcow2 dispatch has the same runner
+      ## disk profile as a single build job.
       - name: Free runner disk space
         run: ./ci/free-disk
 
-      ## Cache plumbing mirrors local-build.yml (proven). The two independent
+      ## Cache plumbing (proven). The two independent
       ## builds may share a warm cache; cache provenance does not affect a
       ## reproducible build's output, so this only speeds the lane up. Key
       ## includes matrix.copy so the parallel 'a'/'b' saves do not race on one
