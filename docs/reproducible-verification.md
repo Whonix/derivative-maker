@@ -6,12 +6,13 @@ differ without downloading our multi-GB image, and why `diffoscope` alone is not
 the right first tool.
 
 > **Status.** The manifest tool (`ci/reproducible-manifest`) and the local
-> build-twice check (`ci/reproducible-build-twice`) work today. Publishing a
-> **signed manifest sidecar next to each official image** -- the piece that lets
-> an end user compare without downloading the image (steps 1-2 below) -- is the
-> proposed next step and is not shipped yet. Until it is, you can still localize
-> a difference locally by generating a manifest from your rebuild and comparing
-> it against a manifest you generate from a copy of our image.
+> build-twice check (`ci/reproducible-build-twice`) work today. The **ISO**
+> release now publishes a signed manifest sidecar (`<image>.manifest` +
+> `.manifest.asc`) via `dm-prepare-release`, so steps 1-2 below apply to the
+> ISO. Publishing the same sidecar for the **raw / qcow2 / VirtualBox** targets
+> (whose images are not loop-mountable at signing time) and a one-command
+> `--manifest-only` fetch/verify flow are follow-ups; for those targets, for
+> now, compare against a manifest you generate from a copy of our image.
 
 ## Why not just run diffoscope?
 
