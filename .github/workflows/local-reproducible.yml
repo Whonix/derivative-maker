@@ -127,7 +127,7 @@ jobs:
           ## the lane reports non-reproducible for a reason that is not the
           ## build's fault.
           FRESHNESS: frozen
-        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}" --target "${TARGET}" --flavor "${FLAVOR}" --freshness "${FRESHNESS}"
+        run: ./docker/derivative-maker-docker-run -- ci/github-build --arch "${ARCH}" --target "${TARGET}" --flavor "${FLAVOR}" --freshness "${FRESHNESS}"
 
       - name: Save docker image to cache
         if: steps.dmimg-cache.outputs.cache-hit != 'true'
@@ -187,7 +187,7 @@ jobs:
         env:
           REPORT: reproducible-report.html
           TARGET: ${{ env.REPRO_TARGET }}
-        run: ./docker/derivative-maker-docker-run --custom ci/reproducible-compare -- --target "${TARGET}" --dir-a build-a --dir-b build-b --output "${REPORT}"
+        run: ./docker/derivative-maker-docker-run -- ci/reproducible-compare --target "${TARGET}" --dir-a build-a --dir-b build-b --output "${REPORT}"
 
       - name: Upload diffoscope report
         if: always()

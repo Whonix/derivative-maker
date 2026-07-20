@@ -6,7 +6,7 @@
 ## AI-Assisted
 
 ## Runs INSIDE the derivative-maker docker container, invoked from
-##   ./docker/derivative-maker-docker-run --custom ci/reproducible-compare -- \
+##   ./docker/derivative-maker-docker-run -- ci/reproducible-compare \
 ##       --target TARGET --dir-a DIR --dir-b DIR --output REPORT
 ## so the reproducibility comparison runs in the SAME Debian layer as the build
 ## (consistency + clean layering) instead of bare on the CI runner. It installs
