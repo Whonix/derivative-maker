@@ -198,11 +198,14 @@ export_vbox_vm() {
    ## '.ova'. The salt (the '.ova' basename, which carries flavor + version +
    ## architecture, plus '$SOURCE_DATE_EPOCH') is stable across rebuilds of the
    ## same commit but differs across images / versions.
+   ## The normalizer lives in the helper-scripts package (a Python helper under
+   ## usr/libexec/helper-scripts/); derive its path from the source-tree root.
    if [ -v dist_source_help_steps_folder ]; then
-      vbox_ova_normalize_tool="${dist_source_help_steps_folder}/vbox-ova-reproducible-normalize"
+      dist_source_root="$(dirname -- "${dist_source_help_steps_folder}")"
    else
-      vbox_ova_normalize_tool="$(dirname -- "${BASH_SOURCE[0]}")/vbox-ova-reproducible-normalize"
+      dist_source_root="$(dirname -- "$(dirname -- "${BASH_SOURCE[0]}")")"
    fi
+   vbox_ova_normalize_tool="${dist_source_root}/packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/vbox-ova-reproducible-normalize"
    python3 "${vbox_ova_normalize_tool}" \
       --ova "${binary_image_ova_file}" \
       --source-date-epoch "${SOURCE_DATE_EPOCH}" \
