@@ -25,18 +25,20 @@ on:
       target:
         description: "Build target to check for reproducibility."
         type: choice
-        default: virtualbox
+        ## iso is the cheap, mountable default -- matches the scheduled/push
+        ## fallback below so dispatch and schedule agree.
+        default: iso
         options:
-          - virtualbox
           - iso
+          - virtualbox
           - qcow2
       flavor:
-        description: "Flavor (use kicksecure-lxqt with target iso)."
+        description: "Flavor (kicksecure-lxqt for iso; kicksecure-cli for vbox/qcow2)."
         type: choice
-        default: kicksecure-cli
+        default: kicksecure-lxqt
         options:
-          - kicksecure-cli
           - kicksecure-lxqt
+          - kicksecure-cli
   ## Also the build gate (this lane replaced local-build.yml): a push to a
   ## '**ci**' branch or a tag builds the default target TWICE and compares, so a
   ## green run means both "it builds" and "it is reproducible". Other targets /
