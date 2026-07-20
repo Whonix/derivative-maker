@@ -160,12 +160,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      ## diffoscope and the format-descent helpers it shells out to. No external
-      ## input in this command (rule 4/7 injection class does not apply to a
-      ## fixed apt-get install line).
-      - name: Install diffoscope and descent helpers
-        ## rule 7: post-checkout shell lives in a lint-covered ci/ script.
-        run: ./ci/reproducible-install-deps
+      ## Same disk reclaim as the build jobs (#96): the compare downloads two
+      ## images and builds the derivative-maker container image.
+      - name: Free runner disk space
+        run: ./ci/free-disk
 
       - name: Download image A
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -179,13 +177,17 @@ jobs:
           name: repro-image-b
           path: build-b
 
+      ## Run the comparison in the SAME derivative-maker Debian container as the
+      ## build (consistency + clean layering), not bare on the runner: the source
+      ## tree and the downloaded build-a / build-b bind-mount into the container,
+      ## where ci/reproducible-compare installs diffoscope and runs the comparator.
       ## Exit code IS the pass/fail: 0 reproducible, 1 differs (report written),
-      ## 2 environment error. A remaining difference fails the job on purpose.
-      - name: Compare images (diffoscope + allowlist)
+      ## 2 environment error; a remaining difference fails the job on purpose.
+      - name: Compare images in the derivative-maker container
         env:
           REPORT: reproducible-report.html
           TARGET: ${{ env.REPRO_TARGET }}
-        run: ./packages/kicksecure/developer-meta-files/usr/bin/dm-reproducible-compare-artifacts --target "${TARGET}" --dir-a build-a --dir-b build-b --output "${REPORT}"
+        run: ./docker/derivative-maker-docker-run --custom ci/reproducible-compare -- --target "${TARGET}" --dir-a build-a --dir-b build-b --output "${REPORT}"
 
       - name: Upload diffoscope report
         if: always()
