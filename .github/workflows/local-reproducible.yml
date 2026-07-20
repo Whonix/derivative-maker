@@ -53,8 +53,11 @@ concurrency:
 ## scheduled run (where inputs are empty). Fixed to amd64: the primary
 ## reproducibility target; arm64 is a follow-up.
 env:
-  REPRO_TARGET: ${{ inputs.target || 'virtualbox' }}
-  REPRO_FLAVOR: ${{ inputs.flavor || 'kicksecure-cli' }}
+  ## Default the scheduled (input-less) run to the cheapest mountable target:
+  ## iso is smaller than a vbox raw+vdi+ova peak and lets reproducible-manifest
+  ## --deep localize a differing file. vbox/qcow2 stay reachable via dispatch.
+  REPRO_TARGET: ${{ inputs.target || 'iso' }}
+  REPRO_FLAVOR: ${{ inputs.flavor || 'kicksecure-lxqt' }}
   REPRO_ARCH: amd64
 
 jobs:
@@ -81,6 +84,11 @@ jobs:
           fetch-depth: 0
           ## rule 2: the build only signs/tags locally and never pushes.
           persist-credentials: false
+
+      ## Same disk reclaim as local-build.yml (#96); a vbox/qcow2 dispatch has
+      ## the same runner disk profile as a single build job.
+      - name: Free runner disk space
+        run: ./ci/free-disk
 
       ## Cache plumbing mirrors local-build.yml (proven). The two independent
       ## builds may share a warm cache; cache provenance does not affect a
@@ -114,7 +122,12 @@ jobs:
           ARCH: ${{ env.REPRO_ARCH }}
           TARGET: ${{ env.REPRO_TARGET }}
           FLAVOR: ${{ env.REPRO_FLAVOR }}
-        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}" --target "${TARGET}" --flavor "${FLAVOR}"
+          ## Pin the snapshot in BOTH independent builds: without --freshness
+          ## frozen the two runner VMs can pull different package versions and
+          ## the lane reports non-reproducible for a reason that is not the
+          ## build's fault.
+          FRESHNESS: frozen
+        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}" --target "${TARGET}" --flavor "${FLAVOR}" --freshness "${FRESHNESS}"
 
       - name: Save docker image to cache
         if: steps.dmimg-cache.outputs.cache-hit != 'true'
