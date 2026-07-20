@@ -1,94 +1,70 @@
 # Verifying a reproducible image build
 
-You rebuilt an official image with `--freshness frozen` and the whole-image
-hash does **not** match ours. This page explains how to find out *which files*
-differ without downloading our multi-GB image, and why `diffoscope` alone is not
-the right first tool.
+You rebuilt an official image with `--freshness frozen` and want to confirm it
+matches ours bit-for-bit -- or find out what differs.
 
-> **Status.** The manifest tool (`ci/reproducible-manifest`) and the local
-> build-twice check (`ci/reproducible-build-twice`) work today. The **ISO**
-> release now publishes a signed manifest sidecar (`<image>.manifest` +
-> `.manifest.asc`) via `dm-prepare-release`, so steps 1-2 below apply to the
-> ISO. Publishing the same sidecar for the **raw / qcow2 / VirtualBox** targets
-> (whose images are not loop-mountable at signing time) and a one-command
-> `--manifest-only` fetch/verify flow are follow-ups; for those targets, for
-> now, compare against a manifest you generate from a copy of our image.
+## The model: rebuild and compare, do not trust
 
-## Why not just run diffoscope?
+Reproducible builds let you verify a published image **without trusting us, the
+builder**. You rebuild from the same source and inputs and compare *your* image
+to *ours*. There is deliberately no artifact we sign that "proves" the image is
+good -- a compromised builder could sign that too. The only trustworthy check is
+your own rebuild against our published image.
 
-`diffoscope` compares **two** inputs and renders their differences. It cannot
-analyze a single image in isolation, so a "diffoscope report of our image on its
-own" does not exist. To use it you would have to download our full image and run
-diffoscope against your local one, which:
+To rebuild with the same inputs, fetch the signed `<image>.dm-buildinfo` sidecar
+(it records the build parameters) and build from the recorded commit; see
+`dm-reproducible-verify`.
 
-- transfers ~1-1.4 GB you may not need, and
-- can exhaust RAM (diffoscope on two ~1.4 GB ISOs OOMs an 8 GB host).
-
-`diffoscope` is the right tool for the **last** step, once a mismatch has been
-narrowed to a specific file.
-
-## The cheap first step: compare manifests
-
-A **manifest** is a per-file fingerprint of an image: one `sha256  path` line for
-every regular file inside it, sorted by path. It is a few MB regardless of image
-size, so you can fetch ours and compare locally without downloading the image.
-
-The tool is `ci/reproducible-manifest` (already in this repo):
+## Pass / fail: compare the whole-image hash
 
 ```
-ci/reproducible-manifest generate --image FILE --output MANIFEST [--deep]
-ci/reproducible-manifest compare  --a MANIFEST --b MANIFEST [--output REPORT]
+sha256sum your-image.iso
+# compare against our published, signed <image>.sha512sums
 ```
 
-- `generate` mounts the image read-only and lists every regular file. `--deep`
-  also descends into a `filesystem.squashfs` member (live ISO rootfs), so
-  differences inside the squashfs are localized too.
-- `compare` prints files only in A, only in B, and same-path-different-hash,
-  then exits `0` identical / `1` any difference / `2` usage error.
+Equal hash means bit-for-bit reproducible. Done.
 
-## Verification flow on a hash mismatch
+## If they differ: diffoscope on the two images
 
-1. **Fetch only our small signed manifest** (`<image>.manifest` + `<image>.manifest.asc`)
-   from the same download location as the image. It is a sidecar, so you do not
-   pull the image itself.
+To see *which* files differ, run diffoscope on both images. diffoscope unpacks
+the container itself (ISO -> squashfs -> files, qcow2 via `qemu-img`, `.ova`
+tar -> vmdk), so no manual extraction is needed:
 
-2. **Verify the manifest's OpenPGP signature** against the Kicksecure signing key
-   (the same key that signs the image `.sha512sums`). A manifest you cannot
-   verify tells you nothing.
+```
+diffoscope our-image.iso your-image.iso
+```
 
-3. **Generate the manifest of your local rebuild:**
+### On a RAM-limited host
 
-   ```
-   ci/reproducible-manifest generate --image <your-rebuilt-image> --output local.manifest --deep
-   ```
+diffoscope only uses significant memory when the images **differ inside a large
+binary member** -- identical images short-circuit cheaply. Two mitigations:
 
-4. **Compare the two manifests:**
+- Use **diffoscope >= v302** (Debian trixie-backports:
+  `apt-get install -t trixie-backports diffoscope`). It streams the diff instead
+  of buffering it whole, avoiding the OOM older versions hit on a large differing
+  member (upstream: diffoscope salsa issue #342 / MR !145).
+- Bound the diff and keep the temp dir on real disk (not a tmpfs like
+  `/run/shm`):
 
-   ```
-   ci/reproducible-manifest compare --a <ours>.manifest --b local.manifest
-   ```
+```
+TMPDIR=/var/tmp diffoscope \
+  --max-diff-input-lines 100000 --max-diff-block-lines-saved 10000 \
+  --exclude 'boot/initrd*' --exclude 'boot/vmlinuz*' \
+  --text report.txt our-image.iso your-image.iso
+```
 
-   This prints exactly which in-image files diverged. For a truly reproducible
-   build the list is empty (exit `0`).
+## Reporting a difference
 
-5. **Explain a specific difference (optional):** once a file is localized, run
-   `diffoscope` on just that pair (extract the one file from each image) for a
-   byte-level explanation. This is bounded and cheap because it is one file, not
-   two whole images.
-
-## Reporting a genuine difference
-
-If the manifests differ and the diff is not one of the known
-expected-to-differ entries, it is a reproducibility bug worth reporting: include
-the `compare` output (the differing paths) and your build's recorded commit
-(from the signed `<image>.dm-buildinfo` sidecar, which records the inputs needed
-to reproduce the build). That is enough for a maintainer to reproduce and
-localize without your image.
+If the images differ and it is not an intentional variation, that is a
+reproducibility bug worth reporting: include the diffoscope report and the commit
+recorded in the signed `<image>.dm-buildinfo` -- enough for a maintainer to
+reproduce and localize without your image.
 
 ## See also
 
-- `ci/reproducible-manifest` -- the manifest generate/compare tool.
-- `ci/reproducible-build-twice` -- build an image twice locally and diff it
-  (the developer-side reproducibility check).
-- `.github/workflows/local-reproducible.yml` -- the CI lane that builds twice on
-  two independent runners and compares.
+- `ci/reproducible-build-twice` -- build an image twice locally and diff it (the
+  developer determinism check: sha256 pass/fail, diffoscope on a mismatch).
+- `.github/workflows/local-reproducible.yml` -- the CI lane: two independent
+  builds compared with diffoscope.
+- `dm-reproducible-verify` / `dm-reproducible-buildinfo` -- fetch inputs, rebuild,
+  diffoscope.

@@ -27,9 +27,10 @@
 ## The two builds run SEQUENTIALLY, never concurrently: two full image builds at
 ## once exhaust RAM/disk on a modest host. The verdict is a whole-file sha256
 ## comparison of the two images (equal == bit-for-bit reproducible, for any
-## target). On a mismatch, and for a mountable image (iso), it additionally runs
-## 'reproducible-manifest --deep' on each build to LOCALIZE the difference to the
-## specific in-image file(s), which is what you then go and fix.
+## target). On a mismatch it additionally runs diffoscope on the two images to
+## LOCALIZE the difference to the specific in-image file(s), which is what you
+## then go and fix. diffoscope unpacks the container itself (iso -> squashfs,
+## qcow2 via qemu-img, ova tar -> vmdk), so no custom extraction is needed.
 ##
 ## Exit: 0 reproducible, 1 differ, 2 usage error, 3 a build failed.
 
@@ -176,16 +177,20 @@ fi
 
 printf '%s\n' "RESULT: $target DIFFERS (not bit-reproducible)" | tee --append "$report"
 
-## Localize the difference for a mountable image so the developer knows which
-## in-image file to chase. reproducible-manifest --deep also descends into the
-## squashfs rootfs. Best-effort: never let it mask the sha-based verdict above.
-if [ "$target" = "iso" ]; then
-   printf '%s\n' "localizing difference (reproducible-manifest --deep):" | tee --append "$report"
-   "$MYDIR/reproducible-manifest" generate --image "$image_a" --output "$output_dir/a.manifest" --deep || true
-   "$MYDIR/reproducible-manifest" generate --image "$image_b" --output "$output_dir/b.manifest" --deep || true
-   "$MYDIR/reproducible-manifest" compare --a "$output_dir/a.manifest" --b "$output_dir/b.manifest" --output "$output_dir/manifest-diff.txt" >> "$report" 2>&1 || true
-else
-   printf '%s\n' "(container-level diff only; mount/convert $target to localize in-image files)" | tee --append "$report"
-fi
+## Localize the difference with diffoscope on the two images directly: diffoscope
+## unpacks the container itself (iso -> squashfs -> files, qcow2 via qemu-img, ova
+## tar -> vmdk), so no custom extraction is needed and every target works. This is
+## only reached on a mismatch (a reproducibility failure), so the heavier diff is
+## a rare debug path; bound peak memory and keep TMPDIR on disk for a RAM-limited
+## host. diffoscope >= v302 (Debian trixie-backports) has the streaming fix that
+## avoids OOM on a large differing member. Best-effort: never mask the sha verdict.
+printf '%s\n' "localizing difference (diffoscope -> $output_dir/diffoscope.txt):" | tee --append "$report"
+TMPDIR="${TMPDIR:-/var/tmp}" diffoscope \
+   --max-diff-input-lines 100000 \
+   --max-diff-block-lines-saved 10000 \
+   --max-diff-block-lines 256 \
+   --max-report-size 10000000 \
+   --text "$output_dir/diffoscope.txt" \
+   "$image_a" "$image_b" >> "$report" 2>&1 || true
 
 exit 1
