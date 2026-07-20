@@ -45,7 +45,9 @@ on:
     branches:
       - '**ci**'
     tags:
-      - '*'
+      ## '**' not '*': '*' does not match a slash, so a slash-delimited tag would
+      ## silently skip the gate.
+      - '**'
   schedule:
     ## Weekly, Sundays 07:00 UTC (offset from the scorecard lane at 06:00 to
     ## avoid a thundering herd on the shared runner pool).
