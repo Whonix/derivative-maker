@@ -76,7 +76,6 @@ On Apple Silicon hosts, the default platform already matches
 | `--binary-mount` | Configure custom binary artifact directory | /home/user/whonix/dm-binary
 | `--cacher-mount` | Configure custom package cache directory | /home/user/whonix/apt-cache
 | `--key-mount` | Configure custom keystore directory | /home/user/whonix/keys
-| `--build-step`, `-b` | DEPRECATED -- use `-- build-steps.d/NAME` | 3600_convert-raw-to-iso
 
 The command to run in the container is explicit, after `--`.
 #### Sample Commands

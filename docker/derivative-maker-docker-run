@@ -23,9 +23,9 @@ shopt -s shift_verbose
 
 HOST_USER="$(id -u)"
 DOCKER_USER="user"
-## No implicit default command: the caller must pass an explicit command, either
-## a --build-step or the command after '--'. A bare invocation is an error, not a
-## silent full './derivative-maker' build.
+## No implicit default command: the caller must pass an explicit command after
+## '--'. A bare invocation is an error, not a silent full './derivative-maker'
+## build.
 COMMAND=""
 DOCKER_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
 SOURCE_VOLUME="$( dirname -- "${DOCKER_DIR}" )"
@@ -72,7 +72,6 @@ print_usage() {
     --cacher-mount DIR : package cache directory
     --key-mount DIR    : keystore directory
     -h|--help          : this help
-    -b|--build-step N  : DEPRECATED -- use '-- build-steps.d/N'
 
   Examples:
     $0 -- ./derivative-maker --flavor kicksecure-cli --target raw   # build an image
@@ -126,13 +125,6 @@ build_docker_image() {
 
 while true; do
   case "${1:-}" in
-    -b|--build-step)
-      ## DEPRECATED: pass the build step as the explicit command instead, e.g.
-      ##   $0 -- build-steps.d/NAME
-      printf '%s\n' "WARNING: --build-step is deprecated; use: -- build-steps.d/${2}" >&2
-      COMMAND="build-steps.d/${2}"
-      shift 2
-      ;;
     --binary-mount)
       BINARY_VOLUME="${2}"
       shift 2
@@ -160,18 +152,15 @@ while true; do
 done
 
 ## The command to run in the container is explicit: the first argument after
-## '--' (with any further arguments passed through), or the deprecated
-## --build-step. There is no implicit default, so a bare invocation fails loudly
-## instead of silently running a full build.
-if [ -z "${COMMAND}" ]; then
-  if [ "$#" -lt 1 ]; then
-    print_usage >&2
-    printf '%s\n' "ERROR: no command given: pass -- COMMAND [ARGS] (see --help)." >&2
-    exit 1
-  fi
-  COMMAND="${1}"
-  shift
+## '--', with any further arguments passed through. There is no implicit default,
+## so a bare invocation fails loudly instead of silently running a full build.
+if [ "$#" -lt 1 ]; then
+  print_usage >&2
+  printf '%s\n' "ERROR: no command given: pass -- COMMAND [ARGS] (see --help)." >&2
+  exit 1
 fi
+COMMAND="${1}"
+shift
 
 ## The container intentionally does NOT run derivative-update to fetch/merge
 ## git submodules. It builds the source tree exactly as bind-mounted from the
