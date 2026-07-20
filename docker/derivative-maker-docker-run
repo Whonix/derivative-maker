@@ -81,7 +81,7 @@ print_usage() {
 EOF
 }
 
-die() {
+usage_error() {
   print_usage >&2
   printf '%s\n' "ERROR: $*" >&2
   exit 1
@@ -93,10 +93,10 @@ die() {
 validate_mount_path() {
   case "$1" in
     /*) ;;
-    *) die "mount path must be an absolute path: $1" ;;
+    *) usage_error "mount path must be an absolute path: $1" ;;
   esac
   case "$1" in
-    *:*) die "mount path must not contain a colon: $1" ;;
+    *:*) usage_error "mount path must not contain a colon: $1" ;;
   esac
 }
 
@@ -114,18 +114,14 @@ volume_prepare() {
   )
 
   while (( ${#VOLUMES[@]} > 0 )); do
+    ## Only create-and-own a directory we are making fresh. Deliberately do NOT
+    ## chown/chmod a PRE-EXISTING directory: a mistyped '--key-mount /etc' would
+    ## otherwise sudo-chown a system path and break the host. A hand-created
+    ## volume dir with the wrong ownership is the caller's to fix.
     if [ ! -d "${VOLUMES[0]}" ]; then
       mkdir --parents -- "${VOLUMES[0]}"
       sudo "${sudo_options_maybe[@]}" -- chown --recursive -- "${VOLUMES[1]}" "${VOLUMES[0]}"
       sudo "${sudo_options_maybe[@]}" -- chmod --recursive -- "${VOLUMES[2]}" "${VOLUMES[0]}"
-    else
-      ## Directory already exists (created by hand, or by an older script version
-      ## with different ownership): fix the TOP-LEVEL owner/mode so the
-      ## in-container writer (e.g. approx uid 101) can use it. Non-recursive on
-      ## purpose -- a recursive pass would rechown a potentially large cache
-      ## every run.
-      sudo "${sudo_options_maybe[@]}" -- chown -- "${VOLUMES[1]}" "${VOLUMES[0]}"
-      sudo "${sudo_options_maybe[@]}" -- chmod -- "${VOLUMES[2]}" "${VOLUMES[0]}"
     fi
 
     VOLUMES=("${VOLUMES[@]:3}")
@@ -162,19 +158,19 @@ saw_dashdash="false"
 while true; do
   case "${1:-}" in
     --binary-mount)
-      [ "$#" -ge 2 ] || die "--binary-mount requires a value."
+      [ "$#" -ge 2 ] || usage_error "--binary-mount requires a value."
       validate_mount_path "${2}"
       BINARY_VOLUME="${2}"
       shift 2
       ;;
     --cacher-mount)
-      [ "$#" -ge 2 ] || die "--cacher-mount requires a value."
+      [ "$#" -ge 2 ] || usage_error "--cacher-mount requires a value."
       validate_mount_path "${2}"
       CACHER_VOLUME="${2}"
       shift 2
       ;;
     --key-mount)
-      [ "$#" -ge 2 ] || die "--key-mount requires a value."
+      [ "$#" -ge 2 ] || usage_error "--key-mount requires a value."
       validate_mount_path "${2}"
       KEY_VOLUME="${2}"
       shift 2
@@ -189,7 +185,7 @@ while true; do
       break
       ;;
     -*)
-      die "unknown option: $1"
+      usage_error "unknown option: $1"
       ;;
     *)
       break
@@ -202,10 +198,17 @@ done
 ## command (no '--'), an unknown option, or no command at all is rejected -- so a
 ## typo is never silently run and there is no implicit default.
 if [ "${saw_dashdash}" != "true" ] || [ "$#" -lt 1 ]; then
-  die "no command given: pass -- COMMAND [ARGS] (see --help)."
+  usage_error "no command given: pass -- COMMAND [ARGS] (see --help)."
 fi
 COMMAND="${1}"
 shift
+
+## The default volume paths (SOURCE_VOLUME + the $HOME-derived mounts) also feed
+## '-v', so a ':' in $HOME or the checkout path would split the spec. Validate
+## them the same way as the --*-mount overrides.
+for volume_path in "${SOURCE_VOLUME}" "${BINARY_VOLUME}" "${CACHER_VOLUME}" "${KEY_VOLUME}" "${GNUPG_VOLUME}"; do
+  validate_mount_path "${volume_path}"
+done
 
 ## The container intentionally does NOT run derivative-update to fetch/merge
 ## git submodules. It builds the source tree exactly as bind-mounted from the
