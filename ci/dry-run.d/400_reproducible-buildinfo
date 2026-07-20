@@ -1,0 +1,62 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Smoke-test the reproducibility buildinfo generation in the fast dry-run, so a
+## break in dm-reproducible-buildinfo is caught here instead of only in an
+## expensive real release build. The tool records build PARAMETERS (no image
+## content, no checksum), so a dummy image file plus a couple of exported build
+## variables is enough to exercise the whole Deb822 emit and the env read.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## style-ok: no-safe-rm -- removes only a mktemp'd work dir (not user input), and
+## safe-rm is not guaranteed on PATH inside the dry-run container.
+
+MYDIR="$( cd -- "$( dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")" )" && pwd )"
+source_root="$( cd -- "${MYDIR}/../.." && pwd )"
+buildinfo_tool="${source_root}/packages/kicksecure/developer-meta-files/usr/bin/dm-reproducible-buildinfo"
+
+work_dir="$(mktemp --directory)"
+cleanup() {
+   rm --recursive --force -- "${work_dir}"
+}
+trap cleanup EXIT
+
+dummy_image="${work_dir}/dummy.raw"
+: > "${dummy_image}"
+buildinfo_file="${dummy_image}.dm-buildinfo"
+
+## Export a couple of build variables so val() has real (not 'unknown') input to
+## propagate; the tool tolerates the rest being unset.
+export dist_build_flavor="kicksecure-cli"
+export SOURCE_DATE_EPOCH="1600000000"
+
+"${buildinfo_tool}" --target raw --image "${dummy_image}" --output "${buildinfo_file}"
+
+## The emit must be a well-formed Deb822 record: the fixed fields plus the two
+## exported values must be present.
+expected_fields=(
+   "Format: 1.0"
+   "Buildinfo-Type: derivative-image"
+   "Target: raw"
+   "Image-File: dummy.raw"
+   "Flavor: kicksecure-cli"
+   "Source-Date-Epoch: 1600000000"
+)
+for field in "${expected_fields[@]}"; do
+   if ! grep --quiet --fixed-strings -- "${field}" "${buildinfo_file}"; then
+      printf '%s\n' "ERROR: buildinfo missing expected field: ${field}" >&2
+      exit 1
+   fi
+done
+
+printf '%s\n' "INFO: reproducibility buildinfo smoke test passed." >&2
