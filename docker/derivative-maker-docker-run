@@ -123,6 +123,10 @@ build_docker_image() {
   fi
 }
 
+## Track whether '--' (the mandatory command delimiter) was seen, so a bare
+## command or a mistyped option is rejected rather than silently run.
+saw_dashdash="false"
+
 while true; do
   case "${1:-}" in
     --binary-mount)
@@ -142,8 +146,14 @@ while true; do
       exit 0
       ;;
     --)
+      saw_dashdash="true"
       shift
       break
+      ;;
+    -*)
+      print_usage >&2
+      printf '%s\n' "ERROR: unknown option: $1" >&2
+      exit 1
       ;;
     *)
       break
@@ -151,10 +161,11 @@ while true; do
   esac
 done
 
-## The command to run in the container is explicit: the first argument after
-## '--', with any further arguments passed through. There is no implicit default,
-## so a bare invocation fails loudly instead of silently running a full build.
-if [ "$#" -lt 1 ]; then
+## The command to run in the container is explicit and MUST follow '--': the
+## first argument after it, with any further arguments passed through. A bare
+## command (no '--'), an unknown option, or no command at all is rejected -- so a
+## typo is never silently run and there is no implicit default.
+if [ "${saw_dashdash}" != "true" ] || [ "$#" -lt 1 ]; then
   print_usage >&2
   printf '%s\n' "ERROR: no command given: pass -- COMMAND [ARGS] (see --help)." >&2
   exit 1
