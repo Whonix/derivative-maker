@@ -30,14 +30,14 @@
 ## file is the single reviewable place the pin changes. Bump it (to a newer valid snapshot)
 ## with dm-maintenance, not by hand and not in approx.conf.
 Types: deb
-URIs: http://127.0.0.1:9977/debian-frozen/20260709T201930Z
+URIs: http://127.0.0.1:9977/debian-frozen/20260720T082444Z
 Suites: trixie
 Components: main contrib non-free non-free-firmware
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
 Types: deb
-URIs: http://127.0.0.1:9977/debian-security-frozen/20260709T201930Z
+URIs: http://127.0.0.1:9977/debian-security-frozen/20260720T082444Z
 Suites: trixie-security
 Components: main contrib non-free non-free-firmware
 Enabled: yes
