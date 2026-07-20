@@ -18,7 +18,7 @@ To rebuild with the same inputs, fetch the signed `<image>.dm-buildinfo` sidecar
 ## Pass / fail: compare the whole-image hash
 
 ```
-sha256sum your-image.iso
+sha512sum your-image.iso
 # compare against our published, signed <image>.sha512sums
 ```
 
