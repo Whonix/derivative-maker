@@ -25,7 +25,10 @@
 
 Types: deb
 URIs: http://127.0.0.1:9977/debian-frozen
-Suites: forky
+## forky-updates included for the same reason trixie-updates is in the stable
+## frozen sources: keep the frozen build in step with the stable-updates the
+## build machine carries (see debian_stable_frozen_clearnet.sources).
+Suites: forky forky-updates
 Components: main contrib non-free non-free-firmware
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
