@@ -23,7 +23,10 @@ shopt -s shift_verbose
 
 HOST_USER="$(id -u)"
 DOCKER_USER="user"
-COMMAND="./derivative-maker"
+## No implicit default command: the caller must pass an explicit command, either
+## a --build-step or the command after '--'. A bare invocation is an error, not a
+## silent full './derivative-maker' build.
+COMMAND=""
 DOCKER_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
 SOURCE_VOLUME="$( dirname -- "${DOCKER_DIR}" )"
 BINARY_VOLUME="$HOME/binary_mnt"
@@ -60,15 +63,18 @@ sudo "${sudo_options_maybe[@]}" test -d /usr
 
 print_usage() {
   cat -- << EOF
-  Usage: $0 [ options ]
+  Usage: $0 [ options ] ( --build-step NAME | -- COMMAND [ ARGS ] )
 
   General Options:
-    -b|--build-step  : build-step in derivative-maker/build-steps.d/
-    -c|--custom      : custom command or shell compliant command chain
+    -b|--build-step  : run derivative-maker/build-steps.d/NAME in the container
     --binary-mount   : Changes the binary artifact directory
     --cacher-mount   : Changes the package cache directory
     --key-mount      : Changes the keystore directory
     -h|--help        : print usage dialog
+
+  The command to run in the container is explicit: pass --build-step, or the
+  command and its arguments after '--', e.g.:
+    $0 -- ci/github-build --arch amd64 --target iso --flavor kicksecure-lxqt
 EOF
 }
 
@@ -115,16 +121,10 @@ build_docker_image() {
   fi
 }
 
-## TODO: Consider what should happen when derivative-maker-docker-run is run without arguments.
-
 while true; do
   case "${1:-}" in
     -b|--build-step)
       COMMAND="build-steps.d/${2}"
-      shift 2
-      ;;
-    -c|--custom)
-      COMMAND="${2}"
       shift 2
       ;;
     --binary-mount)
@@ -152,6 +152,20 @@ while true; do
       ;;
   esac
 done
+
+## The command to run in the container is explicit: a --build-step, or the first
+## argument after '--' (with any further arguments passed through). There is no
+## implicit default, so a bare invocation fails loudly instead of silently
+## running a full build.
+if [ -z "${COMMAND}" ]; then
+  if [ "$#" -lt 1 ]; then
+    print_usage >&2
+    printf '%s\n' "ERROR: no command given: pass --build-step NAME or -- COMMAND [ARGS]." >&2
+    exit 1
+  fi
+  COMMAND="${1}"
+  shift
+fi
 
 ## The container intentionally does NOT run derivative-update to fetch/merge
 ## git submodules. It builds the source tree exactly as bind-mounted from the
