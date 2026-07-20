@@ -388,28 +388,6 @@ packages_installation_from_backports_repository() {
    true
 }
 
-diffoscope_backports_install() {
-   ## diffoscope from trixie-backports (>= v302, which has the streaming fix that
-   ## avoids OOM when diffing a large differing member) for the reproducibility
-   ## build-twice / compare. Not a build dependency, so installed on its own with
-   ## '-t' rather than added to the base set; trixie-backports is already a suite
-   ## in the primary sources list, so '-t' targets it without upgrading the rest.
-   retry_run --tries 4 --delay 15 -- \
-   $SUDO_TO_ROOT \
-      apt-get \
-         "${DIST_APTGETOPT[@]}" \
-         -o Dir::Etc::sourcelist="$dist_build_sources_list_primary" \
-         -o Dir::Etc::sourceparts="-" \
-         $apt_unattended_opts \
-         --no-install-recommends \
-         --yes \
-         -t trixie-backports \
-         install \
-         diffoscope
-
-   true
-}
-
 signing_key() {
    true "INFO: GPG_AGENT_INFO: ${GPG_AGENT_INFO:-}"
    if [ "${GPG_AGENT_INFO:-}" = "" ]; then
@@ -491,7 +469,6 @@ main() {
    check-vm-exists "$@"
    grml-debootstrap_installation "$@"
    packages_installation_from_backports_repository "$@"
-   diffoscope_backports_install "$@"
    signing_key "$@"
    sudo_setup "$@"
 }
