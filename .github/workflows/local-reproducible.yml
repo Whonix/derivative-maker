@@ -76,6 +76,14 @@ env:
   REPRO_TARGET: ${{ inputs.target || 'iso' }}
   REPRO_FLAVOR: ${{ inputs.flavor || 'kicksecure-lxqt' }}
   REPRO_ARCH: amd64
+  ## The release image's extension for the chosen target, so the upload can grab
+  ## ONLY that file instead of the whole binary_mnt tree. The ISO build leaves a
+  ## ~3GB intermediate '.raw' beside the ~1.4GB '.iso'; uploading the whole tree
+  ## made each artifact ~4.8GB, so the compare job's two downloads (9.5GB) blew
+  ## the runner disk ("No space left on device"). The comparator selects the
+  ## image by this same extension, so the intermediates are pure dead weight.
+  ## Map mirrors dm-reproducible-compare-artifacts' target->extension table.
+  REPRO_IMAGE_EXT: ${{ fromJSON('{"iso":"iso","virtualbox":"ova","qcow2":"qcow2"}')[inputs.target || 'iso'] }}
 
 jobs:
   build:
@@ -154,11 +162,16 @@ jobs:
         if: always()
         run: ./ci/approx-cache-sidecar snapshot
 
+      ## Upload ONLY the release image (by target extension), not the whole
+      ## binary_mnt tree: the comparator picks the image by this extension, and
+      ## the ~3GB '.raw' intermediate would otherwise bloat each artifact to
+      ## ~4.8GB and exhaust the compare runner's disk on download. '**' descends
+      ## the version subfolder the build writes into.
       - name: Upload build ${{ matrix.copy }} image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: repro-image-${{ matrix.copy }}
-          path: /home/runner/binary_mnt/
+          path: /home/runner/binary_mnt/**/*.${{ env.REPRO_IMAGE_EXT }}
           if-no-files-found: error
           retention-days: 7
 
