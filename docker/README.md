@@ -73,27 +73,28 @@ On Apple Silicon hosts, the default platform already matches
 
 |  Option     | Description              | Sample Value
 | ------------| -------------------------|------------|
-| `--build-step`, `-b` | Allow execution of a specific build-step |3600_convert-raw-to-iso
-| `--custom`, `-c` | Run a custom command inside the container | /bin/bash
 | `--binary-mount` | Configure custom binary artifact directory | /home/user/whonix/dm-binary
 | `--cacher-mount` | Configure custom package cache directory | /home/user/whonix/apt-cache
 | `--key-mount` | Configure custom keystore directory | /home/user/whonix/keys
+| `--build-step`, `-b` | DEPRECATED -- use `-- build-steps.d/NAME` | 3600_convert-raw-to-iso
+
+The command to run in the container is explicit, after `--`.
 #### Sample Commands
 1. Build a Kicksecure or Whonix image
    ```sh
-   ./derivative-maker-docker-run -- <build arguments>
+   ./derivative-maker-docker-run -- ./derivative-maker <build arguments>
    ```
-2. Execute specific build-steps
+2. Execute a specific build-step
    ```sh
-   ./derivative-maker-docker-run -b 3600_convert-raw-to-iso -- <build arguments>
+   ./derivative-maker-docker-run -- build-steps.d/3600_convert-raw-to-iso <build arguments>
    ```
-3. Running a custom command
+3. Run a custom command (e.g. an interactive shell)
    ```sh
-   ./derivative-maker-docker-run -c /bin/bash --
+   ./derivative-maker-docker-run -- bash
    ```
 4. Choose custom volume mount points
    ```sh
-   ./derivative-maker-docker-run --binary-mount /home/user/whonix/dm-binary --cacher-mount /home/user/whonix/apt-cache -- <build arguments>
+   ./derivative-maker-docker-run --binary-mount /home/user/whonix/dm-binary --cacher-mount /home/user/whonix/apt-cache -- ./derivative-maker <build arguments>
    ```
 #### Hints
 * Multiple custom commands can be chained with `&&` or `;`

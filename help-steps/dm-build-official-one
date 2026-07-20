@@ -47,7 +47,7 @@ fi
 if [ "${CI:-}" = "true" ]; then
   ## Minimal test only for now.
   sudo --non-interactive -- ./docker/derivative-maker-docker-setup
-  ./docker/derivative-maker-docker-run --build-step 1100_sanity-tests --target raw --flavor source
+  ./docker/derivative-maker-docker-run -- build-steps.d/1100_sanity-tests --target raw --flavor source
 fi
 
 ## architecture choice

@@ -63,18 +63,21 @@ sudo "${sudo_options_maybe[@]}" test -d /usr
 
 print_usage() {
   cat -- << EOF
-  Usage: $0 [ options ] ( --build-step NAME | -- COMMAND [ ARGS ] )
+  Usage: $0 [ options ] -- COMMAND [ ARGS ]
 
-  General Options:
-    -b|--build-step  : run derivative-maker/build-steps.d/NAME in the container
-    --binary-mount   : Changes the binary artifact directory
-    --cacher-mount   : Changes the package cache directory
-    --key-mount      : Changes the keystore directory
-    -h|--help        : print usage dialog
+  The command to run in the container is explicit, after '--'.
 
-  The command to run in the container is explicit: pass --build-step, or the
-  command and its arguments after '--', e.g.:
-    $0 -- ci/github-build --arch amd64 --target iso --flavor kicksecure-lxqt
+  Options:
+    --binary-mount DIR : binary artifact directory
+    --cacher-mount DIR : package cache directory
+    --key-mount DIR    : keystore directory
+    -h|--help          : this help
+    -b|--build-step N  : DEPRECATED -- use '-- build-steps.d/N'
+
+  Examples:
+    $0 -- ./derivative-maker --flavor kicksecure-cli --target raw   # build an image
+    $0 -- build-steps.d/3600_convert-raw-to-iso                     # one build step
+    $0 -- bash                                                      # interactive shell
 EOF
 }
 
@@ -124,6 +127,9 @@ build_docker_image() {
 while true; do
   case "${1:-}" in
     -b|--build-step)
+      ## DEPRECATED: pass the build step as the explicit command instead, e.g.
+      ##   $0 -- build-steps.d/NAME
+      printf '%s\n' "WARNING: --build-step is deprecated; use: -- build-steps.d/${2}" >&2
       COMMAND="build-steps.d/${2}"
       shift 2
       ;;
@@ -153,14 +159,14 @@ while true; do
   esac
 done
 
-## The command to run in the container is explicit: a --build-step, or the first
-## argument after '--' (with any further arguments passed through). There is no
-## implicit default, so a bare invocation fails loudly instead of silently
-## running a full build.
+## The command to run in the container is explicit: the first argument after
+## '--' (with any further arguments passed through), or the deprecated
+## --build-step. There is no implicit default, so a bare invocation fails loudly
+## instead of silently running a full build.
 if [ -z "${COMMAND}" ]; then
   if [ "$#" -lt 1 ]; then
     print_usage >&2
-    printf '%s\n' "ERROR: no command given: pass --build-step NAME or -- COMMAND [ARGS]." >&2
+    printf '%s\n' "ERROR: no command given: pass -- COMMAND [ARGS] (see --help)." >&2
     exit 1
   fi
   COMMAND="${1}"
