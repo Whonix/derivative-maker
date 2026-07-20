@@ -54,8 +54,8 @@ concurrency:
 ## reproducibility target; arm64 is a follow-up.
 env:
   ## Default the scheduled (input-less) run to the cheapest mountable target:
-  ## iso is smaller than a vbox raw+vdi+ova peak and lets reproducible-manifest
-  ## --deep localize a differing file. vbox/qcow2 stay reachable via dispatch.
+  ## iso is smaller than a vbox raw+vdi+ova peak and diffoscope can descend it to
+  ## localize a differing file. vbox/qcow2 stay reachable via dispatch.
   REPRO_TARGET: ${{ inputs.target || 'iso' }}
   REPRO_FLAVOR: ${{ inputs.flavor || 'kicksecure-lxqt' }}
   REPRO_ARCH: amd64
