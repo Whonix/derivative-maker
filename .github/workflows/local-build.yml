@@ -64,6 +64,13 @@ jobs:
           ## the checkout token rather than leave it in .git/config.
           persist-credentials: false
 
+      ## Reclaim ~25-30 GB of preinstalled toolchains the build never uses, so
+      ## the virtualbox pipeline's raw + vdi + ova peak fits the runner root
+      ## filesystem (#96). Shell lives in a lint-covered ci/ script (rule 7);
+      ## best-effort, so an absent path on the arm64 image is a no-op.
+      - name: Free runner disk space
+        run: ./ci/free-disk
+
       ## Cache the build's apt package downloads across runs via a runner-owned
       ## sidecar: approx's cache dir is 101:102-owned, so actions/cache cannot
       ## tar it directly (the root-owned-dir case the developer-meta-files
