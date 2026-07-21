@@ -113,12 +113,7 @@ jobs:
       - name: Resolve released-image extension
         env:
           TARGET: ${{ env.REPRO_TARGET }}
-        run: |
-          source packages/kicksecure/developer-meta-files/usr/libexec/developer-meta-files/reproducible-target-map.bsh
-          image_ext=""
-          dm_reproducible_target_ext image_ext "${TARGET}" \
-            || { printf '%s\n' "unsupported target: ${TARGET}" >&2; exit 1; }
-          printf 'REPRO_IMAGE_EXT=%s\n' "${image_ext}" >> "${GITHUB_ENV}"
+        run: ./ci/reproducible-image-ext "${TARGET}"
 
       ## Reclaim runner disk (#96); a vbox/qcow2 dispatch has the same runner
       ## disk profile as a single build job.
