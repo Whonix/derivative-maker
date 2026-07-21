@@ -207,9 +207,6 @@ update_repo() {
       ## it's important to get the working tree back into a known-good state
       ## if at all possible. Thus it is possible that failed verification
       ## during a branch update could lead to a compromised local branch.
-      ##
-      ## TODO: Why don't we verify the remote branch before merging in
-      ## addition to verifying after?
 
       ## Save the ref first so we can undo the merge if it goes wrong.
       ## NOTE: This must be run after 'git checkout'.
