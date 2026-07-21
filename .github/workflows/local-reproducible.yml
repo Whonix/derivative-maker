@@ -5,13 +5,13 @@ name: Reproducible
 ## the same image TWICE as two INDEPENDENT jobs (separate runner VMs, the
 ## reproducible-builds gold standard -- not one job building twice), then a
 ## third job compares the two images with diffoscope via developer-meta-files'
-## dm-reproducible-compare, applying the expected-to-differ allowlist.
+## dm-reproducible-compare. Every difference is reported (no allowlist).
 ## This lane also REPLACES the former local-build.yml: the two builds are the
 ## build test, so a green run means the image both builds and is reproducible.
 ## Kept simple -- one target per run (the default, or a workflow_dispatch choice),
 ## not a build-everything matrix, to avoid superfluous builds.
 ## The compare job's conclusion IS the reproducibility pass/fail signal: green
-## == bit-for-bit reproducible, red == a difference remains after the allowlist.
+## == bit-for-bit reproducible, red == a difference remains.
 ## Until the images are fully reproducible this lane is EXPECTED to be red; that
 ## red is the honest "not there yet" signal and the diffoscope report artifact
 ## says exactly what still differs. All build logic reuses ci/github-build and
@@ -184,8 +184,8 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ## The comparator lives in the developer-meta-files submodule
-          ## (dm-reproducible-compare-artifacts + dm-reproducible-compare + the
-          ## allowlist), so the submodule must be checked out.
+          ## (dm-reproducible-compare-artifacts + dm-reproducible-compare), so the
+          ## submodule must be checked out.
           submodules: recursive
           fetch-depth: 1
           persist-credentials: false
