@@ -76,14 +76,6 @@ env:
   REPRO_TARGET: ${{ inputs.target || 'iso' }}
   REPRO_FLAVOR: ${{ inputs.flavor || 'kicksecure-lxqt' }}
   REPRO_ARCH: amd64
-  ## The release image's extension for the chosen target, so the upload can grab
-  ## ONLY that file instead of the whole binary_mnt tree. The ISO build leaves a
-  ## ~3GB intermediate '.raw' beside the ~1.4GB '.iso'; uploading the whole tree
-  ## made each artifact ~4.8GB, so the compare job's two downloads (9.5GB) blew
-  ## the runner disk ("No space left on device"). The comparator selects the
-  ## image by this same extension, so the intermediates are pure dead weight.
-  ## Map mirrors dm-reproducible-compare-artifacts' target->extension table.
-  REPRO_IMAGE_EXT: ${{ fromJSON('{"iso":"iso","virtualbox":"ova","qcow2":"qcow2"}')[inputs.target || 'iso'] }}
 
 jobs:
   build:
@@ -109,6 +101,24 @@ jobs:
           fetch-depth: 0
           ## rule 2: the build only signs/tags locally and never pushes.
           persist-credentials: false
+
+      ## Resolve the RELEASED image's extension from the shared map
+      ## (reproducible-target-map.bsh, the same map the comparator uses) so the
+      ## upload grabs ONLY that file, not the whole binary_mnt tree: the ISO build
+      ## leaves a ~3GB intermediate '.raw' beside the released image, and uploading
+      ## the whole tree made each artifact ~4.8GB, so the compare job's two
+      ## downloads blew the runner disk. raw/qcow2 are released compressed
+      ## ('.libvirt.xz'); sourcing the shared map (not a hard-coded copy) keeps the
+      ## upload and the comparator from ever disagreeing on the artifact name.
+      - name: Resolve released-image extension
+        env:
+          TARGET: ${{ env.REPRO_TARGET }}
+        run: |
+          source packages/kicksecure/developer-meta-files/usr/libexec/developer-meta-files/reproducible-target-map.bsh
+          image_ext=""
+          dm_reproducible_target_ext image_ext "${TARGET}" \
+            || { printf '%s\n' "unsupported target: ${TARGET}" >&2; exit 1; }
+          printf 'REPRO_IMAGE_EXT=%s\n' "${image_ext}" >> "${GITHUB_ENV}"
 
       ## Reclaim runner disk (#96); a vbox/qcow2 dispatch has the same runner
       ## disk profile as a single build job.
