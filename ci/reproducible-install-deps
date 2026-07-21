@@ -11,6 +11,14 @@
 ## shell is shellcheck / 'bash -n' covered and runnable locally, rather than an
 ## inline workflow 'run:' block.
 ##
+## diffoscope comes from trixie-backports, not trixie: trixie ships 297, which
+## OOMs when diffing a large DIFFERING member of two multi-GB images, whereas
+## backports (>= 302, currently 306) has the streaming fix. Identical images
+## short-circuit either way, but a real difference must produce a report, not an
+## OOM. trixie-backports is enabled below and diffoscope pulled from it with
+## '-t'; the descenders resolve from trixie as normal (they have no backports
+## candidate, so '-t' does not disturb them).
+##
 ## --no-install-recommends keeps diffoscope's large optional recommends (LaTeX
 ## and friends) out; the descenders the lane's images actually need are named
 ## explicitly: ISO 9660 (genisoimage), squashfs (squashfs-tools), tar/OVA
@@ -28,8 +36,19 @@ shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
+## Enable trixie-backports (deb822) so diffoscope can be pulled from it. The
+## container is plain trixie; a single-suite drop-in is enough and leaves the
+## build's own sources untouched.
+printf '%s\n' \
+   'Types: deb' \
+   'URIs: http://deb.debian.org/debian' \
+   'Suites: trixie-backports' \
+   'Components: main' \
+   'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg' \
+   | sudo tee /etc/apt/sources.list.d/trixie-backports.sources >/dev/null
+
 sudo apt-get update
-sudo apt-get install --yes --no-install-recommends \
+sudo apt-get install --yes --no-install-recommends -t trixie-backports \
    diffoscope \
    genisoimage \
    squashfs-tools \
