@@ -92,11 +92,16 @@ usage_error() {
 ## the '-v' spec. Require an absolute, colon-free path.
 validate_mount_path() {
   case "$1" in
-    /*) ;;
-    *) usage_error "mount path must be an absolute path: $1" ;;
+    /*)
+      ;;
+    *)
+      usage_error "mount path must be an absolute path: $1"
+      ;;
   esac
   case "$1" in
-    *:*) usage_error "mount path must not contain a colon: $1" ;;
+    *:*)
+      usage_error "mount path must not contain a colon: $1"
+      ;;
   esac
 }
 
