@@ -1,5 +1,5 @@
 ---
-name: Reproducible
+name: Build
 
 ## Repo-private native reproducibility lane (G-A-005 'local-' prefix): builds
 ## the same image TWICE as two INDEPENDENT jobs (separate runner VMs, the
