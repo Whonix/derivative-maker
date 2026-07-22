@@ -7,7 +7,7 @@
 
 ## Build ONE target TWICE with identical inputs and compare the two images for
 ## bit-for-bit reproducibility. This is the dev-runnable local equivalent of the
-## local-reproducible CI workflow (two independent builds + a compare): a
+## local-build CI workflow (two independent builds + a compare): a
 ## developer can reproduce, and iterate on, a reproducibility failure on their own
 ## machine without a CI round-trip.
 ##
