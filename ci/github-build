@@ -101,6 +101,18 @@ case "${flavor}" in
       ;;
 esac
 
+## derivative-maker has no --freshness default (buildconfig.d/25_apt_sources.conf errors if
+## unset), so require it here too. The reproducibility lane always passes 'frozen'; 'current'
+## is accepted for a non-reproducible smoke build.
+case "${freshness}" in
+   frozen | current)
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --freshness <frozen|current> is required (got: '${freshness}')" >&2
+      exit 1
+      ;;
+esac
+
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 
 ## The ISO build leaves live-build's work tree (bootstrap/chroot cache,
@@ -169,15 +181,11 @@ fi
 ## SMBIOS ('--smbios-append "dm-cmdline=console=ttyS0,115200n8"'; the GRUB reader
 ## ships in vm-config-dist by default), so no baked-in divergence is needed.
 
-## Optional apt freshness passthrough. Unset -> derivative-maker's own default. '--freshness
-## frozen' pins the snapshot.debian.org timestamp (build_sources/debian_stable_frozen_*), so two
-## independent builds pull identical package versions -- required for a meaningful reproducibility
-## comparison. The value is validated by help-steps/parse-cmd, not duplicated here.
-freshness_args=()
-if [ -n "${freshness}" ]; then
-   freshness_args=(--freshness "${freshness}")
-fi
-
+## '--freshness' is mandatory (validated above). '--freshness frozen' pins the
+## snapshot.debian.org timestamp (build_sources/debian_stable_frozen_*), so two independent
+## builds pull identical package versions -- required for a meaningful reproducibility
+## comparison. The value is re-validated by help-steps/parse-cmd.
+##
 ## '--remote-derivative-packages false': build the Kicksecure/Whonix derivative packages
 ## LOCALLY from the source tree instead of pulling prebuilt ones from the remote repo. A
 ## reproducible build must not embed opaque prebuilt packages -- a third party can only
@@ -190,7 +198,7 @@ fi
    --flavor "${flavor}" \
    --target "${target}" \
    "${type_args[@]}" \
-   "${freshness_args[@]}" \
+   --freshness "${freshness}" \
    --arch "${arch}" \
    --allow-uncommitted true \
    --allow-untagged true \

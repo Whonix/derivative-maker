@@ -146,7 +146,8 @@ Optional Parameters:
   --vram [size]            : Set VM video RAM size (e.g., --vram 12).
   --vmsize [size]          : Set VM disk size (e.g., --vmsize 200G).
 
-  --freshness [option]     : Choose between 'frozen' (frozen sources) or 'current' (current sources).
+  --freshness <frozen|current> : REQUIRED (no default). 'frozen' pins snapshot.debian.org
+                              sources for a reproducible build; 'current' tracks the live mirror.
   --build-slot [name]      : Build under derivative-binary/<name> (its own output tree and
                              cowbuilder chroots) so multiple builds can run concurrently on a
                              resourceful host. Name chars: [A-Za-z0-9_-]. Default: unset (shared
@@ -418,7 +419,6 @@ dist_build_one_parse_cmd() {
                   export dist_build_apt_freshness="frozen"
                   true "${cyan}INFO: Using frozen (snapshot.debian.org) sources -- reproducible build.${reset}"
                elif [ "${2:-}" = "current" ]; then
-                  ## default
                   export dist_build_apt_freshness="current"
                   true "${cyan}INFO: Using current sources.${reset}"
                else

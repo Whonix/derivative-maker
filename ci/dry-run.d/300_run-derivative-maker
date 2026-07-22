@@ -23,6 +23,7 @@ timeout 1200 \
    ./help-steps/run-as-user --chown "${PWD}" -- \
       "${target_user}" \
       ./derivative-maker \
+         --freshness current \
          --dry-run true \
          --unsupported-os true \
          --allow-uncommitted true \
