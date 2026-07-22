@@ -35,11 +35,10 @@ CACHER_VOLUME="$HOME/approx_cache_mnt"
 ## Persist the auto-generated local APT signing key across builds. sq (sequoia) keeps
 ## the SECRET key in ~/.local/share/sequoia/keystore (the softkeys backend) and the
 ## certificates in ~/.local/share/pgp.cert.d, so KEY_VOLUME is mounted at ~/.local/share
-## (see the --volume below). A prior mount at ~/.gnupg persisted nothing (that folder
-## holds only gpg-agent sockets here), so help-steps/signing-key-create regenerated a
-## fresh key every run (a new fingerprint each build), breaking sign-and-tag re-run-safety
-## and leaving residue tags. signing-key-create is idempotent: with the store persisted it
-## reuses the same key. GNUPG_VOLUME additionally persists ~/.gnupg for gpg-agent /
+## (see the --volume below) -- NOT ~/.gnupg, which here holds only gpg-agent sockets, not
+## the key. With the store persisted, signing-key-create is idempotent: it reuses the same
+## key (same fingerprint) across builds, keeping sign-and-tag re-run-safe. GNUPG_VOLUME
+## additionally persists ~/.gnupg for gpg-agent /
 ## Qubes split-gpg-2 setups that DO route secret keys through gpg-agent (no-op here, where
 ## sq uses the softkeys backend, but harmless and correct for those configurations).
 KEY_VOLUME="$HOME/.key_mnt"
