@@ -146,7 +146,7 @@ Optional Parameters:
   --vram [size]            : Set VM video RAM size (e.g., --vram 12).
   --vmsize [size]          : Set VM disk size (e.g., --vmsize 200G).
 
-  --freshness <frozen|current> : REQUIRED (no default). 'frozen' pins snapshot.debian.org
+  --freshness <frozen|current> : REQUIRED for an image build. 'frozen' pins snapshot.debian.org
                               sources for a reproducible build; 'current' tracks the live mirror.
   --build-slot [name]      : Build under derivative-binary/<name> (its own output tree and
                              cowbuilder chroots) so multiple builds can run concurrently on a
@@ -1027,6 +1027,22 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
       true
    else
       parse_cmd_target_error
+   fi
+
+   ## --freshness is mandatory for an image build: the operator must explicitly
+   ## choose 'frozen' (reproducible, pinned snapshot.debian.org) or 'current'
+   ## (live mirror), so a build is never silently non-reproducible. Source-only
+   ## runs and helper scripts that skip parse-cmd do not build an image and keep
+   ## the fallback in buildconfig.d/25_apt_sources.conf.
+   if [ "${dist_build_one_parsed:-}" = "true" ]; then
+      true
+   elif [ "${dist_build_source_run:-}" = "true" ]; then
+      true
+   elif [ "${dist_build_source_archive:-}" = "true" ]; then
+      true
+   elif [ -z "${dist_build_apt_freshness:-}" ]; then
+      printf '%s\n' "${red}${bold}You must add '--freshness frozen' (reproducible, pinned snapshot.debian.org) or '--freshness current' (live mirror).${reset}"
+      exit 1
    fi
 
    if [ "${dist_build_install_to_root:-}" = "true" ]; then
