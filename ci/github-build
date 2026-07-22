@@ -101,9 +101,9 @@ case "${flavor}" in
       ;;
 esac
 
-## derivative-maker has no --freshness default (buildconfig.d/25_apt_sources.conf errors if
-## unset), so require it here too. The reproducibility lane always passes 'frozen'; 'current'
-## is accepted for a non-reproducible smoke build.
+## --freshness is mandatory for an image build (enforced by help-steps/parse-cmd), so require
+## it here too. The reproducibility lane always passes 'frozen'; 'current' is accepted for a
+## non-reproducible smoke build.
 case "${freshness}" in
    frozen | current)
       ;;
