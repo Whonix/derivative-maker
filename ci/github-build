@@ -162,9 +162,12 @@ if [ "${target}" = "virtualbox" ] || [ "${target}" = "qcow2" ]; then
    type_args=(--type vm)
 fi
 
-## Every CI target gets a serial console so all test images boot-test uniformly over serial
-## (headless qemu -nographic). Test-only; production builds omit '--serial-console-enable'.
-serial_args=(--serial-console-enable true)
+## No '--serial-console-enable': it would install the serial-console-enable package,
+## making the reproducibility-tested image diverge from the production image (which
+## omits it), and nothing in CI boot-tests these images (the lane builds twice and
+## compares). A manual dm-qemu boot-test injects a serial console at run time via
+## SMBIOS ('--smbios-append "dm-cmdline=console=ttyS0,115200n8"'; the GRUB reader
+## ships in vm-config-dist by default), so no baked-in divergence is needed.
 
 ## Optional apt freshness passthrough. Unset -> derivative-maker's own default. '--freshness
 ## frozen' pins the snapshot.debian.org timestamp (build_sources/debian_stable_frozen_*), so two
@@ -187,7 +190,6 @@ fi
    --flavor "${flavor}" \
    --target "${target}" \
    "${type_args[@]}" \
-   "${serial_args[@]}" \
    "${freshness_args[@]}" \
    --arch "${arch}" \
    --allow-uncommitted true \
