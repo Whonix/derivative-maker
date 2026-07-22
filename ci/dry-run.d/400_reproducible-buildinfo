@@ -32,7 +32,7 @@ cleanup() {
 trap cleanup EXIT
 
 dummy_image="${work_dir}/dummy.raw"
-: > "${dummy_image}"
+true > "${dummy_image}"
 buildinfo_file="${dummy_image}.dm-buildinfo"
 
 ## Export a couple of build variables so val() has real (not 'unknown') input to
