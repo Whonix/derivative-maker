@@ -165,6 +165,8 @@ jobs:
 
   compare:
     needs: build
+    ## Fork-PR guard (rule 3), mirroring the build job; also gated by needs:build.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
