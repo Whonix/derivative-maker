@@ -180,7 +180,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: repro-image-${{ matrix.copy }}
-          path: /home/runner/binary_mnt/**/Kicksecure-*
+          ## Released image + siblings only, NOT the '.raw' build intermediate: a
+          ## 100 GB sparse disk image that is not the reproducibility subject and
+          ## bloats the artifact past the compare job's disk.
+          path: |
+            /home/runner/binary_mnt/**/Kicksecure-*
+            !/home/runner/binary_mnt/**/*.raw
           if-no-files-found: error
           retention-days: 7
 
