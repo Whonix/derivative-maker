@@ -40,12 +40,11 @@ dist_build_source_run="true"
 source pre
 source variables
 ## Per-package rebuild detection (dm_package_needs_rebuild); shared with
-## dm-packaging-helper-script's changelog-vs-published-version mechanism. Sourced
-## only for the opt-in --skip-published-packages path, so a normal build does not
-## depend on this helper.
-if [ "${dist_build_skip_published_packages:-}" = "true" ]; then
-   source "$dist_developer_meta_files_folder/usr/libexec/developer-meta-files/reprepro-freshness.bsh"
-fi
+## dm-packaging-helper-script's changelog-vs-published-version mechanism. Only the
+## opt-in --skip-published-packages path calls into it, but source it
+## unconditionally (no conditional imports): it just defines functions, and the
+## helper always ships with the developer-meta-files submodule.
+source "$dist_developer_meta_files_folder/usr/libexec/developer-meta-files/reprepro-freshness.bsh"
 
 cd "$MYDIR"
 cd ..
@@ -482,7 +481,7 @@ create_derivative_distribution_debian_packages() {
    ## name to the fail flag on failure; the pool never lets two workers share a cow slot.
    local pkg_fail_flag
    pkg_fail_flag="$(mktemp)"
-   rm --force -- "$pkg_fail_flag"
+   safe-rm --force -- "$pkg_fail_flag"
 
    build_one_derivative_package() {
       local pkgdir="$1" slot="$2" name
@@ -502,18 +501,26 @@ create_derivative_distribution_debian_packages() {
 
    local -a slot_pid
    local i slot launched=0
-   for (( i=0; i<max_jobs; i++ )); do slot_pid[i]=0 ; done
+   for (( i=0; i<max_jobs; i++ )); do
+      slot_pid[i]=0
+   done
    for item in "${package_build_list[@]}"; do
       slot=-1
       while [ "$slot" -lt 0 ]; do
          for (( i=0; i<max_jobs; i++ )); do
-            if [ "${slot_pid[i]}" -eq 0 ]; then slot="$i" ; break ; fi
+            if [ "${slot_pid[i]}" -eq 0 ]; then
+               slot="$i"
+               break
+            fi
             if ! kill -0 "${slot_pid[i]}" 2>/dev/null ; then
                wait "${slot_pid[i]}" 2>/dev/null || true
-               slot="$i" ; break
+               slot="$i"
+               break
             fi
          done
-         if [ "$slot" -lt 0 ]; then wait -n 2>/dev/null || true ; fi
+         if [ "$slot" -lt 0 ]; then
+            wait -n 2>/dev/null || true
+         fi
       done
       launched="$(( launched + 1 ))"
       true "${cyan}INFO: [slot ${slot}] building (${launched}/${total_to_build}): ${item##*/} ${reset}"
@@ -521,15 +528,17 @@ create_derivative_distribution_debian_packages() {
       slot_pid[slot]="$!"
    done
    for (( i=0; i<max_jobs; i++ )); do
-      if [ "${slot_pid[i]}" -ne 0 ]; then wait "${slot_pid[i]}" 2>/dev/null || true ; fi
+      if [ "${slot_pid[i]}" -ne 0 ]; then
+         wait "${slot_pid[i]}" 2>/dev/null || true
+      fi
    done
    if [ -f "$pkg_fail_flag" ]; then
       local failed_packages
       failed_packages="$(tr '\n' ' ' < "$pkg_fail_flag")"
-      rm --force -- "$pkg_fail_flag"
+      safe-rm --force -- "$pkg_fail_flag"
       error "Derivative package build(s) failed: ${failed_packages}"
    fi
-   rm --force -- "$pkg_fail_flag"
+   safe-rm --force -- "$pkg_fail_flag"
 
    ## Phase 3: publish serially into the shared, locked reprepro database: remove any stale copy,
    ## then add the freshly built package. Order does not matter (independent packages; runtime
