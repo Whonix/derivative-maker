@@ -1,0 +1,13 @@
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## trixie-backports, enabled ONLY inside the reproducibility compare container
+## (copied by ci/reproducible-install-deps) to pull diffoscope >= 302 -- the
+## streaming fix that avoids OOM on a large differing image member; trixie ships
+## 297. This is NOT one of the image build's apt sources (build_sources/), which
+## is why it lives under ci/ and is copied in, not selected by the build.
+Types: deb
+URIs: http://deb.debian.org/debian
+Suites: trixie-backports
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg

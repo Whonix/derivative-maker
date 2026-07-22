@@ -12,13 +12,14 @@
 ## machine without a CI round-trip.
 ##
 ## Usage:
-##   ci/reproducible-build-twice --target <iso|virtualbox|qcow2> \
-##       [--flavor FLAVOR] [--arch amd64] [--freshness frozen] [--output-dir DIR]
+##   ci/reproducible-build-twice --target <iso|virtualbox|qcow2> --arch <amd64|arm64> \
+##       [--flavor FLAVOR] [--freshness frozen] [--output-dir DIR]
 ##
 ## --target      image type to build twice (iso | virtualbox | qcow2).
+## --arch        build architecture (required, e.g. amd64) -- not defaulted, so the
+##               compared arch is always explicit.
 ## --flavor      derivative flavor; defaults per target (iso -> kicksecure-lxqt,
 ##               virtualbox/qcow2 -> kicksecure-cli).
-## --arch        build architecture (default amd64).
 ## --freshness   passed through to the build (default 'frozen': pins the Debian
 ##               snapshot, without which two builds diverge on package versions).
 ## --output-dir  where the two images + report are collected (default a fresh
@@ -48,13 +49,13 @@ source_code_folder_dist="$( cd -- "$MYDIR/.." && pwd )"
 
 usage() {
    printf '%s\n' "Usage:
-  ${0##*/} --target <iso|virtualbox|qcow2> [--flavor FLAVOR] [--arch amd64] [--freshness frozen] [--output-dir DIR]" >&2
+  ${0##*/} --target <iso|virtualbox|qcow2> --arch <amd64|arm64> [--flavor FLAVOR] [--freshness frozen] [--output-dir DIR]" >&2
    exit 2
 }
 
 target=""
 flavor=""
-arch="amd64"
+arch=""
 freshness="frozen"
 output_dir=""
 while [ "$#" -gt 0 ]; do
@@ -110,8 +111,13 @@ case "$target" in
       ;;
 esac
 
+if [ -z "$arch" ]; then
+   printf '%s\n' "${0##*/}: --arch is required (e.g. amd64)." >&2
+   usage
+fi
+
 if [ -z "$output_dir" ]; then
-   output_dir="$( mktemp --directory --tmpdir="$( dirname -- "$source_code_folder_dist" )" reproducible-build-twice.XXXXXX )"
+   output_dir="$( mktemp --directory --tmpdir="${source_code_folder_dist%/*}" reproducible-build-twice.XXXXXX )"
 fi
 mkdir --parents -- "$output_dir"
 report="$output_dir/report.txt"
@@ -119,7 +125,7 @@ report="$output_dir/report.txt"
 ## Remove a prior build's image tree so 'find' below sees only the current build's
 ## output. Left deliberately narrow: it clears only the emitted-binary directory.
 clean_binary() {
-   rm --recursive --force -- "$source_code_folder_dist/derivative-binary/"* 2>/dev/null || true
+   safe-rm --recursive --force -- "$source_code_folder_dist/derivative-binary/"* 2>/dev/null || true
 }
 
 ## Run one build and collect its artifact into $output_dir/<tag>/.
@@ -128,9 +134,11 @@ build_one() {
    printf '%s\n' "=== build ${tag}: ${flavor} ${target} ${arch} (freshness=${freshness}) ==="
    clean_binary
    build_rc=0
-   ( cd -- "$source_code_folder_dist" && \
-      ./ci/github-build --arch "$arch" --target "$target" --flavor "$flavor" --freshness "$freshness" ) \
-      || build_rc="$?"
+   ## pushd/popd rather than a '( cd && ... )' subshell: scopes the cd without a
+   ## subshell (and dodges the errexit-in-conditional-subshell footgun).
+   pushd -- "$source_code_folder_dist" >/dev/null
+   ./ci/github-build --arch "$arch" --target "$target" --flavor "$flavor" --freshness "$freshness" || build_rc="$?"
+   popd >/dev/null
    if [ "$build_rc" -ne 0 ]; then
       printf '%s\n' "${0##*/}: build ${tag} failed (exit ${build_rc})" >&2
       exit 3
@@ -148,10 +156,10 @@ build_one() {
    ## Start from a clean $dest: a rerun into the same --output-dir with a different --flavor
    ## must not leave a stale artifact that the compare's 'find | sort | first' could pick over
    ## the newly built one. $dest is a dedicated per-tag subdir ($output_dir/a|b), safe to wipe.
-   rm --recursive --force -- "$dest"
+   safe-rm --recursive --force -- "$dest"
    mkdir --parents -- "$dest"
    cp -- "$found" "$dest/"
-   printf '%s\n' "  collected: $dest/$( basename -- "$found" )"
+   printf '%s\n' "  collected: $dest/${found##*/}"
 }
 
 build_one a a
