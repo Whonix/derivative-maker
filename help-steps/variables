@@ -1656,17 +1656,11 @@ $SUDO_TO_ROOT rm --force -- "$dist_build_pbuilder_config_file"
 mkdir --parents -- "$binary_build_folder_dist"
 mkdir --parents -- "$make_cowbuilder_dist_folder"
 
-## pbuilder-createbuildenv's post-bootstrap 'apt-get -q "${APTGETOPT[@]}" update' uses pbuilder's
-## OWN APTGETOPT array, not derivative-maker's DIST_APTGETOPT (renamed to avoid the collision noted
-## above), so without this it gets none of the build's apt options. (mmdebstrap's --aptopt covers
-## only the bootstrap phase, not this later apt-get update.) Pass the FULL DIST_APTGETOPT so
-## create-time apt gets the same options as every other apt path -- e.g. APT::Update::Error-Mode=any
-## (fail-loud on any apt error, a security feature) and, for a '--freshness frozen' build,
-## Acquire::Check-Valid-Until=false (the pinned snapshot Release is expired by design; without it
-## create fails "Release file ... is expired; E: pbuilder create failed"). ${...@Q} quotes each
-## element so the array round-trips when pbuilder sources this configfile.
+## pbuilder's post-bootstrap 'apt-get update' uses its own APTGETOPT, not DIST_APTGETOPT, so pass
+## the build's apt options through -- notably Acquire::Check-Valid-Until=false for '--freshness
+## frozen'. All options are plain '-o key=value' tokens (no spaces), so no per-element quoting.
 if [ "${#DIST_APTGETOPT[@]}" -gt 0 ]; then
-   pbuilder_aptgetopt_block="APTGETOPT=(${DIST_APTGETOPT[*]@Q})
+   pbuilder_aptgetopt_block="APTGETOPT=(${DIST_APTGETOPT[*]})
 export APTGETOPT"
 else
    pbuilder_aptgetopt_block=""
@@ -1705,8 +1699,6 @@ export APTCACHEHARDLINK
 PBUILDERSATISFYDEPENDSCMD=/usr/lib/pbuilder/pbuilder-satisfydepends-apt
 export PBUILDERSATISFYDEPENDSCMD
 
-## Frozen-only: pass Acquire::Check-Valid-Until=false to pbuilder's post-bootstrap create-time apt
-## (empty unless --freshness frozen; see the pbuilder_aptgetopt_block comment above).
 $pbuilder_aptgetopt_block
 
 ## pbuilder hard-exports 'LANG=C' and 'LC_ALL=C' when 'pbuilder-checkparams'
