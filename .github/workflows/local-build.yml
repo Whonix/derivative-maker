@@ -88,13 +88,34 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
-      - name: Checkout (recursive submodules)
+      - name: Checkout repository (no submodules yet)
+        ## submodules: false so the next steps can re-target each submodule's
+        ## origin URL at the fork before init.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 0
           ## rule 2: the build only signs/tags locally and never pushes.
           persist-credentials: false
+
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        ## Must run BEFORE 'submodule update --init' so the rewrites are visible
+        ## to the recursive clone.
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        ## head_ref on a fork PR is attacker-named; route it through an env var
+        ## rather than inlining (actionlint).
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
 
       ## Reclaim runner disk (#96); a vbox/qcow2 dispatch has the same runner
       ## disk profile as a single build job.
@@ -170,15 +191,31 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - name: Checkout
+      ## The comparator lives in the developer-meta-files submodule
+      ## (dm-reproducible-compare-artifacts + dm-reproducible-compare), so the
+      ## submodule is checked out -- and, like the build job, its matching fork
+      ## branch when a coordinated PR carries one.
+      - name: Checkout repository (no submodules yet)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ## The comparator lives in the developer-meta-files submodule
-          ## (dm-reproducible-compare-artifacts + dm-reproducible-compare), so the
-          ## submodule must be checked out.
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
 
       ## Same disk reclaim as the build jobs (#96): the compare downloads two
       ## images and builds the derivative-maker container image.
