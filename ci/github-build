@@ -153,6 +153,25 @@ iso_workdir_cleanup() {
 
 trap iso_workdir_cleanup EXIT
 
+## Reproducibility: pin the image version to the PRE-SIGN source commit.
+##
+## The CI lane has no offline maintainer key, so signing-key-create mints a FRESH
+## key per runner VM and sign-and-tag amends HEAD ('commit --amend -S' -> new
+## commit sha) and tags it '<base>_<sha>_<fpr>'. help-steps/variables then derives
+## dist_build_version from 'git describe', which resolves to that ephemeral tag --
+## so the per-build key fingerprint and amended sha would land in the image
+## FILENAME and content, making two independent builds differ for a reason that is
+## not the build's fault (the ephemeral CI signature), not a real reproducibility
+## defect. A real reproducer checks out the same PUBLIC signed release tag and
+## never re-signs, so its version is stable.
+##
+## Capture the version from HEAD BEFORE signing -- both independent builds check
+## out the same source commit, so they share it -- and export it, so
+## help-steps/variables uses it verbatim (its 'if unset' guard) instead of
+## re-deriving it from the post-sign HEAD.
+dist_build_version="$(git describe --always --abbrev=1000000000)"
+export dist_build_version
+
 ## Create signing material (idempotent; signing-key-create never overwrites an
 ## existing key) and sign+tag HEAD. Mirrors ci/dry-run.d/150_signing-key-create
 ## and ci/dry-run.d/200_sign-and-tag.
