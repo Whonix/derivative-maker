@@ -110,7 +110,7 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.approx-cache-sidecar
-          key: ${{ runner.os }}-repro-${{ matrix.copy }}-approx-${{ hashFiles('.github/workflows/local-reproducible.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
+          key: ${{ runner.os }}-repro-${{ matrix.copy }}-approx-${{ hashFiles('.github/workflows/local-build.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
 
       - name: Restore docker image cache
         id: dmimg-cache

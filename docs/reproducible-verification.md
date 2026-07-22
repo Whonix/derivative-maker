@@ -64,7 +64,7 @@ reproduce and localize without your image.
 
 - `ci/reproducible-build-twice` -- build an image twice locally and diff it (the
   developer determinism check: sha256 pass/fail, diffoscope on a mismatch).
-- `.github/workflows/local-reproducible.yml` -- the CI lane: two independent
+- `.github/workflows/local-build.yml` -- the CI lane: two independent
   builds compared with diffoscope.
 - `dm-reproducible-verify` / `dm-reproducible-buildinfo` -- fetch inputs, rebuild,
   diffoscope.

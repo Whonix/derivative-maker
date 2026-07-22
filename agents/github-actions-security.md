@@ -113,7 +113,7 @@ The format is:
 - Source: https://github.com/actions/download-artifact/releases/tag/v8.0.1
 - Verbatim quote: `"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"` (release target commit).
 - Verified: 2026-07-14 by git-api tag resolution (`git/ref/tags/v8.0.1`, lightweight tag -> commit).
-- Used by `local-reproducible.yml` (compare job downloads both independent build images). Reads artifacts written by `upload-artifact` v7.
+- Used by `local-build.yml` (compare job downloads both independent build images). Reads artifacts written by `upload-artifact` v7.
 
 **`actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5`**
 - Source: https://github.com/actions/cache/releases/tag/v5.0.5

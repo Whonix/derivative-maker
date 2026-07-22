@@ -6,7 +6,7 @@
 ## AI-Assisted
 
 ## Install diffoscope and the format-descent helpers the reproducibility lane
-## (.github/workflows/local-reproducible.yml) needs to compare two build images.
+## (.github/workflows/local-build.yml) needs to compare two build images.
 ## Kept as a ci/ script (github-actions-security.md rule 7) so this post-checkout
 ## shell is shellcheck / 'bash -n' covered and runnable locally, rather than an
 ## inline workflow 'run:' block.
