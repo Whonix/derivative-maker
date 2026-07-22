@@ -33,20 +33,26 @@ source variables
 ## Best-effort teardown, invoked from an EXIT trap so a failure under 'set -e' never leaks the
 ## read-only mount, the root-owned staging tree (a full rootfs copy), or the kpartx/loop mapping.
 reimage_cleanup() {
+   ## reimage_mnt/reimage_tree are globals initialized to "" at the top of reimage_raw
+   ## BEFORE this trap is armed, so under 'set -o nounset' they are always defined when
+   ## the trap fires; the ':-' defaults are belt-and-suspenders for the (currently
+   ## impossible) case of the trap firing before that init.
    if [ -n "${reimage_mnt:-}" ]; then
       $SUDO_TO_ROOT umount "$reimage_mnt" 2>/dev/null || true
-      rmdir "$reimage_mnt" 2>/dev/null || true
+      rmdir -- "$reimage_mnt" 2>/dev/null || true
    fi
    if [ -n "${reimage_tree:-}" ]; then
-      $SUDO_TO_ROOT rm --recursive --force "$reimage_tree" 2>/dev/null || true
+      $SUDO_TO_ROOT safe-rm --recursive --force -- "$reimage_tree" 2>/dev/null || true
    fi
    "$dist_source_help_steps_folder"/unmount-raw 2>/dev/null || true
 }
 
 reimage_raw() {
+   ## SOURCE_DATE_EPOCH is exported unconditionally by help-steps/variables; an empty
+   ## value here is a build bug, not a supported non-reproducible mode -- fail loud.
    if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
-      true "${green}INFO: Skipping ${BASH_SOURCE[0]} reimage, because SOURCE_DATE_EPOCH is unset (non-reproducible build).${reset}"
-      return 0
+      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: SOURCE_DATE_EPOCH is unset; the reproducible reimage requires it." >&2
+      return 1
    fi
 
    local dev_mapper_device fs_uuid fs_hashseed fs_blocksize fs_inodes fs_isize fs_features
@@ -75,12 +81,30 @@ reimage_raw() {
    fs_inodes="$(printf '%s\n' "$dumpe2fs_out" | sed -n 's/^Inode count:[[:space:]]*//p')"
    fs_isize="$(printf '%s\n' "$dumpe2fs_out" | sed -n 's/^Inode size:[[:space:]]*//p')"
    fs_features="$(printf '%s\n' "$dumpe2fs_out" | sed -n 's/^Filesystem features:[[:space:]]*//p' | tr ' ' ',')"
-   [ -n "$fs_uuid" ]      || { printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read filesystem UUID of $dev_mapper_device." >&2; return 1; }
-   [ -n "$fs_hashseed" ]  || { printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Directory Hash Seed of $dev_mapper_device." >&2; return 1; }
-   [ -n "$fs_blocksize" ] || { printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Block size of $dev_mapper_device." >&2; return 1; }
-   [ -n "$fs_inodes" ]    || { printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Inode count of $dev_mapper_device." >&2; return 1; }
-   [ -n "$fs_isize" ]     || { printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Inode size of $dev_mapper_device." >&2; return 1; }
-   [ -n "$fs_features" ]  || { printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Filesystem features of $dev_mapper_device." >&2; return 1; }
+   if [ -z "$fs_uuid" ]; then
+      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read filesystem UUID of $dev_mapper_device." >&2
+      return 1
+   fi
+   if [ -z "$fs_hashseed" ]; then
+      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Directory Hash Seed of $dev_mapper_device." >&2
+      return 1
+   fi
+   if [ -z "$fs_blocksize" ]; then
+      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Block size of $dev_mapper_device." >&2
+      return 1
+   fi
+   if [ -z "$fs_inodes" ]; then
+      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Inode count of $dev_mapper_device." >&2
+      return 1
+   fi
+   if [ -z "$fs_isize" ]; then
+      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Inode size of $dev_mapper_device." >&2
+      return 1
+   fi
+   if [ -z "$fs_features" ]; then
+      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read Filesystem features of $dev_mapper_device." >&2
+      return 1
+   fi
 
    reimage_mnt="$(mktemp -d)"
    ## Stage the copied tree next to the SAME image mount_raw mapped (disk-backed, has room for a full
@@ -98,7 +122,7 @@ reimage_raw() {
    $SUDO_TO_ROOT mount -o ro "$dev_mapper_device" "$reimage_mnt"
    $SUDO_TO_ROOT cp -a "$reimage_mnt/." "$reimage_tree/"
    $SUDO_TO_ROOT umount "$reimage_mnt"
-   rmdir "$reimage_mnt"
+   rmdir -- "$reimage_mnt"
    reimage_mnt=""
 
    ## Strip runtime artifacts whose CONTENT embeds the build's wall-clock time (their mtimes are pinned
@@ -106,7 +130,7 @@ reimage_raw() {
    ## ldconfig auxiliary cache. Both are written by late chroot activity that runs after 80_cleanup
    ## truncates /var/log, and both are regenerated at runtime as needed.
    $SUDO_TO_ROOT truncate -s 0 -- "$reimage_tree/var/log/alternatives.log" 2>/dev/null || true
-   $SUDO_TO_ROOT rm --force -- "$reimage_tree/var/cache/ldconfig/aux-cache"
+   $SUDO_TO_ROOT safe-rm --force -- "$reimage_tree/var/cache/ldconfig/aux-cache"
 
    ## update-locale writes /etc/locale.conf (target of the /etc/default/locale symlink) with its
    ## assignment lines in a non-deterministic order. Sort the file so it is identical every build;
@@ -134,12 +158,12 @@ reimage_raw() {
    ## yields an identical filesystem. set -e aborts (and the trap cleans up) if this critical step
    ## fails rather than shipping a corrupt image.
    # shellcheck disable=SC2086
-   SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" $SUDO_TO_ROOT mke2fs -F -q -t ext4 \
+   $SUDO_TO_ROOT mke2fs -F -q -t ext4 \
       -b "$fs_blocksize" -N "$fs_inodes" -I "$fs_isize" -O "$fs_features" \
       -U "$fs_uuid" -E hash_seed="$fs_hashseed" \
       -d "$reimage_tree" "$dev_mapper_device"
 
-   $SUDO_TO_ROOT rm --recursive --force "$reimage_tree"
+   $SUDO_TO_ROOT safe-rm --recursive --force -- "$reimage_tree"
    reimage_tree=""
 
    ## Pin the superblock timestamps mke2fs stamps from wall-clock. debugfs set_super_value field names
@@ -153,7 +177,7 @@ reimage_raw() {
                   "set_super_value lastcheck ${sde_hex}" \
                   "set_super_value mkfs_time ${sde_hex}" \
                   "set_super_value kbytes_written 0" ; do
-      debugfs_err="$(SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" $SUDO_TO_ROOT debugfs -w -R "$sde_cmd" "$dev_mapper_device" 2>&1 1>/dev/null)"
+      debugfs_err="$($SUDO_TO_ROOT debugfs -w -R "$sde_cmd" "$dev_mapper_device" 2>&1 1>/dev/null)"
       case "$debugfs_err" in
          *"set_super_value:"*) printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: debugfs rejected '$sde_cmd': ${debugfs_err}" >&2; return 1 ;;
       esac
