@@ -22,14 +22,28 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 
 HOST_USER="$(id -u)"
+HOST_GROUP="$(id -g)"
 DOCKER_USER="user"
-COMMAND="./derivative-maker"
+## No implicit default command: the caller must pass an explicit command after
+## '--'. A bare invocation is an error, not a silent full './derivative-maker'
+## build.
+COMMAND=""
 DOCKER_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
 SOURCE_VOLUME="$( dirname -- "${DOCKER_DIR}" )"
 BINARY_VOLUME="$HOME/binary_mnt"
 CACHER_VOLUME="$HOME/approx_cache_mnt"
+## Persist the auto-generated local APT signing key across builds. sq (sequoia) keeps
+## the SECRET key in ~/.local/share/sequoia/keystore (the softkeys backend) and the
+## certificates in ~/.local/share/pgp.cert.d, so KEY_VOLUME is mounted at ~/.local/share
+## (see the --volume below) -- NOT ~/.gnupg, which here holds only gpg-agent sockets, not
+## the key. With the store persisted, signing-key-create is idempotent: it reuses the same
+## key (same fingerprint) across builds, keeping sign-and-tag re-run-safe. GNUPG_VOLUME
+## additionally persists ~/.gnupg for gpg-agent /
+## Qubes split-gpg-2 setups that DO route secret keys through gpg-agent (no-op here, where
+## sq uses the softkeys backend, but harmless and correct for those configurations).
 KEY_VOLUME="$HOME/.key_mnt"
-IMG="Kicksecure/derivative-maker-docker"
+GNUPG_VOLUME="$HOME/.gnupg_mnt"
+IMG="kicksecure/derivative-maker-docker"
 ## Arch-qualify the image tag so an amd64 and an arm64 image can never collide
 ## in a shared docker store or image cache. The image is built natively on the
 ## runner, so its architecture is the host's; 'uname --machine' (e.g. x86_64 /
@@ -49,16 +63,45 @@ sudo "${sudo_options_maybe[@]}" test -d /usr
 
 print_usage() {
   cat -- << EOF
-  Usage: $0 [ options ]
+  Usage: $0 [ options ] -- COMMAND [ ARGS ]
 
-  General Options:
-    -b|--build-step  : build-step in derivative-maker/build-steps.d/
-    -c|--custom      : custom command or shell compliant command chain
-    --binary-mount   : Changes the binary artifact directory
-    --cacher-mount   : Changes the package cache directory
-    --key-mount      : Changes the keystore directory
-    -h|--help        : print usage dialog
+  The command to run in the container is explicit, after '--'.
+
+  Options:
+    --binary-mount DIR : binary artifact directory
+    --cacher-mount DIR : package cache directory
+    --key-mount DIR    : keystore directory
+    -h|--help          : this help
+
+  Examples:
+    $0 -- ./derivative-maker --flavor kicksecure-cli --target raw   # build an image
+    $0 -- build-steps.d/3600_convert-raw-to-iso                     # one build step
+    $0 -- bash                                                      # interactive shell
 EOF
+}
+
+usage_error() {
+  print_usage >&2
+  printf '%s\n' "ERROR: $*" >&2
+  exit 1
+}
+
+## Reject a mount source Docker would misinterpret: a NON-absolute path is
+## treated as a named volume (silently not the host directory), and a ':' splits
+## the '-v' spec. Require an absolute, colon-free path.
+validate_mount_path() {
+  case "$1" in
+    /*)
+      ;;
+    *)
+      usage_error "mount path must be an absolute path: $1"
+      ;;
+  esac
+  case "$1" in
+    *:*)
+      usage_error "mount path must not contain a colon: $1"
+      ;;
+  esac
 }
 
 volume_prepare() {
@@ -69,11 +112,16 @@ volume_prepare() {
   ## literal stays correct. Kept in sync with ci/approx-cache-sidecar.
   VOLUMES=(
     "${CACHER_VOLUME}" "101:102" "770"
-    "${BINARY_VOLUME}" "${HOST_USER}:${HOST_USER}" "770"
-    "${KEY_VOLUME}" "${HOST_USER}:${HOST_USER}" "700"
+    "${BINARY_VOLUME}" "${HOST_USER}:${HOST_GROUP}" "770"
+    "${KEY_VOLUME}" "${HOST_USER}:${HOST_GROUP}" "700"
+    "${GNUPG_VOLUME}" "${HOST_USER}:${HOST_GROUP}" "700"
   )
 
   while (( ${#VOLUMES[@]} > 0 )); do
+    ## Only create-and-own a directory we are making fresh. Deliberately do NOT
+    ## chown/chmod a PRE-EXISTING directory: a mistyped '--key-mount /etc' would
+    ## otherwise sudo-chown a system path and break the host. A hand-created
+    ## volume dir with the wrong ownership is the caller's to fix.
     if [ ! -d "${VOLUMES[0]}" ]; then
       mkdir --parents -- "${VOLUMES[0]}"
       sudo "${sudo_options_maybe[@]}" -- chown --recursive -- "${VOLUMES[1]}" "${VOLUMES[0]}"
@@ -87,9 +135,13 @@ volume_prepare() {
 build_docker_image() {
   ## Hoist the subshell out of the command arguments so 'set -o errexit'
   ## catches a failing 'id' instead of silently passing an empty --build-arg.
-  local dm_uid
+  local dm_uid existing_image
   dm_uid="$(id -u)"
-  if [ -z "$(docker images --quiet -- "${image_ref}" 2> /dev/null)" ]; then
+  ## Query the SAME daemon that build/run use (sudo). A non-sudo query can hit a
+  ## different or missing daemon, then wrongly rebuild every run, or skip the
+  ## build and let 'docker run' fall back to pulling the unpinned name.
+  existing_image="$(sudo "${sudo_options_maybe[@]}" -- docker images --quiet -- "${image_ref}" 2> /dev/null)" || true
+  if [ -z "${existing_image}" ]; then
     sudo \
     "${sudo_options_maybe[@]}" \
     -- \
@@ -103,27 +155,27 @@ build_docker_image() {
   fi
 }
 
-## TODO: Consider what should happen when derivative-maker-docker-run is run without arguments.
+## Track whether '--' (the mandatory command delimiter) was seen, so a bare
+## command or a mistyped option is rejected rather than silently run.
+saw_dashdash="false"
 
 while true; do
   case "${1:-}" in
-    -b|--build-step)
-      COMMAND="build-steps.d/${2}"
-      shift 2
-      ;;
-    -c|--custom)
-      COMMAND="${2}"
-      shift 2
-      ;;
     --binary-mount)
+      [ "$#" -ge 2 ] || usage_error "--binary-mount requires a value."
+      validate_mount_path "${2}"
       BINARY_VOLUME="${2}"
       shift 2
       ;;
     --cacher-mount)
+      [ "$#" -ge 2 ] || usage_error "--cacher-mount requires a value."
+      validate_mount_path "${2}"
       CACHER_VOLUME="${2}"
       shift 2
       ;;
     --key-mount)
+      [ "$#" -ge 2 ] || usage_error "--key-mount requires a value."
+      validate_mount_path "${2}"
       KEY_VOLUME="${2}"
       shift 2
       ;;
@@ -132,13 +184,34 @@ while true; do
       exit 0
       ;;
     --)
+      saw_dashdash="true"
       shift
       break
+      ;;
+    -*)
+      usage_error "unknown option: $1"
       ;;
     *)
       break
       ;;
   esac
+done
+
+## The command to run in the container is explicit and MUST follow '--': the
+## first argument after it, with any further arguments passed through. A bare
+## command (no '--'), an unknown option, or no command at all is rejected -- so a
+## typo is never silently run and there is no implicit default.
+if [ "${saw_dashdash}" != "true" ] || [ "$#" -lt 1 ]; then
+  usage_error "no command given: pass -- COMMAND [ARGS] (see --help)."
+fi
+COMMAND="${1}"
+shift
+
+## The default volume paths (SOURCE_VOLUME + the $HOME-derived mounts) also feed
+## '-v', so a ':' in $HOME or the checkout path would split the spec. Validate
+## them the same way as the --*-mount overrides.
+for volume_path in "${SOURCE_VOLUME}" "${BINARY_VOLUME}" "${CACHER_VOLUME}" "${KEY_VOLUME}" "${GNUPG_VOLUME}"; do
+  validate_mount_path "${volume_path}"
 done
 
 ## The container intentionally does NOT run derivative-update to fetch/merge
@@ -172,17 +245,20 @@ sudo \
   -- \
     docker \
       run \
-      --name derivative-maker-docker \
+      --name "derivative-maker-docker-${image_arch}-$$" \
       "${docker_run_opts[@]}" \
       --rm \
+      --pull=never \
       --privileged \
+      --volume /dev:/dev \
       --env 'flavor_meta_packages_to_install=' \
       --env 'install_package_list=' \
       --env 'DERIVATIVE_APT_REPOSITORY_OPTS=' \
       --volume "${SOURCE_VOLUME}:/home/${DOCKER_USER}/derivative-maker" \
       --volume "${BINARY_VOLUME}:/home/${DOCKER_USER}/derivative-binary" \
       --volume "${CACHER_VOLUME}:/var/cache/approx-derivative-maker" \
-      --volume "${KEY_VOLUME}:/home/${DOCKER_USER}/.gnupg" \
+      --volume "${KEY_VOLUME}:/home/${DOCKER_USER}/.local/share" \
+      --volume "${GNUPG_VOLUME}:/home/${DOCKER_USER}/.gnupg" \
       "${image_ref}" \
         sudo \
           --non-interactive \

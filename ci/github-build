@@ -8,7 +8,7 @@
 ## Runs INSIDE the derivative-maker docker container, invoked from
 ## .github/workflows/local-build.yml as:
 ##
-##   ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch <amd64|arm64>
+##   ./docker/derivative-maker-docker-run -- ci/github-build --arch <amd64|arm64>
 ##
 ## Signs HEAD before building so build-steps.d/1100_sanity-tests' sq-git
 ## signature verification passes without the --allow-unsigned escape hatch,
@@ -29,6 +29,7 @@ shopt -s shift_verbose
 arch=""
 target="virtualbox"
 flavor="kicksecure-cli"
+freshness=""
 while [ "$#" -gt 0 ]; do
    case "$1" in
       --arch)
@@ -55,6 +56,14 @@ while [ "$#" -gt 0 ]; do
          flavor="$2"
          shift 2
          ;;
+      --freshness)
+         if [ "$#" -lt 2 ]; then
+            printf '%s\n' "${BASH_SOURCE[0]}: --freshness requires a value" >&2
+            exit 1
+         fi
+         freshness="$2"
+         shift 2
+         ;;
       *)
          printf '%s\n' "${BASH_SOURCE[0]}: unexpected argument: $1" >&2
          exit 1
@@ -72,10 +81,10 @@ case "${arch}" in
 esac
 
 case "${target}" in
-   virtualbox | iso)
+   virtualbox | iso | qcow2)
       ;;
    *)
-      printf '%s\n' "${BASH_SOURCE[0]}: --target <virtualbox|iso> is required (got: '${target}')" >&2
+      printf '%s\n' "${BASH_SOURCE[0]}: --target <virtualbox|iso|qcow2> is required (got: '${target}')" >&2
       exit 1
       ;;
 esac
@@ -88,6 +97,18 @@ case "${flavor}" in
       ;;
    *)
       printf '%s\n' "${BASH_SOURCE[0]}: --flavor <kicksecure-cli|kicksecure-lxqt> is required (got: '${flavor}')" >&2
+      exit 1
+      ;;
+esac
+
+## --freshness is mandatory for an image build (enforced by help-steps/parse-cmd), so require
+## it here too. The reproducibility lane always passes 'frozen'; 'current' is accepted for a
+## non-reproducible smoke build.
+case "${freshness}" in
+   frozen | current)
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --freshness <frozen|current> is required (got: '${freshness}')" >&2
       exit 1
       ;;
 esac
@@ -149,27 +170,38 @@ trap iso_workdir_cleanup EXIT
 ## implicit_dist_type_host), so '--type vm' is passed only for the VM
 ## target.
 type_args=()
-if [ "${target}" = "virtualbox" ]; then
+if [ "${target}" = "virtualbox" ] || [ "${target}" = "qcow2" ]; then
    type_args=(--type vm)
 fi
 
-## CI ISOs get a serial console so they can be smoke-boot-tested headless
-## (qemu -nographic). Harmless for a test image; production ISO builds simply
-## omit '--serial-console-enable'.
-serial_args=()
-if [ "${target}" = "iso" ]; then
-   serial_args=(--serial-console-enable true)
-fi
+## No '--serial-console-enable': it would install the serial-console-enable package,
+## making the reproducibility-tested image diverge from the production image (which
+## omits it), and nothing in CI boot-tests these images (the lane builds twice and
+## compares). A manual dm-qemu boot-test injects a serial console at run time via
+## SMBIOS ('--smbios-append "dm-cmdline=console=ttyS0,115200n8"'; the GRUB reader
+## ships in vm-config-dist by default), so no baked-in divergence is needed.
 
+## '--freshness' is mandatory (validated above). '--freshness frozen' pins the
+## snapshot.debian.org timestamp (build_sources/debian_stable_frozen_*), so two independent
+## builds pull identical package versions -- required for a meaningful reproducibility
+## comparison. The value is re-validated by help-steps/parse-cmd.
+##
+## '--remote-derivative-packages false': build the Kicksecure/Whonix derivative packages
+## LOCALLY from the source tree instead of pulling prebuilt ones from the remote repo. A
+## reproducible build must not embed opaque prebuilt packages -- a third party can only
+## reproduce the image if every derivative package is built from the same source. Trade-off: the
+## build is slower (it compiles all derivative packages) in exchange for being reproducible.
+##
+## '--unsafe-io true': eatmydata elides fsync in the disposable cowbuilder chroot -- repro-safe
+## (no byte that lands in a .deb/.iso changes; SOURCE_DATE_EPOCH still enforces determinism).
 ./derivative-maker \
    --flavor "${flavor}" \
    --target "${target}" \
    "${type_args[@]}" \
-   "${serial_args[@]}" \
+   --freshness "${freshness}" \
    --arch "${arch}" \
    --allow-uncommitted true \
    --allow-untagged true \
    --freedom false \
    --repo true \
-   --remote-derivative-packages true \
-   --unsafe-io true
+   --remote-derivative-packages false

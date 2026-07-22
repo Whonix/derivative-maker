@@ -1627,48 +1627,12 @@ else
 fi
 export cowbuilder_cache_dir
 
-## Translate a Debian architecture (dpkg --print-architecture style, e.g. the
-## values in make_cross_build_platform_list / dist_build_target_arch) to the
-## matching qemu-user / kernel machine name (uname -m style). Used for
-## binfmt_misc handler names ('qemu-<machine>') and cross-build emulation.
-## Prints the machine name on stdout; returns non-zero for an unmapped
-## architecture.
-dist_build_arch_to_qemu_machine() {
-   case "${1}" in
-      amd64)
-         printf '%s' "x86_64"
-         ;;
-      arm64)
-         printf '%s' "aarch64"
-         ;;
-      ## Both 32-bit ARM variants use the same emulator.
-      armel)
-         printf '%s' "arm"
-         ;;
-      armhf)
-         printf '%s' "arm"
-         ;;
-      mipsel)
-         printf '%s' "mipsel"
-         ;;
-      mips64el)
-         printf '%s' "mips64el"
-         ;;
-      ## The emulator for ppc64el really is ppc64le. This is not a typo.
-      ppc64el)
-         printf '%s' "ppc64le"
-         ;;
-      riscv64)
-         printf '%s' "riscv64"
-         ;;
-      s390x)
-         printf '%s' "s390x"
-         ;;
-      *)
-         return 1
-         ;;
-   esac
-}
+## The Debian-arch -> qemu machine-name map (dist_build_arch_to_qemu_machine) lives in a
+## standalone, side-effect-free fragment so dm-qemu (developer-meta-files; headless ISO
+## boot-testing) can reuse the SAME mapping without sourcing the whole build context. Single
+## source of truth -- do not re-inline it here. Used for binfmt_misc handler names
+## ('qemu-<machine>'), cross-build emulation, and dm-qemu's 'qemu-system-<machine>' binary.
+source "${dist_developer_meta_files_folder}/usr/libexec/developer-meta-files/arch-to-qemu-machine.bsh"
 
 set_cowbuilder_folders() {
    cow_folder="$cowbuilder_cache_dir/cow.cow_${dist_build_multiarch_package_item}"
@@ -1691,6 +1655,22 @@ export make_cowbuilder_dist_folder
 $SUDO_TO_ROOT rm --force -- "$dist_build_pbuilder_config_file"
 mkdir --parents -- "$binary_build_folder_dist"
 mkdir --parents -- "$make_cowbuilder_dist_folder"
+
+## pbuilder-createbuildenv's post-bootstrap 'apt-get -q "${APTGETOPT[@]}" update' uses pbuilder's
+## OWN APTGETOPT array, not derivative-maker's DIST_APTGETOPT (renamed to avoid the collision noted
+## above), so without this it gets none of the build's apt options. (mmdebstrap's --aptopt covers
+## only the bootstrap phase, not this later apt-get update.) Pass the FULL DIST_APTGETOPT so
+## create-time apt gets the same options as every other apt path -- e.g. APT::Update::Error-Mode=any
+## (fail-loud on any apt error, a security feature) and, for a '--freshness frozen' build,
+## Acquire::Check-Valid-Until=false (the pinned snapshot Release is expired by design; without it
+## create fails "Release file ... is expired; E: pbuilder create failed"). ${...@Q} quotes each
+## element so the array round-trips when pbuilder sources this configfile.
+if [ "${#DIST_APTGETOPT[@]}" -gt 0 ]; then
+   pbuilder_aptgetopt_block="APTGETOPT=(${DIST_APTGETOPT[*]@Q})
+export APTGETOPT"
+else
+   pbuilder_aptgetopt_block=""
+fi
 
 printf "%s\n" "\
 ## This is an auto generated file.
@@ -1724,6 +1704,10 @@ export APTCACHEHARDLINK
 ## Not compatible with 'set -o nounset'.
 PBUILDERSATISFYDEPENDSCMD=/usr/lib/pbuilder/pbuilder-satisfydepends-apt
 export PBUILDERSATISFYDEPENDSCMD
+
+## Frozen-only: pass Acquire::Check-Valid-Until=false to pbuilder's post-bootstrap create-time apt
+## (empty unless --freshness frozen; see the pbuilder_aptgetopt_block comment above).
+$pbuilder_aptgetopt_block
 
 ## pbuilder hard-exports 'LANG=C' and 'LC_ALL=C' when 'pbuilder-checkparams'
 ## sources 'pbuilder-modules', clobbering the locale passed in through the

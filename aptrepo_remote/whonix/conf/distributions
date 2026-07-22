@@ -88,6 +88,7 @@ Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfree
 Components: main contrib non-free
 Description: Whonix trixie APT Repository
 SignWith: 0x8D66066A2EEACCDA
+Tracking: minimal includebuildinfos includechanges keepsources
 Contents:
 ValidFor: 1m
 
@@ -98,6 +99,7 @@ Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfree
 Components: main contrib non-free
 Description: Whonix stable fixes testing APT Repository
 SignWith: 0x8D66066A2EEACCDA
+Tracking: minimal includebuildinfos includechanges keepsources
 Contents:
 ValidFor: 1m
 
@@ -108,6 +110,7 @@ Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfree
 Components: main contrib non-free
 Description: Whonix trixie Testers APT Repository
 SignWith: 0x8D66066A2EEACCDA
+Tracking: minimal includebuildinfos includechanges keepsources
 Contents:
 ValidFor: 1m
 
@@ -118,5 +121,6 @@ Architectures: amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfree
 Components: main contrib non-free
 Description: Whonix Developers APT Repository
 SignWith: 0x8D66066A2EEACCDA
+Tracking: minimal includebuildinfos includechanges keepsources
 Contents:
 ValidFor: 1m

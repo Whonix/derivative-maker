@@ -23,15 +23,27 @@
 ##    - See note above!
 ##    - See note above!
 
+## THE REPRODUCIBILITY PIN. The snapshot.debian.org timestamp below is what makes a
+## '--freshness frozen' build reproducible: a third party who builds from this exact commit
+## gets the same package versions. approx (127.0.0.1:9977 -> debian-frozen) is a generic,
+## UNPINNED pass-through to snapshot.debian.org; the timestamp is a path segment HERE, so this
+## file is the single reviewable place the pin changes. Bump it (to a newer valid snapshot)
+## with dm-maintenance, not by hand and not in approx.conf.
+## trixie-updates is included (pinned to the same snapshot) so the frozen build
+## matches the trixie-updates the build machine already carries: without it,
+## build_machine_setup could only offer an older stdlib (e.g. python3.13
+## deb13u2) than the docker base image pulled from trixie-updates (deb13u4),
+## producing "held broken packages". trixie-updates lives in the main archive
+## (debian-frozen), same URI as trixie.
 Types: deb
-URIs: http://127.0.0.1:9977/debian-frozen
-Suites: trixie
+URIs: http://127.0.0.1:9977/debian-frozen/20260720T082444Z
+Suites: trixie trixie-updates
 Components: main contrib non-free non-free-firmware
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
 Types: deb
-URIs: http://127.0.0.1:9977/debian-security-frozen
+URIs: http://127.0.0.1:9977/debian-security-frozen/20260720T082444Z
 Suites: trixie-security
 Components: main contrib non-free non-free-firmware
 Enabled: yes

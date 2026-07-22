@@ -41,7 +41,7 @@ fi
 
 ## Must match docker-run's image_ref (it builds "${IMG}:$(uname --machine)").
 image_arch="$(uname --machine)"
-img="Kicksecure/derivative-maker-docker:${image_arch}"
+img="kicksecure/derivative-maker-docker:${image_arch}"
 cache_dir="${HOME}/.dm-docker-image"
 image_tar="${cache_dir}/image.tar"
 
@@ -52,23 +52,34 @@ case "${1:-}" in
       ## Cache miss leaves no tar; nothing to load (build_docker_image will
       ## build the image itself).
       [ -f "${image_tar}" ] || exit 0
-      ## A corrupted tar (partial write, disk/cache issue) must NOT block CI:
-      ## treat a docker-load failure as a cache miss and drop the bad tar, so
+      ## If the daemon is unreachable, the build is doomed anyway; fail loudly
+      ## WITHOUT deleting a possibly-good tar, so a transient daemon restart does
+      ## not drop the cache.
+      if ! sudo --non-interactive -- docker info >/dev/null 2>&1; then
+         printf '%s\n' "${BASH_SOURCE[0]}: ERROR: docker daemon not reachable; leaving the cache tar in place." >&2
+         exit 1
+      fi
+      ## Daemon is up, so a load failure now means a corrupted tar (partial
+      ## write, disk/cache issue), which must NOT block CI: drop the bad tar so
       ## build_docker_image rebuilds the image instead of the job aborting.
       ## 'rm' (not safe-rm): a GitHub-hosted runner has no safe-rm installed,
       ## and the path is a fixed cache file, not user input.
       ## style-ok: no-safe-rm
       if ! sudo --non-interactive -- docker load --input "${image_tar}"; then
-         printf '%s\n' "${BASH_SOURCE[0]}: WARNING: docker load failed; cache tar may be corrupted. Rebuilding the image." >&2
+         printf '%s\n' "${BASH_SOURCE[0]}: WARNING: docker load failed; cache tar corrupted. Rebuilding the image." >&2
          rm --force -- "${image_tar}"
       fi
       ;;
    save)
       mkdir --parents -- "${cache_dir}"
-      ## 'docker save' as root (the harness builds via 'sudo docker'); then
-      ## hand the tar to the runner so actions/cache can read it on post.
-      sudo --non-interactive -- docker save "${img}" --output "${image_tar}"
-      sudo --non-interactive -- chown -- "${runner_uid_gid}" "${image_tar}"
+      ## 'docker save' as root (the harness builds via 'sudo docker'); then hand
+      ## the tar to the runner so actions/cache can read it on post. Save to a
+      ## temp file and rename on success, so a mid-save failure (disk full, image
+      ## deleted concurrently) never leaves a truncated image.tar behind that a
+      ## later 'load' would treat as the cache.
+      sudo --non-interactive -- docker save "${img}" --output "${image_tar}.tmp"
+      sudo --non-interactive -- chown -- "${runner_uid_gid}" "${image_tar}.tmp"
+      mv -- "${image_tar}.tmp" "${image_tar}"
       ;;
    *)
       printf '%s\n' "usage: ${BASH_SOURCE[0]} <load|save>" >&2

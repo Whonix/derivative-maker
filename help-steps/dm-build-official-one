@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "$0: START"
 
@@ -47,7 +49,7 @@ fi
 if [ "${CI:-}" = "true" ]; then
   ## Minimal test only for now.
   sudo --non-interactive -- ./docker/derivative-maker-docker-setup
-  ./docker/derivative-maker-docker-run --build-step 1100_sanity-tests --target raw --flavor source
+  ./docker/derivative-maker-docker-run -- build-steps.d/1100_sanity-tests --target raw --flavor source
 fi
 
 ## architecture choice
