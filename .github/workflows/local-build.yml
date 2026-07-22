@@ -6,8 +6,8 @@ name: Build
 ## reproducible-builds gold standard -- not one job building twice), then a
 ## third job compares the two images with diffoscope via developer-meta-files'
 ## dm-reproducible-compare. Every difference is reported (no allowlist).
-## This lane also REPLACES the former local-build.yml: the two builds are the
-## build test, so a green run means the image both builds and is reproducible.
+## The two builds ARE the build test, so a green run means the image both builds
+## and is reproducible.
 ## Kept simple -- one target per run (the default, or a workflow_dispatch choice),
 ## not a build-everything matrix, to avoid superfluous builds.
 ## The compare job's conclusion IS the reproducibility pass/fail signal: green
