@@ -12,13 +12,15 @@
 ##       --image <path> --arch <amd64|arm64> --firmware <bios|efi|efi-secureboot> \
 ##       --session <user|sysmaint>
 ##
-## It installs the qemu/OVMF/pexpect runtime, then hands the image to
-## dm-image-test (which boots it via dm-qemu, logs in over the serial console and
-## runs 'systemcheck --leak-tests'). The exit code IS the pass/fail signal:
-##   0 pass, 5 booted-but-a-check-failed / no login, 2 setup error.
+## It installs the qemu/OVMF/pexpect runtime, then hands the image to dist-ai's
+## dm-image-boot-tests (which bundles dm-qemu + dm-image-test: boots the image,
+## drives a login-free root serial shell and runs 'systemcheck --leak-tests').
+## The exit code IS the pass/fail signal:
+##   0 pass, non-zero booted-but-a-check-failed / no login / setup, 77 SKIP.
 ##
-## dm-qemu owns qemu, firmware and Secure Boot; this script owns only dependency
-## setup, image discovery and dispatch to the right per-firmware wrapper.
+## The boot harness lives in dist-ai (test-only tooling), not derivative-maker;
+## this script owns only dependency setup, image discovery and dispatch. It finds
+## dm-image-boot-tests via DIST_AI_DIR, a sibling dist-ai checkout, or PATH.
 
 set -o errexit
 set -o nounset
@@ -91,13 +93,21 @@ sudo --non-interactive -- apt-get install --yes --no-install-recommends \
    python3-pexpect xorriso
 
 script_dir="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
-## dm-image-test + its wrappers are installed with developer-meta-files; in the
-## source tree they live under the submodule's usr/bin.
-dm_image_test_bin="${script_dir}/../packages/kicksecure/developer-meta-files/usr/bin/dm-image-test"
-if ! [ -x "$dm_image_test_bin" ]; then
-   ## Fall back to an installed copy on PATH.
-   dm_image_test_bin="dm-image-test"
-fi
+## The boot harness moved to dist-ai. Resolve the dm-image-boot-tests runner from
+## DIST_AI_DIR, a sibling dist-ai checkout next to derivative-maker, or PATH (an
+## installed dist-ai package).
+boot_tests_bin=""
+for candidate in \
+   "${DIST_AI_DIR:-}/usr/bin/dm-image-boot-tests" \
+   "${script_dir}/../dist-ai/usr/bin/dm-image-boot-tests" \
+   "${script_dir}/../../dist-ai/usr/bin/dm-image-boot-tests" ; do
+   if [ -x "${candidate}" ]; then
+      boot_tests_bin="${candidate}"
+      break
+   fi
+done
+## Fall back to an installed dist-ai package on PATH.
+[ -n "${boot_tests_bin}" ] || boot_tests_bin="dm-image-boot-tests"
 
 test_args=(
    --disk "$image"
@@ -110,8 +120,8 @@ test_args=(
 [ -n "$serial_log" ] && test_args+=(--serial-log "$serial_log")
 
 printf '%s\n' "${BASH_SOURCE[0]}: boot-testing ${image} (arch=${arch} firmware=${firmware:-default} session=${session})"
-## Run dm-image-test and forward its exit code (errexit aborts with the child's
-## code on 5/2); avoid 'exec' so any future cleanup after this line still runs.
-dm_image_test_rc=0
-"$dm_image_test_bin" "${test_args[@]}" || dm_image_test_rc="$?"
-exit "$dm_image_test_rc"
+## Run dm-image-boot-tests and forward its exit code; avoid 'exec' so any future
+## cleanup after this line still runs.
+boot_tests_rc=0
+"$boot_tests_bin" "${test_args[@]}" || boot_tests_rc="$?"
+exit "$boot_tests_rc"

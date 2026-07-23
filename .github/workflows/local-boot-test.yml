@@ -4,16 +4,20 @@ name: Boot Test
 ## Repo-private boot + functional test lane (G-A-005 'local-' prefix): builds a
 ## bootable qcow2 disk image once, then boots it across the firmware x session
 ## matrix (SeaBIOS / OVMF EFI / OVMF Secure Boot, as the 'user' and 'sysmaint'
-## sessions) and, in each, logs in over the serial console and runs
+## sessions) and, in each, drives a login-free root serial shell and runs
 ## 'systemcheck --leak-tests'. Each boot-test leg's conclusion IS its pass/fail
-## signal (dm-image-test exit: 0 pass, 5 booted-but-a-check-failed / no login,
-## 2 setup error).
+## signal (0 pass, non-zero fail/setup, 77 SKIP).
 ##
-## All boot logic reuses developer-meta-files' dm-qemu (qemu/firmware/Secure Boot
-## + SMBIOS kernel-cmdline injection) and dm-image-test (login + checks); this
-## workflow is a thin wrapper that builds an image and fans out the matrix, so the
-## shell stays lint-covered and locally runnable. See
-## agents/github-actions-security.md for the pinning / permissions patterns.
+## The 'sysmaint' session exists only on GUI (lxqt) flavors -- CLI images ship no
+## user-sysmaint-split by design -- so the sysmaint legs run only when building a
+## GUI flavor (see the boot-test step's 'if').
+##
+## All boot logic lives in dist-ai's dm-image-boot-tests, which bundles dm-qemu
+## (qemu/firmware/Secure Boot + SMBIOS kernel-cmdline injection) and dm-image-test
+## (login + checks). This workflow is a thin wrapper that builds an image, checks
+## out dist-ai and fans out the matrix, so the shell stays lint-covered and
+## locally runnable. See agents/github-actions-security.md for the pinning /
+## permissions patterns.
 
 on:
   workflow_dispatch:
@@ -147,9 +151,21 @@ jobs:
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
         run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
 
-      - name: Initialize developer-meta-files submodule
-        ## dm-qemu + dm-image-test live in the developer-meta-files submodule.
-        run: git submodule update --init --recursive packages/kicksecure/developer-meta-files
+      - name: Check out dist-ai (boot harness)
+        ## The boot harness (dm-image-boot-tests -> dm-qemu + dm-image-test) lives
+        ## in dist-ai. Checked out into the workspace so ci/boot-test finds it via
+        ## its '../dist-ai' resolver (works inside the build container too, since
+        ## the whole workspace is mounted). NOTE: org-ai-assisted/dist-ai is
+        ## private; this needs the repo to be readable by the token below. If the
+        ## default GITHUB_TOKEN cannot read it, set a DIST_AI_CHECKOUT_TOKEN secret
+        ## (a PAT with read access) -- this is the one piece to confirm in CI.
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.repository_owner }}/dist-ai
+          path: dist-ai
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ secrets.DIST_AI_CHECKOUT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Check out matching fork branch in cross-org submodules (if present)
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
@@ -175,6 +191,9 @@ jobs:
           printf 'path=%s\n' "${image_path}" >> "${GITHUB_OUTPUT}"
 
       - name: Boot-test (${{ matrix.firmware }}, ${{ matrix.session }})
+        ## The sysmaint session only exists on GUI (lxqt) flavors; skip its legs
+        ## for CLI builds (no user-sysmaint-split account by design).
+        if: ${{ matrix.session != 'sysmaint' || env.BOOT_FLAVOR == 'kicksecure-lxqt' }}
         ## rule 4: values via env, not interpolated into run:.
         env:
           IMAGE: ${{ steps.image.outputs.path }}
