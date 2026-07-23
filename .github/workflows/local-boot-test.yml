@@ -90,15 +90,19 @@ jobs:
         if: steps.dmimg-cache.outputs.cache-hit == 'true'
         run: ./ci/dm-docker-image-cache load
 
-      - name: Build ${{ env.BOOT_FLAVOR }} ${{ env.BOOT_TARGET }} (${{ env.BOOT_ARCH }})
+      - name: Build ${{ env.BOOT_FLAVOR }} via dm-build-official (${{ env.BOOT_ARCH }})
+        ## Build through the official orchestration -- the SAME single build path
+        ## as local-build.yml, no duplication. The 'env VAR=val' prefix injects the
+        ## build controls into the container (its entrypoint execs "$@"); see
+        ## local-build.yml for the rationale. dm-build-official builds this flavor's
+        ## qcow2, which the boot-test job below locates and boots.
         ## rule 4: route every value through env, never interpolate into run:.
         env:
           CI: "true"
           ARCH: ${{ env.BOOT_ARCH }}
-          TARGET: ${{ env.BOOT_TARGET }}
           FLAVOR: ${{ env.BOOT_FLAVOR }}
           FRESHNESS: frozen
-        run: ./docker/derivative-maker-docker-run -- ci/github-build --arch "${ARCH}" --target "${TARGET}" --flavor "${FLAVOR}" --freshness "${FRESHNESS}"
+        run: ./docker/derivative-maker-docker-run -- env "dist_build_target_arch=${ARCH}" "flavors_list=${FLAVOR}" ./help-steps/dm-build-official --freshness "${FRESHNESS}"
 
       - name: Save docker image to cache
         if: steps.dmimg-cache.outputs.cache-hit != 'true'

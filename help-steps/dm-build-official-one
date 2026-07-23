@@ -94,6 +94,15 @@ build_args+=(--arch "$architecture")
   whonix-workstation-cli
 )
 
+## True if $1 is one of the flavors this run actually built. The hardcoded
+## source-release / upload steps below name specific flavors (kicksecure-lxqt,
+## whonix-workstation-lxqt); skip them when a reduced flavors_list (e.g. a
+## flavors_list=kicksecure-cli CI smoke build) did not build that flavor, so a
+## single-flavor run does not fail preparing a release for an image it never made.
+flavor_built() {
+  printf '%s\n' "${flavors_list[@]}" | grep -qxF -- "$1"
+}
+
 build_upload_noninteractive=true
 export build_upload_noninteractive
 
@@ -223,9 +232,13 @@ done
 ## - desktop: LXQt versus CLI
 ## - target: Kicksecure versus Whonix.
 ## - architecture: all
-run_cmd dm-prepare-release --target source --flavor "kicksecure-lxqt" "$@"
-run_cmd dm-upload-images --target source --flavor "kicksecure-lxqt" "$@"
-run_cmd dm-upload-images --target source --flavor "whonix-workstation-lxqt" "$@"
+if flavor_built "kicksecure-lxqt"; then
+  run_cmd dm-prepare-release --target source --flavor "kicksecure-lxqt" "$@"
+  run_cmd dm-upload-images --target source --flavor "kicksecure-lxqt" "$@"
+fi
+if flavor_built "whonix-workstation-lxqt"; then
+  run_cmd dm-upload-images --target source --flavor "whonix-workstation-lxqt" "$@"
+fi
 
 ## TODO: Windows
 # if [ "${CI:-}" = "true" ]; then
