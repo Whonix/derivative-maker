@@ -23,24 +23,30 @@ true "INFO: Currently running chroot script: ${BASH_SOURCE[0]}"
 ## with '--preserve-env', so they are carried into this chroot (VMNAME, VMRAM,
 ## VRAM, binary_image_raw_file, ...). Fail loud if a required one did not
 ## make it.
+## The locale trio ('help-steps/variables' sets LC_ALL=C.UTF-8,
+## LANG=C.UTF-8, LANGUAGE=C) travels the same route; checking it here makes
+## a silent locale passthrough regression fail loud instead of surfacing as
+## unparseable translated 'VBoxManage' output.
 for required_var in \
    VMNAME VMRAM VRAM binary_image_raw_file binary_image_vdi_dir HOMEVAR_VBOX_TEMP \
-   SUDO_TO_VBOX_TEMP vm_names_to_be_exported ; do
+   SUDO_TO_VBOX_TEMP vm_names_to_be_exported LC_ALL LANG LANGUAGE ; do
    if [ ! -v "$required_var" ]; then
       printf '%s\n' "ERROR: required variable '$required_var' not present in the chroot environment." >&2
       exit 1
    fi
 done
 
-## This script runs as root inside the cowbuilder chroot (via
-## 'cowbuilder --execute'), so 'sudo' to root is redundant. Worse, sudo's
-## 'env_reset' drops 'COWDANCER_ILISTFILE' while cowbuilder's 'libcowdancer'
-## remains LD_PRELOAD'ed, leaving the copy-on-write layer half-initialized so
-## that root file operations fail with 'cp: ... Cannot allocate memory'. Run
-## root commands directly (without sudo) so the inherited cowdancer
-## environment stays intact. '$SUDO_TO_VBOX_TEMP' is deliberately NOT cleared
-## here: it must drop privileges to the 'dm-vbox-temp' account.
-SUDO_TO_ROOT=""
+## Shared chroot-session plumbing; see the header of
+## 'help-steps/vbox-chroot-shared' (including why resolution goes through
+## the bind-mounted source tree, not '${BASH_SOURCE[0]}'). The BASH_SOURCE
+## fallback keeps direct (non-cowbuilder) execution working.
+if [ -v dist_source_help_steps_folder ]; then
+   vbox_chroot_shared_file="${dist_source_help_steps_folder}/vbox-chroot-shared"
+else
+   vbox_chroot_shared_file="$(dirname -- "${BASH_SOURCE[0]}")/vbox-chroot-shared"
+fi
+# shellcheck source=./vbox-chroot-shared
+source "${vbox_chroot_shared_file}"
 
 ## Absolute path of the VM disk. It lives under '$binary_image_vdi_dir' (on the
 ## bind-mounted host build folder), NOT the chroot-local 'dm-vbox-temp' home,
@@ -51,27 +57,6 @@ SUDO_TO_ROOT=""
 ## 'help-steps/variables' ('binary_image_vdi_dir').
 vdi_dir="$binary_image_vdi_dir/$VMNAME"
 vdi_file="$vdi_dir/$VMNAME.vdi"
-
-error() {
-   printf '%s\n' "ERROR: $*" >&2
-   exit 1
-}
-
-setup_vbox_temp_sudo() {
-   ## '$SUDO_TO_VBOX_TEMP' runs 'sudo --chdir' (-D), which sudo refuses
-   ## unless the policy permits 'runcwd'. On the build host that rule is
-   ## installed by 'build-steps.d/*_prepare-build-machine'; inside this
-   ## chroot it must be installed here. This script runs as root (via
-   ## 'cowbuilder --execute'), so the invoking user is root and a global
-   ## 'Defaults runcwd=*' is the matching rule. 'sponge' (used on the host)
-   ## may be absent in the chroot, so use 'tee' (as
-   ## 'pbuilder-chroot-script-virtualbox' does).
-   printf '%s\n' "Defaults runcwd=*" \
-      | SUDO_EDITOR="" VISUAL="" EDITOR=tee visudo -f /etc/sudoers.d/dm-vbox-temp-runcwd >/dev/null
-
-   ## Sanity test.
-   visudo --strict --check /etc/sudoers.d/dm-vbox-temp-runcwd
-}
 
 debugging_pre() {
    qemu-img \
@@ -507,6 +492,10 @@ main() {
       return 0
    fi
 
+   diagnostics_dump
+
+   vbox_stale_ipc_cleanup
+
    setup_vbox_temp_sudo
 
    debugging_pre
@@ -575,6 +564,8 @@ main() {
       ## the previous host-side behavior).
       $SUDO_TO_ROOT safe-rm -f -- "$binary_image_raw_file"
    fi
+
+   vbox_stale_ipc_cleanup
 
    sync
 }

@@ -1,0 +1,57 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Reclaim disk on GitHub-hosted runners by deleting large preinstalled
+## toolchains the derivative-maker build never uses (~25-30 GB on amd64), so the
+## virtualbox pipeline's raw + vdi + ova peak fits the runner root filesystem
+## (#96). Kept as a ci/ script (github-actions-security.md rule 7) so this
+## post-checkout shell is shellcheck / 'bash -n' covered and runnable locally,
+## rather than an inline workflow 'run:' block.
+##
+## Best-effort by design: a path absent on a given runner image (e.g. arm64
+## lacks the android / dotnet bulk) is skipped, and no single removal failure
+## aborts the build -- freeing disk must never turn a green build red. Every
+## fallible operation is guarded, so strict mode stays on.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## style-ok: no-has -- runner-maintenance script; does not source derivative-maker helper-scripts.
+## style-ok: no-safe-rm -- removes GitHub-runner preinstalled toolchains; safe-rm is not present on
+## the hosted runner, and these are throwaway CI paths removed best-effort.
+
+before_kib="$(df --output=avail / | tail -n1)"
+
+## Bulk the build never uses. amd64 carries all of these; arm64 lacks the
+## android / dotnet / swift bulk, so those are simply skipped below.
+bulk_paths=(
+   /usr/local/lib/android
+   /opt/hostedtoolcache/CodeQL
+   /usr/local/.ghcup
+   /opt/ghc
+   /usr/share/dotnet
+   /usr/share/swift
+)
+
+for path in "${bulk_paths[@]}"; do
+   if [ -e "$path" ]; then
+      printf 'free-disk: removing %s\n' "$path"
+      sudo rm --recursive --force -- "$path" || true
+   fi
+done
+
+if command -v docker >/dev/null 2>&1; then
+   printf 'free-disk: pruning docker images\n'
+   docker image prune --all --force || true
+fi
+
+after_kib="$(df --output=avail / | tail -n1)"
+printf 'free-disk: reclaimed ~%s MiB on /\n' "$(( (after_kib - before_kib) / 1024 ))"

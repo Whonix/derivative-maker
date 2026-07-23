@@ -107,7 +107,7 @@ main() {
       return 0
    fi
 
-   if [ "${dist_build_fast2:-}" = "2" ]; then
+   if [ "${dist_build_fast2:-}" = "1" ]; then
       true "${bold}${cyan}INFO: run with '--fast 2' switch, skipping ${BASH_SOURCE[0]}. ${reset}"
       return 0
    fi

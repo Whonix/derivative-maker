@@ -1,0 +1,54 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Install diffoscope and the format-descent helpers the reproducibility lane
+## (.github/workflows/local-build.yml) needs to compare two build images.
+## Kept as a ci/ script (github-actions-security.md rule 7) so this post-checkout
+## shell is shellcheck / 'bash -n' covered and runnable locally, rather than an
+## inline workflow 'run:' block.
+##
+## diffoscope comes from trixie-backports, not trixie: trixie ships 297, which
+## OOMs when diffing a large DIFFERING member of two multi-GB images, whereas
+## backports (>= 302, currently 306) has the streaming fix. Identical images
+## short-circuit either way, but a real difference must produce a report, not an
+## OOM. trixie-backports is enabled below and diffoscope pulled from it with
+## '-t'; the descenders resolve from trixie as normal (they have no backports
+## candidate, so '-t' does not disturb them).
+##
+## --no-install-recommends keeps diffoscope's large optional recommends (LaTeX
+## and friends) out; the descenders the lane's images actually need are named
+## explicitly: ISO 9660 (genisoimage), squashfs (squashfs-tools), tar/OVA
+## (built-in), qcow2 / vmdk / vdi (qemu-utils' qemu-img), 7z containers
+## (p7zip-full), raw hexdump (xxd), and fakeroot so squashfs/device nodes and
+## ownership compare fully. reproducible-compare only WARNs on a missing
+## descender, so an unlisted format degrades gracefully.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
+
+MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
+
+## Enable trixie-backports so diffoscope can be pulled from it: copy the static
+## ci/trixie-backports.sources drop-in (a single suite; the build's own sources
+## are untouched) rather than generating it inline.
+sudo cp -- "${MYDIR}/trixie-backports.sources" /etc/apt/sources.list.d/trixie-backports.sources
+
+sudo apt-get update
+sudo apt-get install --yes --no-install-recommends -t trixie-backports \
+   diffoscope \
+   genisoimage \
+   squashfs-tools \
+   fakeroot \
+   xxd \
+   p7zip-full \
+   qemu-utils

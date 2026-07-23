@@ -128,7 +128,21 @@ export HOMEVAR_VBOX_TEMP
 
 [ -n "${HOMEVAR:-}" ] || HOMEVAR="/home/$user_name"
 export HOMEVAR
-[ -n "${binary_build_folder_dist:-}" ] || binary_build_folder_dist="$HOMEVAR/derivative-binary"
+## '--build-slot NAME' (parse-cmd, OPTIONAL) isolates this build's entire output tree AND cowbuilder
+## chroots under a per-slot subfolder ('derivative-binary/<slot>'), so several builds can run
+## concurrently on a resourceful host without colliding. UNSET by default: without a slot the layout
+## is the historical 'derivative-binary/<version>' -- defaulting the slot to "main" was reverted
+## because the extra '/main/' path level broke code hardcoding 'derivative-binary/<version>' (e.g.
+## ci/github-build's live-build / cowbuilder scratch cleanup). An explicit 'binary_build_folder_dist'
+## override still wins.
+export dist_build_slot="${dist_build_slot:-}"
+if [ -n "${binary_build_folder_dist:-}" ]; then
+   true "INFO: using explicitly set binary_build_folder_dist='$binary_build_folder_dist'"
+elif [ -n "${dist_build_slot:-}" ]; then
+   binary_build_folder_dist="$HOMEVAR/derivative-binary/$dist_build_slot"
+else
+   binary_build_folder_dist="$HOMEVAR/derivative-binary"
+fi
 export binary_build_folder_dist
 
 MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
@@ -224,10 +238,20 @@ aptgetopt_conf_add () {
 ## Avoiding "perl: warning: Setting locale failed." as suggested on
 ## https://wiki.ubuntu.com/DebootstrapChroot and
 ## https://lists.debian.org/debian-amd64/2005/08/msg00249.html.
-LANG="C"
+## 'C.UTF-8' ships with glibc (no locale generation needed, available in
+## every chroot) and keeps tool output deterministic English while staying
+## UTF-8-clean. 'LANGUAGE' is the gettext override list and must be 'C' as
+## well, otherwise it can override 'LC_MESSAGES' with a translated locale.
+## All three are passed into the cowbuilder chroots via
+## '$env_vars_keep_list'; the VBox chroot scripts additionally carry them
+## across their internal 'sudo' 'env_reset' boundary via an 'env_keep'
+## sudoers rule (see 'setup_vbox_temp_sudo').
+LANG="C.UTF-8"
 export LANG
-LC_ALL="C"
+LC_ALL="C.UTF-8"
 export LC_ALL
+LANGUAGE="C"
+export LANGUAGE
 
 ## Deterministic.
 TZ=UTC
@@ -745,6 +769,80 @@ true "${cyan}${BASH_SOURCE[0]} INFO: BUILD_INITRAMFS_PKGS (--initramfs): $BUILD_
 
 ## }}}
 
+## {{{ ISO extra packages
+##
+## The ISO reuses the shared raw image + 'build-steps.d/*_install-packages'.
+## On top of the shared VM package set, the ISO needs the live-boot /
+## installer / live-bootloader packages. Resolve them here (before
+## '*_install-packages' runs) from the same source-of-truth package lists the
+## ISO has always used, applying the per-architecture / freedom substitutions.
+##
+## Note: the baremetal host meta ('XXX_KICKSECURE_HOST_XXX') and network-conf
+## are installed by '*_install-packages' itself (flavor_meta_packages_to_install
+## and its kicksecure-network-conf handling), so they are substituted to empty
+## here. VirtualBox Guest Additions are handled by the GUI metapackage
+## ('Depends: virtualbox-guest-additions-iso', 'Breaks/Replaces' the deprecated
+## 'virtualbox-guest-utils'/'-x11'), so the live list no longer carries those.
+if [ "${dist_build_iso:-}" = "true" ]; then
+   dist_iso_grub_pc=""
+   dist_iso_shim_signed=""
+   dist_iso_grub_efi_signed=""
+   dist_iso_fwupd_signed=""
+   case "${dist_build_target_arch:-}" in
+      armhf)
+         dist_iso_fwupd_signed="fwupd-signed"
+         ;;
+      arm64)
+         dist_iso_shim_signed="shim-signed"
+         dist_iso_grub_efi_signed="grub-efi-arm64-signed"
+         dist_iso_fwupd_signed="fwupd-signed"
+         ;;
+      amd64)
+         dist_iso_grub_pc="grub-pc-bin"
+         dist_iso_shim_signed="shim-signed"
+         dist_iso_grub_efi_signed="grub-efi-amd64-signed"
+         dist_iso_fwupd_signed="fwupd-signed"
+         ;;
+   esac
+   dist_iso_firmware_nonfreedom=""
+   if [ "${build_freedom_only:-}" = "false" ]; then
+      dist_iso_firmware_nonfreedom="firmware-nonfreedom firmware-nonfreedom-noarch"
+   fi
+
+   dist_build_iso_extra_packages=""
+   dist_iso_list_file=""
+   dist_iso_pkg_line=""
+   for dist_iso_list_file in \
+      "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_live" \
+      "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_kicksecure" ; do
+      while IFS="" read -r dist_iso_pkg_line || [ -n "${dist_iso_pkg_line}" ]; do
+         ## Strip a trailing comment and surrounding whitespace.
+         dist_iso_pkg_line="${dist_iso_pkg_line%%#*}"
+         dist_iso_pkg_line="${dist_iso_pkg_line#"${dist_iso_pkg_line%%[![:space:]]*}"}"
+         dist_iso_pkg_line="${dist_iso_pkg_line%"${dist_iso_pkg_line##*[![:space:]]}"}"
+         [ -n "${dist_iso_pkg_line}" ] || continue
+         ## Per-architecture / freedom substitutions.
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_ARCHITECTURE_XXX/${dist_build_target_arch:-}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_GRUB_PC_XXX/${dist_iso_grub_pc}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_SHIM_SIGNED_XXX/${dist_iso_shim_signed}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_GRUB_EFI_SIGNED_XXX/${dist_iso_grub_efi_signed}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_FWUPD_SIGNED_XXX/${dist_iso_fwupd_signed}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_FIRMWARE_NONFREEDOM_XXX/${dist_iso_firmware_nonfreedom}}"
+         ## Installed by '*_install-packages' itself; drop from the extras.
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_HOST_XXX/}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_NETWORK_CONF_XXX/}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_NETWORK_CONF_GUI_XXX/}"
+         ## A substituted-to-empty placeholder line is skipped.
+         [ -n "${dist_iso_pkg_line}" ] || continue
+         dist_build_iso_extra_packages="${dist_build_iso_extra_packages:+${dist_build_iso_extra_packages} }${dist_iso_pkg_line}"
+      done < "${dist_iso_list_file}"
+   done
+   export dist_build_iso_extra_packages
+   true "${cyan}${BASH_SOURCE[0]} INFO: dist_build_iso_extra_packages: ${dist_build_iso_extra_packages}${reset}"
+fi
+
+## }}}
+
 if [ "${VMNAME:-}" = "unknown" ]; then
    true "variables ERROR: VMNAME is unknown. Please report this bug!"
    exit 1
@@ -1200,6 +1298,12 @@ fi
 [ -n "${dist_build_installer_dist:-}" ] || dist_build_installer_dist="false"
 export dist_build_installer_dist
 
+## Default off; '--serial-console-enable true' installs the serial-console-enable
+## package and adds a serial console (ttyS0) to the boot cmdline so the image can
+## be driven headless over a serial line (e.g. in qemu).
+[ -n "${dist_build_serial_console_enable:-}" ] || dist_build_serial_console_enable="false"
+export dist_build_serial_console_enable
+
 if [ "${dist_build_installer_dist}" = "true" ]; then
    [ -n "${ssh_uploader_account:-}" ] || ssh_uploader_account="root"
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="
@@ -1506,31 +1610,29 @@ export make_cross_build_platform_list
 ## chroots. Overridable so the (multi-gigabyte) chroots can be relocated off a
 ## small or volatile root filesystem (e.g. onto persistent '/rw' storage on
 ## Qubes). Exported so child build tools (genmkfile) inherit it.
-[ -v cowbuilder_cache_dir ] || cowbuilder_cache_dir="/var/cache/pbuilder"
+##
+## Under an explicit '--build-slot' the chroots go to a per-slot '/var/cache/pbuilder/<slot>' so
+## concurrent whole-image builds in different slots do not share one 'base.cow' (which they would
+## wipe/collide on); without a slot the historical shared '/var/cache/pbuilder' is used. Deliberately
+## NOT under '$binary_build_folder_dist': the chroots are root-owned build SCRATCH, not output --
+## placing them in the artifact tree makes the CI upload-artifact scan fail with EACCES on the 0700
+## chroot dirs. '/var/cache/pbuilder' also preserves the base.cow cache across builds. An explicit
+## override still wins (e.g. relocate onto persistent '/rw' storage on Qubes).
+if [ -n "${cowbuilder_cache_dir:-}" ]; then
+   true "INFO: using explicitly set cowbuilder_cache_dir='$cowbuilder_cache_dir'"
+elif [ -n "${dist_build_slot:-}" ]; then
+   cowbuilder_cache_dir="/var/cache/pbuilder/$dist_build_slot"
+else
+   cowbuilder_cache_dir="/var/cache/pbuilder"
+fi
 export cowbuilder_cache_dir
 
-## Translate a Debian architecture (dpkg --print-architecture style, e.g. the
-## values in make_cross_build_platform_list / dist_build_target_arch) to the
-## matching qemu-user / kernel machine name (uname -m style). Used for
-## binfmt_misc handler names ('qemu-<machine>') and cross-build emulation.
-## Prints the machine name on stdout; returns non-zero for an unmapped
-## architecture.
-dist_build_arch_to_qemu_machine() {
-   case "${1}" in
-      amd64)    printf '%s' "x86_64" ;;
-      arm64)    printf '%s' "aarch64" ;;
-      ## Both 32-bit ARM variants use the same emulator.
-      armel)    printf '%s' "arm" ;;
-      armhf)    printf '%s' "arm" ;;
-      mipsel)   printf '%s' "mipsel" ;;
-      mips64el) printf '%s' "mips64el" ;;
-      ## The emulator for ppc64el really is ppc64le. This is not a typo.
-      ppc64el)  printf '%s' "ppc64le" ;;
-      riscv64)  printf '%s' "riscv64" ;;
-      s390x)    printf '%s' "s390x" ;;
-      *)        return 1 ;;
-   esac
-}
+## The Debian-arch -> qemu machine-name map (dist_build_arch_to_qemu_machine) lives in a
+## standalone, side-effect-free fragment so dm-qemu (developer-meta-files; headless ISO
+## boot-testing) can reuse the SAME mapping without sourcing the whole build context. Single
+## source of truth -- do not re-inline it here. Used for binfmt_misc handler names
+## ('qemu-<machine>'), cross-build emulation, and dm-qemu's 'qemu-system-<machine>' binary.
+source "${dist_developer_meta_files_folder}/usr/libexec/developer-meta-files/arch-to-qemu-machine.bsh"
 
 set_cowbuilder_folders() {
    cow_folder="$cowbuilder_cache_dir/cow.cow_${dist_build_multiarch_package_item}"
@@ -1553,6 +1655,16 @@ export make_cowbuilder_dist_folder
 $SUDO_TO_ROOT rm --force -- "$dist_build_pbuilder_config_file"
 mkdir --parents -- "$binary_build_folder_dist"
 mkdir --parents -- "$make_cowbuilder_dist_folder"
+
+## pbuilder's post-bootstrap 'apt-get update' uses its own APTGETOPT, not DIST_APTGETOPT, so pass
+## the build's apt options through -- notably Acquire::Check-Valid-Until=false for '--freshness
+## frozen'. All options are plain '-o key=value' tokens (no spaces), so no per-element quoting.
+if [ "${#DIST_APTGETOPT[@]}" -gt 0 ]; then
+   pbuilder_aptgetopt_block="APTGETOPT=(${DIST_APTGETOPT[*]})
+export APTGETOPT"
+else
+   pbuilder_aptgetopt_block=""
+fi
 
 printf "%s\n" "\
 ## This is an auto generated file.
@@ -1586,6 +1698,21 @@ export APTCACHEHARDLINK
 ## Not compatible with 'set -o nounset'.
 PBUILDERSATISFYDEPENDSCMD=/usr/lib/pbuilder/pbuilder-satisfydepends-apt
 export PBUILDERSATISFYDEPENDSCMD
+
+$pbuilder_aptgetopt_block
+
+## pbuilder hard-exports 'LANG=C' and 'LC_ALL=C' when 'pbuilder-checkparams'
+## sources 'pbuilder-modules', clobbering the locale passed in through the
+## environment. This configfile is sourced AFTER that (at '--configfile'
+## argument parsing, also in 'pbuilder-checkparams'), so re-exporting here
+## restores the build's deterministic locale for everything pbuilder runs,
+## the 'pbuilder-chroot-script-*' included. The values are interpolated at
+## generation time from the assignments earlier in 'help-steps/variables'
+## (the single source of truth). 'LANGUAGE' is not touched by pbuilder but
+## is re-exported for consistency.
+export LANG=\"$LANG\"
+export LC_ALL=\"$LC_ALL\"
+export LANGUAGE=\"$LANGUAGE\"
 
 ## End of: '$dist_build_pbuilder_config_file'
 " | \
@@ -1667,6 +1794,8 @@ env_vars_keep_list="
    user_name
    LD_PRELOAD
    LC_ALL
+   LANG
+   LANGUAGE
    TZ
    DEBDEBUG
    XZ_OPT
@@ -1692,6 +1821,8 @@ env_vars_keep_list="
    dist_build_qcow2
    dist_build_raw
    dist_build_iso
+   dist_build_serial_console_enable
+   dist_build_slot
    dist_build_utm
    dist_build_install_to_root
    dist_build_source_run

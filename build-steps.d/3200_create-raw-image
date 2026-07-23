@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -208,11 +210,19 @@ create-debian-raw-image() {
    ## Sanity test.
    test -n "${dist_build_hostname}"
 
+   ## '${UNSHARE_PID_NS:-}': private PID namespace, see 'help-steps/pre'
+   ## (also for its placement after the 'VAR=val' words).
+   ##
+   ## '$DEBOOTSTRAP_PREFIX', '$UNSHARE_PID_NS' and '$use_vmefi_maybe' are
+   ## intentionally unquoted: each holds zero or more words that must split
+   ## into separate argv slots.
+   # shellcheck disable=SC2086
    $SUDO_TO_ROOT \
       --preserve-env \
          PATH="${new_path}" \
          $DEBOOTSTRAP_PREFIX \
          dist_build_multiarch_package_item="$dist_build_target_arch" \
+            ${UNSHARE_PID_NS:-} \
             bash -x -e \
                "$dist_build_grml_bin" \
                   --arch "$dist_build_target_arch" \
@@ -220,7 +230,7 @@ create-debian-raw-image() {
                   $use_vmefi_maybe \
                   --force \
                   --hostname "$dist_build_hostname" \
-                  --password "changeme" \
+                  --nopassword \
                   --release "$dist_build_apt_stable_release" \
                   --keep_src_list \
                   --verbose \
@@ -245,10 +255,11 @@ main() {
       return 0
    fi
 
-   if [ "${dist_build_iso:-}" = "true" ]; then
-       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_iso is set to true.${reset}"
-       return 0
-   fi
+   ## ISO builds now share this base raw image: the ISO is produced as another
+   ## output format of the same raw image the VM path builds (created here,
+   ## packages installed by 'build-steps.d/*_install-packages', then packed
+   ## into an ISO by 'build-steps.d/*_convert-raw-to-iso'). So this step runs
+   ## for ISO too (identical raw image), rather than being skipped.
 
    if [ "${build_dry_run:-}" = "true" ]; then
       true "${bold}${cyan}INFO: dry-run.${reset}"

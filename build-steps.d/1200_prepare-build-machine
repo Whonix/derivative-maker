@@ -100,7 +100,7 @@ build_machine_setup() {
 
    if [ "${eatmydata_install:-}" = "true" ]; then
       true "INFO: Installing eatmydata, because using '--unsafe-io true'."
-      packages_to_be_installed+=" $eatmydata "
+      packages_to_be_installed+=" eatmydata "
    else
       true "INFO: Not installing eatmydata, because not using '--unsafe-io true'."
    fi

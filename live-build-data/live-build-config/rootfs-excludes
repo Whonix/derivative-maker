@@ -1,0 +1,5 @@
+# live-build config/rootfs/excludes: mksquashfs -wildcards -ef patterns, one per line.
+# Excludes runtime /dev so the build host device topology and a per-build-varying
+# by-diskseq loop symlink are not packed into the squashfs; devtmpfs repopulates /dev
+# at boot. Full rationale in build-steps.d/3600_convert-raw-to-iso.
+dev/*

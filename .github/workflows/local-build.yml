@@ -1,79 +1,144 @@
 ---
 name: Build
 
-## Repo-private native build workflow (G-A-005 'local-' prefix): builds the
-## kicksecure-cli image for amd64 and arm64 on native runners. All build
-## logic lives in ci/github-build so the shell is lint-covered and runnable
-## locally. See agents/github-actions-security.md for the required
-## permissions / persist-credentials / fork-PR / SHA-pin patterns applied below.
+## Repo-private native reproducibility lane (G-A-005 'local-' prefix): builds
+## the same image TWICE as two INDEPENDENT jobs (separate runner VMs, the
+## reproducible-builds gold standard -- not one job building twice), then a
+## third job compares the two images with diffoscope via developer-meta-files'
+## dm-reproducible-compare. Every difference is reported (no allowlist).
+## The two builds ARE the build test, so a green run means the image both builds
+## and is reproducible.
+## Kept simple -- one target per run (the default, or a workflow_dispatch choice),
+## not a build-everything matrix, to avoid superfluous builds.
+## The compare job's conclusion IS the reproducibility pass/fail signal: green
+## == bit-for-bit reproducible, red == a difference remains.
+## Until the images are fully reproducible this lane is EXPECTED to be red; that
+## red is the honest "not there yet" signal and the diffoscope report artifact
+## says exactly what still differs. All build logic reuses ci/github-build and
+## all compare logic lives in developer-meta-files' dm-reproducible-compare-artifacts, so the
+## shell stays lint-covered and locally runnable. See
+## agents/github-actions-security.md for the pinning / permissions patterns.
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Build target to check for reproducibility."
+        type: choice
+        ## No 'default:': a choice input defaults to the first option (iso), and
+        ## the env fallback below ('inputs.target || iso') covers schedule/push.
+        options:
+          - iso
+          - virtualbox
+          - qcow2
+      flavor:
+        description: "Flavor (kicksecure-lxqt for iso; kicksecure-cli for vbox/qcow2)."
+        type: choice
+        options:
+          - kicksecure-lxqt
+          - kicksecure-cli
   push:
     branches:
       - '**ci**'
     tags:
-      - '*'
+      ## '**' not '*': '*' does not match a slash, so a slash-delimited tag would
+      ## silently skip the gate.
+      - '**'
+  schedule:
+    ## Weekly, Sundays 07:00 UTC (offset from the scorecard lane at 06:00 to
+    ## avoid a thundering herd on the shared runner pool).
+    - cron: '0 7 * * 0'
 
-## Least privilege (github-actions-security.md rule 1): the workflow only reads
-## the repo and uploads artifacts (artifacts use the Actions runtime backend,
-## not GITHUB_TOKEN), so deny everything else by default.
+## Least privilege (rule 1): read the repo and use the Actions artifact backend
+## only; deny everything else.
 permissions:
   contents: read
 
-## Per-ref cancellation (G-A-006 cancellable): a new push to the same branch/tag
-## cancels the in-flight build. github.ref is unique per branch and per tag.
+## Per-ref cancellation (G-A-006): a new dispatch on the same ref cancels the
+## in-flight run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+## Resolve the dispatch inputs once, with defaults that also apply to the
+## scheduled run (where inputs are empty). Fixed to amd64: the primary
+## reproducibility target; arm64 is a follow-up.
+env:
+  ## Default the scheduled (input-less) run to the cheapest mountable target:
+  ## iso is smaller than a vbox raw+vdi+ova peak and diffoscope can descend it to
+  ## localize a differing file. vbox/qcow2 stay reachable via dispatch.
+  REPRO_TARGET: ${{ inputs.target || 'iso' }}
+  REPRO_FLAVOR: ${{ inputs.flavor || 'kicksecure-lxqt' }}
+  REPRO_ARCH: amd64
+
 jobs:
   build:
-    ## Fork-PR guard (github-actions-security.md rule 3): a build-triggering job
-    ## must not run for a fork PR. Always true for the push / tag /
-    ## workflow_dispatch triggers this workflow actually uses.
+    ## Fork-PR guard (rule 3); always true for the dispatch / schedule triggers
+    ## this workflow uses.
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+        ## Two independent builds of the SAME spec. Separate matrix entries run
+        ## on separate runner VMs, so 'a' and 'b' are genuinely independent
+        ## rebuilds rather than one machine building twice.
+        copy:
+          - a
+          - b
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
-      - name: Checkout (recursive submodules)
+      - name: Checkout repository (no submodules yet)
+        ## submodules: false so the next steps can re-target each submodule's
+        ## origin URL at the fork before init.
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 0
-          ## rule 2: the build only signs/tags locally and never pushes, so drop
-          ## the checkout token rather than leave it in .git/config.
+          ## rule 2: the build only signs/tags locally and never pushes.
           persist-credentials: false
 
-      ## Cache the build's apt package downloads across runs via a runner-owned
-      ## sidecar: approx's cache dir is 101:102-owned, so actions/cache cannot
-      ## tar it directly (the root-owned-dir case the developer-meta-files
-      ## apt-install-with-cache action documents). No restore-keys (G-A-007);
-      ## the hashFiles() key invalidates on a CI/package-config change.
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        ## Must run BEFORE 'submodule update --init' so the rewrites are visible
+        ## to the recursive clone.
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        ## head_ref on a fork PR is attacker-named; route it through an env var
+        ## rather than inlining (actionlint).
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
+
+      ## Reclaim runner disk (#96); a vbox/qcow2 dispatch has the same runner
+      ## disk profile as a single build job.
+      - name: Free runner disk space
+        run: ./ci/free-disk
+
+      ## Cache plumbing (proven). The two independent
+      ## builds may share a warm cache; cache provenance does not affect a
+      ## reproducible build's output, so this only speeds the lane up. Key
+      ## includes matrix.copy so the parallel 'a'/'b' saves do not race on one
+      ## cache entry.
       - name: Restore approx package cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.approx-cache-sidecar
-          key: ${{ runner.os }}-${{ matrix.arch }}-approx-${{ hashFiles('.github/workflows/local-build.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
+          key: ${{ runner.os }}-repro-${{ matrix.copy }}-approx-${{ hashFiles('.github/workflows/local-build.yml', 'docker/derivative-maker-docker-setup', 'ci/github-build') }}
 
-      ## Cache the derivative-maker docker image: its Dockerfile RUNs
-      ## docker-setup's apt-get install of build-host tools, which hits the
-      ## mirrors directly (not approx). A hit lets build_docker_image skip the
-      ## rebuild. Keyed on docker/**; no restore-keys (G-A-007).
       - name: Restore docker image cache
         id: dmimg-cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.dm-docker-image
-          key: ${{ runner.os }}-${{ matrix.arch }}-dmimg-${{ hashFiles('docker/**') }}
+          key: ${{ runner.os }}-repro-${{ matrix.copy }}-dmimg-${{ hashFiles('docker/**') }}
 
       - name: Seed approx cache from sidecar
         run: ./ci/approx-cache-sidecar seed
@@ -82,14 +147,19 @@ jobs:
         if: steps.dmimg-cache.outputs.cache-hit == 'true'
         run: ./ci/dm-docker-image-cache load
 
-      - name: Build kicksecure-cli (${{ matrix.arch }})
-        ## CI=true tells docker-run this is headless; ARCH is routed through env
-        ## (rule 4: no ${{ }} interpolation into run:). All build logic lives in
-        ## ci/github-build (rule 7).
+      - name: Build ${{ matrix.copy }} (${{ env.REPRO_FLAVOR }} ${{ env.REPRO_TARGET }} amd64)
+        ## rule 4: route every value through env, never interpolate into run:.
         env:
           CI: "true"
-          ARCH: ${{ matrix.arch }}
-        run: ./docker/derivative-maker-docker-run --custom ci/github-build -- --arch "${ARCH}"
+          ARCH: ${{ env.REPRO_ARCH }}
+          TARGET: ${{ env.REPRO_TARGET }}
+          FLAVOR: ${{ env.REPRO_FLAVOR }}
+          ## Pin the snapshot in BOTH independent builds: without --freshness
+          ## frozen the two runner VMs can pull different package versions and
+          ## the lane reports non-reproducible for a reason that is not the
+          ## build's fault.
+          FRESHNESS: frozen
+        run: ./docker/derivative-maker-docker-run -- ci/github-build --arch "${ARCH}" --target "${TARGET}" --flavor "${FLAVOR}" --freshness "${FRESHNESS}"
 
       - name: Save docker image to cache
         if: steps.dmimg-cache.outputs.cache-hit != 'true'
@@ -99,16 +169,88 @@ jobs:
         if: always()
         run: ./ci/approx-cache-sidecar snapshot
 
-      - name: Upload build output + logs
+      ## Upload only the released images, not the whole binary_mnt tree: the ~3GB
+      ## intermediate 'base-image.raw' would otherwise bloat each artifact to
+      ## ~4.8GB and exhaust the compare runner's disk on download. Released images
+      ## are 'Kicksecure-*' (this lane builds Kicksecure flavors) while the
+      ## intermediate is 'base-image.raw', so a prefix glob drops it with no
+      ## per-target extension logic; the comparator then picks the exact image by
+      ## extension. '**' descends the version subfolder the build writes into.
+      - name: Upload build ${{ matrix.copy }} image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: repro-image-${{ matrix.copy }}
+          path: /home/runner/binary_mnt/**/Kicksecure-*
+          if-no-files-found: error
+          retention-days: 7
+
+  compare:
+    needs: build
+    ## Fork-PR guard (rule 3), mirroring the build job; also gated by needs:build.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      ## The comparator lives in the developer-meta-files submodule
+      ## (dm-reproducible-compare-artifacts + dm-reproducible-compare), so the
+      ## submodule is checked out -- and, like the build job, its matching fork
+      ## branch when a coordinated PR carries one.
+      - name: Checkout repository (no submodules yet)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: false
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
+
+      ## Same disk reclaim as the build jobs (#96): the compare downloads two
+      ## images and builds the derivative-maker container image.
+      - name: Free runner disk space
+        run: ./ci/free-disk
+
+      - name: Download image A
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: repro-image-a
+          path: build-a
+
+      - name: Download image B
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: repro-image-b
+          path: build-b
+
+      ## Run the comparison in the SAME derivative-maker Debian container as the
+      ## build (consistency + clean layering), not bare on the runner: the source
+      ## tree and the downloaded build-a / build-b bind-mount into the container,
+      ## where ci/reproducible-compare installs diffoscope and runs the comparator.
+      ## Exit code IS the pass/fail: 0 reproducible, 1 differs (report written),
+      ## 2 environment error; a remaining difference fails the job on purpose.
+      - name: Compare images in the derivative-maker container
+        env:
+          REPORT: reproducible-report.html
+          TARGET: ${{ env.REPRO_TARGET }}
+        run: ./docker/derivative-maker-docker-run -- ci/reproducible-compare --target "${TARGET}" --dir-a build-a --dir-b build-b --output "${REPORT}"
+
+      - name: Upload diffoscope report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: kicksecure-cli-${{ matrix.arch }}
-          ## docker-run bind-mounts the build output at $HOME/binary_mnt; on
-          ## GitHub-hosted runners $HOME is /home/runner. upload-artifact does
-          ## not expand '~' or env vars, so the path is spelled out.
-          path: /home/runner/binary_mnt/
-          ## 'warn' not 'error': this step also runs on build failure (always()),
-          ## where the output dir can legitimately be empty.
+          name: reproducible-report
+          path: reproducible-report.html
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 14

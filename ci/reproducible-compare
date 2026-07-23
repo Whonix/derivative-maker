@@ -1,0 +1,38 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Runs INSIDE the derivative-maker docker container, invoked from
+##   ./docker/derivative-maker-docker-run -- ci/reproducible-compare \
+##       --target TARGET --dir-a DIR --dir-b DIR --output REPORT
+## so the reproducibility comparison runs in the SAME Debian layer as the build
+## (consistency + clean layering) instead of bare on the CI runner. It installs
+## diffoscope and the format-descent helpers, then runs the comparator; every
+## argument is forwarded to dm-reproducible-compare-artifacts unchanged.
+##
+## Exit code is the verdict: 0 reproducible, 1 differs, 2 environment error.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
+
+MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
+source_code_dir="$( dirname -- "${MYDIR}" )"
+
+"${MYDIR}/reproducible-install-deps"
+
+## The comparator's exit code IS the verdict; capture it rather than letting
+## errexit abort, so a '1 differs' propagates as the job result instead of a
+## generic failure.
+compare_exit=0
+"${source_code_dir}/packages/kicksecure/developer-meta-files/usr/bin/dm-reproducible-compare-artifacts" "$@" \
+   || compare_exit="$?"
+exit "${compare_exit}"

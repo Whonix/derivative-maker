@@ -41,6 +41,13 @@ LABEL org.opencontainers.image.vendor="ENCRYPTED SUPPORT LLC"
 COPY entrypoint.sh /usr/bin
 COPY derivative-maker-docker-start /usr/bin
 
+## COPY preserves the source file mode; under a hardened umask (e.g. 027/007)
+## the checked-out scripts are 0770 (no world-exec), so once COPY'd 0770
+## root:root they cannot be executed by the unprivileged 'user' the entrypoint
+## drops to ('sudo -u user'), failing with "Permission denied". Force 0755 so
+## the image is executable regardless of the builder's umask.
+RUN chmod 0755 /usr/bin/entrypoint.sh /usr/bin/derivative-maker-docker-start
+
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
 
 CMD ["/bin/bash"]

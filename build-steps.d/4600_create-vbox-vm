@@ -108,9 +108,12 @@ main() {
 
    ## '--preserve-env' carries the variables exported above through cowbuilder
    ## into the chroot script's environment; no env file is passed.
+   ##
+   ## '${UNSHARE_PID_NS:-}': private PID namespace, see 'help-steps/pre'.
    $SUDO_TO_ROOT \
       --preserve-env \
          ${COWBUILDER_PREFIX:-} \
+            ${UNSHARE_PID_NS:-} \
             cowbuilder \
                --host-arch "$host_architecture" \
                --architecture "$dist_build_multiarch_package_item" \

@@ -1,13 +1,43 @@
 #!/bin/bash
 
-## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Verify a built image reproduces, by comparing it against a reference build
+## with diffoscope (via developer-meta-files' 'dm-reproducible-compare').
+##
+## Image reproducibility is verified the way Debian and Tails do it (there is
+## no upstream image-level rebuilder daemon; rebuilderd et al. are package/
+## archive-oriented): build the image (at least) twice under the same pinned
+## inputs -- SOURCE_DATE_EPOCH, frozen snapshot.debian.org sources,
+## strip-nondeterminism, dracut --reproducible, all already set elsewhere --
+## and diffoscope the two outputs. diffoscope descends ISO 9660 / squashfs /
+## raw / qcow2 / OVA natively, so this step is a THIN driver around it; it does
+## not re-implement image dissection (that was the retired, 1200-line
+## 'help-steps/analyze_image' + its per-file stat+sha512 manifest scheme).
+##
+## Point 'dist_build_reproducible_reference_folder' at a reference build's
+## output folder; each built artifact is compared against the same-named
+## artifact there. Without a reference set, this is a no-op (build a reference
+## first, then rebuild with the reference configured).
+##
+## Differences are RECORDED (a '.diffoscope' report next to the artifact), not
+## treated as a build failure here -- current live images are not yet fully
+## bit-reproducible upstream either. CI can gate on the report / exit code.
+##
+## For OUR OWN .deb reproducibility, use Debian's debrebuild(1) (rebuild from
+## the package '.buildinfo' against the pinned snapshot) or reprotest(1) -- not
+## this step, which is for the final disk/ISO images.
 
 set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -20,43 +50,42 @@ cd help-steps
 source pre
 source variables
 
-analyze_target() {
-   local target image_to_analyze
+## Compare one built artifact against its counterpart in the reference folder.
+compare_target() {
+   local target artifact reference_artifact report_out compare_exit_code
    target="$1"
-   image_to_analyze="$2"
+   artifact="$2"
 
-   local topcomment
-   topcomment="\
-INFO: This is an auto-generated file.
-See https://www.whonix.org/wiki/Verifiable_Builds
-and https://www.whonix.org/wiki/Trust
-to learn what this is about.
-dist_build_current_git_head: $dist_build_current_git_head
-dist_build_new_changelog_version: $dist_build_new_changelog_version
-dist_build_version: $dist_build_version
-dist_build_install_to_root: $dist_build_install_to_root"
+   if [ ! -f "$artifact" ]; then
+      true "${cyan}INFO: no $target artifact at '$artifact', skipping.${reset}"
+      return 0
+   fi
 
-   local endcomment
-   endcomment="INFO: End."
+   reference_artifact="${dist_build_reproducible_reference_folder}/$(basename -- "$artifact")"
+   if [ ! -f "$reference_artifact" ]; then
+      true "${cyan}INFO: no reference $target artifact at '$reference_artifact', skipping compare.${reset}"
+      return 0
+   fi
 
-   local errorcomment
-   errorcomment="ERROR: Unfinished report! Error detected!"
+   report_out="$binary_build_folder_dist/$(basename -- "$artifact").diffoscope.txt"
+   true "${cyan}INFO: comparing $target build vs reference with diffoscope...${reset}"
 
-   true "${cyan}INFO: analyzing $target... ${reset}"
+   ## reproducible-compare returns 1 when the artifacts differ; record it, do
+   ## not fail the build on non-reproducibility.
+   compare_exit_code="0"
+   "$dist_developer_meta_files_folder/usr/bin/dm-reproducible-compare" \
+      --output "$report_out" \
+      "$reference_artifact" \
+      "$artifact" \
+      || compare_exit_code="$?"
 
-   report_file="$binary_build_folder_dist/$VMNAME-$dist_build_version.$target.report"
-   report_tempfolder="$binary_build_folder_dist/$VMNAME-${dist_build_version}_report_${target}_tempfolder"
-
-   "$dist_source_help_steps_folder/analyze_image" \
-      $minimal_report_maybe \
-      --topcomment "$topcomment" \
-      --endcomment "$endcomment" \
-      --errorcomment "$errorcomment" \
-      --report "$report_file" \
-      --tempfolder "$report_tempfolder" \
-      "--$target" "$image_to_analyze"
-
-   true "${cyan}INFO: Done, analyzed $target. ${reset}"
+   if [ "$compare_exit_code" = "0" ]; then
+      true "${bold}${green}INFO: $target reproducible: identical to the reference build.${reset}"
+   elif [ "$compare_exit_code" = "1" ]; then
+      true "${bold}${red}WARNING: $target differs from the reference build; see '$report_out'.${reset}"
+   else
+      error "reproducible-compare failed for $target (exit $compare_exit_code)."
+   fi
 }
 
 main() {
@@ -75,26 +104,28 @@ main() {
       return 0
    fi
 
-   local report_file report_tempfolder
-
-   if [ "${dist_build_install_to_root:-}" = "true" ]; then
-      analyze_target "root" "/"
+   if [ "${dist_build_reproducible_reference_folder:-}" = "" ]; then
+      true "${bold}${cyan}INFO: dist_build_reproducible_reference_folder is unset, so there is no reference \
+build to compare against; skipping. To verify reproducibility, build a reference, then rebuild with \
+dist_build_reproducible_reference_folder pointing at it (or run 'dm-reproducible-compare' on two \
+build outputs directly).${reset}"
+      return 0
    fi
 
    if [ "${dist_build_raw:-}" = "true" ]; then
-      analyze_target "raw" "$binary_image_raw_file"
+      compare_target "raw" "$binary_image_raw_file"
    fi
 
    if [ "${dist_build_virtualbox:-}" = "true" ]; then
-      analyze_target "ova" "$binary_image_ova_file"
+      compare_target "ova" "$binary_image_ova_file"
    fi
 
    if [ "${dist_build_qcow2:-}" = "true" ]; then
-      analyze_target "qcow2" "$binary_image_qcow2_file"
+      compare_target "qcow2" "$binary_image_qcow2_file"
    fi
 
    if [ "${dist_build_iso:-}" = "true" ]; then
-      error "Not implemented!"
+      compare_target "iso" "$binary_image_iso_file"
    fi
 }
 

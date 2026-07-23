@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -23,7 +25,7 @@ ${red}${bold}ERROR ${BASH_SOURCE[0]}: | caller: $(caller)${reset}"
 }
 
 unmount_raw() {
-   trap "exception_handler_unmount-raw" ERR INT TERM
+   trap exception_handler_unmount-raw ERR INT TERM
 
    if [ "${mount_folder:-}" = "" ]; then
       true

@@ -39,8 +39,14 @@ keyutils
 efibootmgr
 
 ## VM integration
-virtualbox-guest-utils
-virtualbox-guest-x11
+## NOTE: VirtualBox Guest Additions are NOT installed via
+## 'virtualbox-guest-utils' / 'virtualbox-guest-x11' anymore. Those are
+## deprecated and are 'Breaks/Replaces'-ed by the GUI metapackages
+## ('dist-baremetal-gui-all' / 'dist-vm-gui-all'), which instead
+## 'Depends: virtualbox-guest-additions-iso' (Oracle-ISO-derived, installed at
+## runtime by 'vbox-guest-installer' from package 'vm-config-dist'). The
+## metapackage pulls it in on both baremetal/ISO and VM, so nothing is listed
+## here. See packages/kicksecure/developer-meta-files/metapackage-data/README.md.
 spice-vdagent
 
 ## Kernel

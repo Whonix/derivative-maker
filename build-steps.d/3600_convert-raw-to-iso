@@ -22,6 +22,12 @@ cd help-steps
 source pre
 source variables
 
+## On failure or signal, unmount the host /dev, /sys, /proc bind-mounts
+## this step establishes for its chroot_run interludes (only the success
+## path unmounts them inline), so the ISO-cleanup deletion cannot recurse
+## into the real /dev; see 'help-steps/unmount-lb'.
+exception_handler_setup "exception_handler_unmount_lb" ERR INT TERM
+
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/check_runtime.bsh"
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/strings.bsh"
 
@@ -61,7 +67,14 @@ create-live-build-image() {
    true "INFO: sudo test"
    $SUDO_TO_ROOT test -d /usr
 
-   $SUDO_TO_ROOT lb clean # In case there's a leftover build tree present.
+   ## '${UNSHARE_PID_NS:-}': private PID namespace, see 'help-steps/pre'.
+   ## Applied to every root-run 'lb' phase (clean, bootstrap, chroot,
+   ## binary): each phase is a self-contained chroot session, so nothing it
+   ## starts (the classic live-build leak is a chroot 'gpg-agent') may
+   ## outlive it. The unprivileged 'lb config' calls generate config files
+   ## only and stay unwrapped ('unshare --pid' needs root).
+   # shellcheck disable=SC2086
+   $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb clean # In case there's a leftover build tree present.
 
    mkdir --parents -- auto
 
@@ -140,6 +153,15 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    ## Sanity test.
    test -n "${dist_build_hostname}"
 
+   ## '--serial-console-enable true': add a serial console (ttyS0) to the live
+   ## boot cmdline so the kernel, dracut and systemd log to the serial line and
+   ## the ISO can be driven headless (e.g. under qemu with '-nographic'). Keep
+   ## 'console=tty0' last so the normal display stays the primary console.
+   serial_console_cmdline=""
+   if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
+      serial_console_cmdline=" console=tty0 console=ttyS0,115200n8"
+   fi
+
    printf '%s\n' "#!/bin/sh
 
 lb config noauto \\
@@ -152,7 +174,7 @@ lb config noauto \\
    --archive-areas 'main contrib non-free non-free-firmware' \\
    --backports true \\
    --binary-image iso-hybrid \\
-   --bootappend-live 'rd.live.overlay.overlayfs=1 boot=live components splash live-config.hostname=${dist_build_hostname} rd.live.image root=live:CDLABEL=${dist_build_type_short} rd.live.dir=live rd.live.squashimg=filesystem.squashfs' \\
+   --bootappend-live 'rd.live.overlay.overlayfs=1 boot=live components splash live-config.hostname=${dist_build_hostname} rd.live.image root=live:CDLABEL=${dist_build_type_short} rd.live.dir=live rd.live.squashimg=filesystem.squashfs${serial_console_cmdline}' \\
    --bootappend-live-failsafe 'none' \\
    --cache false \\
    --checksums md5 \\
@@ -222,7 +244,17 @@ Enabled: no
 Signed-By: /usr/share/keyrings/fasttrack-archive-keyring.gpg" | sponge -- archives/fasttrack.sources.chroot
    if [ "${build_remote_derivative_pkgs}" = 'true' ]; then
       printf '%s\n' "$sources_list_build_remote_derivative" | sponge -- archives/derivative-temp.sources.chroot
-      cp -- "${source_code_folder_dist}/packages/kicksecure/repository-dist/usr/share/keyrings/derivative.asc" archives/derivative-temp.key.chroot
+      ## 'install -m 0644' (NOT 'cp'): the source derivative.asc is mode 0660 (no world-read),
+      ## and 'cp' preserves that -- 'umask 0022' above only CLEARS bits, it cannot ADD the
+      ## world-read bit the source lacks, so a plain copy lands as 0640. live-build then installs
+      ## the key into the chroot's /etc/apt/trusted.gpg.d/ at 0640, where the unprivileged '_apt'
+      ## user cannot read it. apt therefore IGNORES the key ("The key(s) in the keyring
+      ## /etc/apt/trusted.gpg.d/derivative-temp.key.chroot.asc are ignored as the file is not
+      ## readable by user '_apt' ...") and, since the 'derivative-temp.sources' entry has no
+      ## Signed-By and falls back to this global keyring, sqv fails the derivative repo with
+      ## "Missing key 6E979B28...", aborting 'lb chroot'. Force 0644 so _apt can read the
+      ## (public) key.
+      install -m 0644 -- "${source_code_folder_dist}/packages/kicksecure/repository-dist/usr/share/keyrings/derivative.asc" archives/derivative-temp.key.chroot
    else
       if [ "${build_dry_run:-}" = "true" ]; then
          true "${bold}${cyan}INFO: Dry-run, skipping setting readlink_result_live_build_localrepo_location. ${reset}"
@@ -238,88 +270,24 @@ Enabled: yes
 Trusted: yes" > archives/derivative-localrepo.sources.chroot
    fi
 
-   ## Apt configuration
-   live_build_package_pins="Package: calamares
-Pin: release n=${dist_build_apt_stable_release}-backports
-Pin-Priority: 900"
-   printf '%s\n' "${live_build_package_pins}" | sponge -- archives/z-kicksecure.pref.chroot
+   ## No live-build package lists are generated: the package set is installed
+   ## into the shared raw image by 'build-steps.d/*_install-packages' (the ISO
+   ## extras are resolved in 'help-steps/variables' as
+   ## 'dist_build_iso_extra_packages', from the same source-of-truth live
+   ## package lists, with the per-architecture / freedom substitutions). This
+   ## step only packs the already-installed rootfs into an ISO, so 'lb chroot'
+   ## has nothing to install.
 
-   ## Package lists
-   mkdir --parents -- package-lists
-   cp -- "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_live" package-lists/live.list.chroot
-   ## NOTE: This file is called 'z-kicksecure.list.chroot' because the list
-   ## files are handled in alphabetical order and these packages MUST be
-   ## handled last.
-   cp -- "${source_code_folder_dist}/live-build-data/live-build-config/live_build_package_list_kicksecure" package-lists/z-kicksecure.list.chroot
-
-   ## Replace linux-image-XXX_ARCHITECTURE_XXX and linux-headers-XXX_ARCHITECTURE_XXX with actual ${dist_build_target_arch}.
-   sed -i "s/XXX_ARCHITECTURE_XXX/${dist_build_target_arch}/" package-lists/z-kicksecure.list.chroot
-
-   case "${dist_build_target_arch}" in
-      armel|mipsel|mips64el|riscv64|ppc64el|s390x)
-         ## no grub-pc
-         ## no shim-signed
-         ## no signed grub-efi
-         ## no fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         ;;
-      armhf)
-         ## no grub-pc
-         ## no shim-signed
-         ## no signed grub-efi
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-      arm64)
-         ## no grub-pc
-         ## has shim-signed
-         ## has signed grub-efi
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX//' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX/shim-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX/grub-efi-arm64-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-      amd64)
-         ## has grub-pc
-         ## has shim-signed
-         ## has signed grub-efi for 64-bit systems
-         ## has fwupd-signed
-         sed -i 's/XXX_GRUB_PC_XXX/grub-pc-bin/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_SHIM_SIGNED_XXX/shim-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_GRUB_EFI_SIGNED_XXX/grub-efi-amd64-signed/' package-lists/z-kicksecure.list.chroot
-         sed -i 's/XXX_FWUPD_SIGNED_XXX/fwupd-signed/' package-lists/z-kicksecure.list.chroot
-         ;;
-   esac
-   if [ "${build_freedom_only:-}" = "true" ]; then
-      sed -i 's/XXX_FIRMWARE_NONFREEDOM_XXX//' package-lists/z-kicksecure.list.chroot
-   elif [ "${build_freedom_only:-}" = "false" ]; then
-      sed -i 's/XXX_FIRMWARE_NONFREEDOM_XXX/firmware-nonfreedom\nfirmware-nonfreedom-noarch/' package-lists/z-kicksecure.list.chroot
-   fi
-
-   ## Example flavor_meta_packages_to_install:
-   ## kicksecure-baremetal-gui-lxqt kicksecure-baremetal-server
-
-   live_build_flavor_line_list="$(trim_collapse_split "${flavor_meta_packages_to_install}")"
-   ## Example live_build_flavor_line_list:
-   ## kicksecure-baremetal-gui-lxqt \
-   ## kicksecure-baremetal-server
-
-   sed -i "s/XXX_KICKSECURE_HOST_XXX/${live_build_flavor_line_list}/" package-lists/z-kicksecure.list.chroot
-
-   if [ "${dist_build_type_short:-}" = 'kicksecure' ]; then
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_XXX/kicksecure-network-conf/" package-lists/z-kicksecure.list.chroot
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_GUI_XXX/kicksecure-network-conf-gui/" package-lists/z-kicksecure.list.chroot
-   else
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_XXX//" package-lists/z-kicksecure.list.chroot
-      sed -i "s/XXX_KICKSECURE_NETWORK_CONF_GUI_XXX//" package-lists/z-kicksecure.list.chroot
-   fi
+   ## Exclude runtime /dev from the squashfs. A live image's /dev is populated by devtmpfs at
+   ## boot and must NOT ship the build host's device topology. This step keeps the host /dev
+   ## bind-mounted during 'lb binary' (so /dev/null works for grub-install; see the /dev
+   ## unmount note further down), so mksquashfs would otherwise pack the host's /dev -- the
+   ## build-host disk UUIDs (dev/disk/by-uuid -> xvd*, dev/block) and a per-build-varying
+   ## dev/disk/by-diskseq/<loop-seq> symlink -- non-reproducible runtime state, and a privacy
+   ## leak of the build host's storage layout. live-build feeds config/rootfs/excludes to
+   ## mksquashfs as '-wildcards -ef'; the empty /dev directory itself is kept.
+   mkdir --parents -- rootfs
+   cp -- "${source_code_folder_dist}/live-build-data/live-build-config/rootfs-excludes" rootfs/excludes
 
    ## Branding and GRUB configuration
    mkdir --parents -- bootloaders
@@ -329,6 +297,22 @@ Pin-Priority: 900"
    mkdir --parents -- 'includes.installer/usr/share/themes/Clearlooks/gtk-2.0'
    cp -- "${source_code_folder_dist}/live-build-data/d-i-theme/gtkrc" includes.installer/usr/share/themes/Clearlooks/gtk-2.0/gtkrc
    sed -i "s|@DIST_NAME@|${dist_build_type_short_pretty}|; s|@DIST_VERSION@|${dist_build_version}|;" bootloaders/grub-pc/splash.svg
+
+   ## '--serial-console-enable true': make the GRUB boot MENU itself reachable
+   ## over the serial line (in addition to the display), so the ISO can be
+   ## driven headless from the GRUB menu onward, not just after the kernel
+   ## starts. grub.cfg's first line 'source /boot/grub/config.cfg' runs
+   ## 'terminal_output gfxterm', so this must be added AFTER that source (append
+   ## to the end) and use '--append' -- otherwise gfxterm clobbers the serial
+   ## output terminal. '--append' keeps the graphical terminal and ADDS serial,
+   ## so the menu renders to both.
+   if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
+      printf '%s\n' \
+         'serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1' \
+         'terminal_input --append serial' \
+         'terminal_output --append serial' \
+         >> bootloaders/grub-pc/grub.cfg
+   fi
 
    ## d-i config
    cp -- "${source_code_folder_dist}/live-build-data/preseed.cfg" includes.installer/preseed.cfg
@@ -342,6 +326,10 @@ Pin-Priority: 900"
 
    if [ "${build_dry_run:-}" = "true" ]; then
       true "${bold}${cyan}INFO: Dry-run, skipping the rest of ${BASH_SOURCE[0]}. ${reset}"
+      ## The bootstrap-mirror temp files are otherwise cleaned only after
+      ## 'lb bootstrap' (below), which the dry-run never reaches; remove them
+      ## here so repeated CI dry-runs do not accumulate stray files in /tmp.
+      safe-rm -f -- "${live_build_bootstrap_mirror_file}" "${live_build_bootstrap_mirror_security_file}" "${live_build_parent_bootstrap_mirror_file}" "${live_build_parent_bootstrap_mirror_security_file}"
       ## Cannot be completely empty, or torrent creation would later fail during the prepare-release step.
       printf '%s\n' "dummy" | sponge -- "${binary_image_iso_file}"
       return 0
@@ -352,8 +340,33 @@ Pin-Priority: 900"
       test -d "${dist_apt_repository_folder}"
    fi
 
-   ## Build ISO bootstrap
-   if ! $SUDO_TO_ROOT lb bootstrap --verbose --debug; then
+   ## The rootfs comes from the shared base raw image: built by
+   ## 'build-steps.d/*_create-raw-image' and fully package-installed (VM set +
+   ## ISO extras) by 'build-steps.d/*_install-packages', exactly like a VM
+   ## build. Mount that raw image and seed its rootfs into live-build's
+   ## bootstrap cache so 'lb bootstrap' adopts it (no debootstrap, no second
+   ## package install). live-build is thereby reduced to the parts it is
+   ## uniquely good at: the BIOS+EFI bootloader matrix, squashfs, and
+   ## hybrid-ISO packing ('lb binary'). 'mount-raw' loop-mounts the raw image
+   ## at CHROOT_FOLDER; 'lb bootstrap' below reassigns CHROOT_FOLDER to the
+   ## live-build chroot for the finishing steps.
+   "$dist_source_help_steps_folder/mount-raw" "${args[@]}"
+   ## Unmount the raw image even if seeding fails. This step's ERR trap
+   ## ('exception_handler_unmount_lb') only tears down mounts under the
+   ## live-build tree, NOT this raw-image loop-mount at CHROOT_FOLDER (a
+   ## sibling of 'live-build/'), so guard the seed explicitly to avoid leaving
+   ## a dangling loop / device-mapper mount behind on failure.
+   if ! "$dist_source_help_steps_folder/lb-seed-rootfs-cache" \
+      --rootfs "${CHROOT_FOLDER}" \
+      --lb-dir "$PWD"; then
+      "$dist_source_help_steps_folder/unmount-raw" "${args[@]}" || true
+      error "seeding the live rootfs from the raw image into live-build's cache failed"
+   fi
+   "$dist_source_help_steps_folder/unmount-raw" "${args[@]}"
+
+   ## Build ISO bootstrap (adopts the seeded rootfs from cache; no debootstrap)
+   # shellcheck disable=SC2086
+   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb bootstrap --verbose --debug; then
       error "${bold}${red}ERROR: Live build bootstrap stage failed!${reset}"
    fi
 
@@ -380,6 +393,19 @@ Pin-Priority: 900"
    $SUDO_TO_ROOT mkdir --parents -- "${CHROOT_FOLDER}/etc"
    $SUDO_TO_ROOT cp -- "${source_code_folder_dist}/live-build-data/live-build-config/live_build_kernel_img_conf" "${CHROOT_FOLDER}/etc/kernel-img.conf"
 
+   ## Reset /etc/fstab for the LIVE image to the empty debootstrap default -- exactly what the
+   ## released ISO ships ("# UNCONFIGURED FSTAB FOR BASE SYSTEM"). The rootfs is SEEDED from the
+   ## raw VM image (help-steps/lb-seed-rootfs-cache), so it carries the grml-debootstrap fstab
+   ## that mounts the VM's root disk and EFI System Partition BY UUID. Those devices do not
+   ## exist in a live boot, so boot-efi.mount (and systemd-fsck@<esp-uuid>) time out,
+   ## local-fs.target fails, and systemd drops to emergency.target -- a headless serial boot then
+   ## hangs at the "Press Enter for maintenance" prompt. The live rootfs is a RAM overlay mounted
+   ## by the initrd (rd.live.* on the kernel cmdline) and needs no disk fstab; systemd mounts
+   ## proc/sys/dev/run automatically. (Regression from the seed-from-raw-image change: a
+   ## freshly-debootstrapped live image had the empty fstab restored here.)
+   printf '%s\n' "# UNCONFIGURED FSTAB FOR BASE SYSTEM" \
+      | $SUDO_TO_ROOT tee -- "${CHROOT_FOLDER}/etc/fstab" >/dev/null
+
    ## Suppress generation of a MOK when DKMS modules are installed.
    $SUDO_TO_ROOT mkdir --parents -- "${target_dkms_suppress_mok_snippet%/*}"
    $SUDO_TO_ROOT cp --verbose -- "$source_dkms_suppress_mok_snippet" "$target_dkms_suppress_mok_snippet"
@@ -388,8 +414,11 @@ Pin-Priority: 900"
    $SUDO_TO_ROOT mkdir --parents -- "${target_dracut_disable_config_snippet%/*}"
    $SUDO_TO_ROOT cp --verbose -- "$source_dracut_disable_config_snippet" "$target_dracut_disable_config_snippet"
 
-   ## Build ISO chroot
-   if ! $SUDO_TO_ROOT lb chroot --verbose --debug; then
+   ## Build ISO chroot ('lb chroot' installs nothing -- no package lists were
+   ## generated; the package set is already in the shared raw image -- so it
+   ## only runs the live-specific finishing: live-config, etc.)
+   # shellcheck disable=SC2086
+   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb chroot --verbose --debug; then
       error "${bold}${red}ERROR: Live build chroot stage failed!${reset}"
    fi
 
@@ -563,11 +592,32 @@ Not running any chroot scripts.${reset}"
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/proc"
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/sys"
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/dev/pts"
-   $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/dev"
+   ## Do NOT unmount "${CHROOT_FOLDER}/dev" before 'lb binary' -- keep the host /dev
+   ## bind-mounted (established above). The live rootfs is SEEDED from the raw image
+   ## (help-steps/lb-seed-rootfs-cache), whose on-disk /dev is empty/broken (mmdebstrap
+   ## creates no static device nodes; devtmpfs is runtime-only), and live-build's binary
+   ## stage mounts /dev/pts, /proc and /sys but NOT /dev. Unmounting /dev here therefore
+   ## left the chroot with no working /dev/null, so every '> /dev/null' in the binary stage
+   ## (the security-misc permission-hardener trigger fired by grub-efi install, man-db, and
+   ## live-build's own binary.sh) failed with "cannot create /dev/null: Permission denied",
+   ## aborting the ISO ~40min in. Keeping the real host /dev mounted shadows the broken
+   ## seeded nodes with working ones (/dev/null, /dev/ptmx, ...); the final unmount-lb sweep
+   ## and the ERR trap tear it down afterwards. Where the seed already has valid nodes (CI),
+   ## the bind-mount simply shadows equivalents, so behaviour there is unchanged.
    $SUDO_TO_ROOT umount "${CHROOT_FOLDER}/run"
 
+   ## 'lb chroot' ran blkid (via grub-efi install / update-initramfs) BEFORE the tmpfs
+   ## /run mount earlier, so the build host's per-build loop-device UUIDs were written to
+   ## the on-disk "${CHROOT_FOLDER}/run/blkid/blkid.tab"(.old). The tmpfs shadowed that
+   ## file and the umount above just re-exposed it; 'lb binary' below would pack it into
+   ## filesystem.squashfs and break bit-for-bit reproducibility. initializer-dist's
+   ## 80_cleanup clears this during the rootfs build, but live-build regenerates it here.
+   ## /run is runtime tmpfs state and must be empty in a shipped image, so drop the cache.
+   $SUDO_TO_ROOT safe-rm --recursive --force -- "${CHROOT_FOLDER}/run/blkid"
+
    ## Package into an ISO
-   if ! $SUDO_TO_ROOT lb binary --verbose --debug; then
+   # shellcheck disable=SC2086
+   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb binary --verbose --debug; then
       error "${bold}${red}ERROR: Live build binary stage failed!${reset}"
    fi
 
@@ -581,6 +631,17 @@ Not running any chroot scripts.${reset}"
 
    ## Revert back to the original umask.
    umask -- "$old_umask"
+
+   ## Final sweep: unmount any host /dev,/sys,/proc bind still under the tree
+   ## after a successful build. Normally a no-op (the inline umounts above
+   ## already ran), but it gives local/non-CI callers the same mount
+   ## verification the CI wrapper gets, so a later deletion of the output
+   ## tree cannot interact with a leftover bind mount. unmount-lb is
+   ## best-effort (it warns but returns success); '|| true' is defensive
+   ## belt-and-suspenders so a non-zero from its sourced 'pre'/'variables'
+   ## chain can never fail a build whose ISO is already written (this
+   ## codebase's ERR trap fires on a non-zero command even with errexit off).
+   "$dist_source_help_steps_folder/unmount-lb" "${args[@]}" || true
 }
 
 main() {

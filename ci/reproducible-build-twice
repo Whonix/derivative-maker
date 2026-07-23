@@ -1,0 +1,204 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Build ONE target TWICE with identical inputs and compare the two images for
+## bit-for-bit reproducibility. This is the dev-runnable local equivalent of the
+## local-build CI workflow (two independent builds + a compare): a
+## developer can reproduce, and iterate on, a reproducibility failure on their own
+## machine without a CI round-trip.
+##
+## Usage:
+##   ci/reproducible-build-twice --target <iso|virtualbox|qcow2> --arch <amd64|arm64> \
+##       [--flavor FLAVOR] [--freshness frozen] [--output-dir DIR]
+##
+## --target      image type to build twice (iso | virtualbox | qcow2).
+## --arch        build architecture (required, e.g. amd64) -- not defaulted, so the
+##               compared arch is always explicit.
+## --flavor      derivative flavor; defaults per target (iso -> kicksecure-lxqt,
+##               virtualbox/qcow2 -> kicksecure-cli).
+## --freshness   passed through to the build (default 'frozen': pins the Debian
+##               snapshot, without which two builds diverge on package versions).
+## --output-dir  where the two images + report are collected (default a fresh
+##               directory beside the repo). Needs a few GB free.
+##
+## The two builds run SEQUENTIALLY, never concurrently: two full image builds at
+## once exhaust RAM/disk on a modest host. The verdict is a whole-file sha256
+## comparison of the two images (equal == bit-for-bit reproducible, for any
+## target). On a mismatch it additionally runs diffoscope on the two images to
+## LOCALIZE the difference to the specific in-image file(s), which is what you
+## then go and fix. diffoscope unpacks the container itself (iso -> squashfs,
+## qcow2 via qemu-img, ova tar -> vmdk), so no custom extraction is needed.
+##
+## Exit: 0 reproducible, 1 differ, 2 usage error, 3 a build failed.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## style-ok: no-has
+
+MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
+source_code_folder_dist="$( cd -- "$MYDIR/.." && pwd )"
+
+usage() {
+   printf '%s\n' "Usage:
+  ${0##*/} --target <iso|virtualbox|qcow2> --arch <amd64|arm64> [--flavor FLAVOR] [--freshness frozen] [--output-dir DIR]" >&2
+   exit 2
+}
+
+target=""
+flavor=""
+arch=""
+freshness="frozen"
+output_dir=""
+while [ "$#" -gt 0 ]; do
+   case "$1" in
+      --target)
+         [ "$#" -ge 2 ] || usage
+         target="$2"
+         shift 2
+         ;;
+      --flavor)
+         [ "$#" -ge 2 ] || usage
+         flavor="$2"
+         shift 2
+         ;;
+      --arch)
+         [ "$#" -ge 2 ] || usage
+         arch="$2"
+         shift 2
+         ;;
+      --freshness)
+         [ "$#" -ge 2 ] || usage
+         freshness="$2"
+         shift 2
+         ;;
+      --output-dir)
+         [ "$#" -ge 2 ] || usage
+         output_dir="$2"
+         shift 2
+         ;;
+      *)
+         printf '%s\n' "${0##*/}: unexpected argument: $1" >&2
+         usage
+         ;;
+   esac
+done
+
+case "$target" in
+   iso)
+      artifact_glob="*.iso"
+      [ -n "$flavor" ] || flavor="kicksecure-lxqt"
+      ;;
+   virtualbox)
+      artifact_glob="*.ova"
+      [ -n "$flavor" ] || flavor="kicksecure-cli"
+      ;;
+   qcow2)
+      artifact_glob="*.qcow2"
+      [ -n "$flavor" ] || flavor="kicksecure-cli"
+      ;;
+   *)
+      printf '%s\n' "${0##*/}: unknown or missing --target (want iso|virtualbox|qcow2)" >&2
+      usage
+      ;;
+esac
+
+if [ -z "$arch" ]; then
+   printf '%s\n' "${0##*/}: --arch is required (e.g. amd64)." >&2
+   usage
+fi
+
+if [ -z "$output_dir" ]; then
+   output_dir="$( mktemp --directory --tmpdir="${source_code_folder_dist%/*}" reproducible-build-twice.XXXXXX )"
+fi
+mkdir --parents -- "$output_dir"
+report="$output_dir/report.txt"
+
+## Remove a prior build's image tree so 'find' below sees only the current build's
+## output. Left deliberately narrow: it clears only the emitted-binary directory.
+clean_binary() {
+   safe-rm --recursive --force -- "$source_code_folder_dist/derivative-binary/"* 2>/dev/null || true
+}
+
+## Run one build and collect its artifact into $output_dir/<tag>/.
+build_one() {
+   local tag="$1" dest="$output_dir/$2" build_rc found
+   printf '%s\n' "=== build ${tag}: ${flavor} ${target} ${arch} (freshness=${freshness}) ==="
+   clean_binary
+   build_rc=0
+   ## pushd/popd rather than a '( cd && ... )' subshell: scopes the cd without a
+   ## subshell (and dodges the errexit-in-conditional-subshell footgun).
+   pushd -- "$source_code_folder_dist" >/dev/null
+   ./ci/github-build --arch "$arch" --target "$target" --flavor "$flavor" --freshness "$freshness" || build_rc="$?"
+   popd >/dev/null
+   if [ "$build_rc" -ne 0 ]; then
+      printf '%s\n' "${0##*/}: build ${tag} failed (exit ${build_rc})" >&2
+      exit 3
+   fi
+   ## Take the first match via parameter expansion, not 'head -1': head closes the
+   ## pipe after one line, which would SIGPIPE find/sort (exit 141 under pipefail +
+   ## inherit_errexit) once their output exceeds the pipe buffer, breaking the exit
+   ## contract with no diagnostic.
+   found="$( find "$source_code_folder_dist/derivative-binary" -type f -name "$artifact_glob" | LC_ALL=C sort )"
+   found="${found%%$'\n'*}"
+   if [ -z "$found" ]; then
+      printf '%s\n' "${0##*/}: build ${tag} produced no ${artifact_glob}" >&2
+      exit 3
+   fi
+   ## Start from a clean $dest: a rerun into the same --output-dir with a different --flavor
+   ## must not leave a stale artifact that the compare's 'find | sort | first' could pick over
+   ## the newly built one. $dest is a dedicated per-tag subdir ($output_dir/a|b), safe to wipe.
+   safe-rm --recursive --force -- "$dest"
+   mkdir --parents -- "$dest"
+   cp -- "$found" "$dest/"
+   printf '%s\n' "  collected: $dest/${found##*/}"
+}
+
+build_one a a
+build_one b b
+
+image_a="$( find "$output_dir/a" -type f -name "$artifact_glob" | LC_ALL=C sort )"
+image_a="${image_a%%$'\n'*}"
+image_b="$( find "$output_dir/b" -type f -name "$artifact_glob" | LC_ALL=C sort )"
+image_b="${image_b%%$'\n'*}"
+sha_a="$( sha256sum -- "$image_a" | cut --delimiter=' ' --fields=1 )"
+sha_b="$( sha256sum -- "$image_b" | cut --delimiter=' ' --fields=1 )"
+
+{
+   printf '%s\n' "reproducible-build-twice: $target ($flavor $arch, freshness=$freshness)"
+   printf '  A: %s  sha256 %s\n' "$image_a" "$sha_a"
+   printf '  B: %s  sha256 %s\n' "$image_b" "$sha_b"
+} | tee "$report"
+
+if [ "$sha_a" = "$sha_b" ]; then
+   printf '%s\n' "RESULT: $target is REPRODUCIBLE (bit-for-bit identical)" | tee --append "$report"
+   exit 0
+fi
+
+printf '%s\n' "RESULT: $target DIFFERS (not bit-reproducible)" | tee --append "$report"
+
+## Localize the difference with diffoscope on the two images directly: diffoscope
+## unpacks the container itself (iso -> squashfs -> files, qcow2 via qemu-img, ova
+## tar -> vmdk), so no custom extraction is needed and every target works. This is
+## only reached on a mismatch (a reproducibility failure), so the heavier diff is
+## a rare debug path; bound peak memory and keep TMPDIR on disk for a RAM-limited
+## host. diffoscope >= v302 (Debian trixie-backports) has the streaming fix that
+## avoids OOM on a large differing member. Best-effort: never mask the sha verdict.
+printf '%s\n' "localizing difference (diffoscope -> $output_dir/diffoscope.txt):" | tee --append "$report"
+TMPDIR="${TMPDIR:-/var/tmp}" diffoscope \
+   --max-diff-input-lines 100000 \
+   --max-diff-block-lines-saved 10000 \
+   --max-diff-block-lines 256 \
+   --max-report-size 10000000 \
+   --text "$output_dir/diffoscope.txt" \
+   "$image_a" "$image_b" >> "$report" 2>&1 || true
+
+exit 1
