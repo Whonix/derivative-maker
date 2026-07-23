@@ -44,8 +44,9 @@ shopt -s shift_verbose
 
 ## style-ok: no-has
 
-MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
-source_code_folder_dist="$( cd -- "$MYDIR/.." && pwd )"
+script_dir_relative="$( dirname -- "${BASH_SOURCE[0]}" )"
+MYDIR="$( cd -- "${script_dir_relative}" && pwd )"
+source_code_folder_dist="$( cd -- "${MYDIR}/.." && pwd )"
 
 usage() {
    printf '%s\n' "Usage:
