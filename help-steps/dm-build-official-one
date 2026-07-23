@@ -60,7 +60,11 @@ if ! [ "${dist_build_target_arch:-}" = "" ]; then
   architecture="$dist_build_target_arch"
 elif [ "${CI:-}" = "true" ]; then
   architecture=arm64
-  build_args+=(--remote-derivative-packages true)
+  ## Build the Kicksecure/Whonix derivative packages from source rather than
+  ## pulling prebuilt ones from the remote repository: a CI (stage) build must be
+  ## reproducible, and a reproducible image must not embed opaque prebuilt
+  ## packages. Trade-off: slower (compiles all derivative packages).
+  build_args+=(--remote-derivative-packages false)
   export dist_build_upgrade_build_machine=1
 else
   architecture="amd64"
@@ -115,8 +119,10 @@ if printf '%s\n' "${build_args[*]}" | grep -- "remote-derivative-packages true" 
   remote_derivative_packages=true
 fi
 
-if [ "${remote_derivative_packages:-}" = "true" ]; then
-  ## Skip upload of debug images.
+if [ "${remote_derivative_packages:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
+  ## Skip upload of debug images, and never upload from CI (a stage build). This
+  ## is independent of remote-derivative-packages so that disabling it above (for
+  ## a reproducible from-source CI build) cannot enable a real upload.
   rsync_cmd="true simulate-only"
   export rsync_cmd
 fi
