@@ -26,14 +26,14 @@
 ##               directory beside the repo). Needs a few GB free.
 ##
 ## The two builds run SEQUENTIALLY, never concurrently: two full image builds at
-## once exhaust RAM/disk on a modest host. The verdict is a whole-file sha256
-## comparison of the two images (equal == bit-for-bit reproducible, for any
-## target). On a mismatch it additionally runs diffoscope on the two images to
-## LOCALIZE the difference to the specific in-image file(s), which is what you
-## then go and fix. diffoscope unpacks the container itself (iso -> squashfs,
-## qcow2 via qemu-img, ova tar -> vmdk), so no custom extraction is needed.
+## once exhaust RAM/disk on a modest host. The verdict is NOT re-implemented here:
+## the two build outputs are collected into a/ and b/ and handed to the single
+## canonical comparator, developer-meta-files' dm-reproducible-compare-artifacts
+## (whole-file sha256, plus diffoscope to localize a mismatch to the specific
+## in-image file). This script owns the build-twice orchestration; the comparison
+## lives in exactly one place.
 ##
-## Exit: 0 reproducible, 1 differ, 2 usage error, 3 a build failed.
+## Exit: 0 reproducible, 1 differ, 2 usage / artifact-not-found, 3 a build failed.
 
 set -o errexit
 set -o nounset
@@ -103,7 +103,11 @@ case "$target" in
       [ -n "$flavor" ] || flavor="kicksecure-cli"
       ;;
    qcow2)
-      artifact_glob="*.qcow2"
+      ## The shipped, released artifact is the compressed '.qcow2.libvirt.xz' (the
+      ## canonical comparator's authoritative qcow2 form); collect and compare that,
+      ## not the bare pre-release '.qcow2'. If a build stops before release packaging
+      ## it will emit no '.xz' and build_one reports it -- run the packaging step.
+      artifact_glob="*.qcow2.libvirt.xz"
       [ -n "$flavor" ] || flavor="kicksecure-cli"
       ;;
    *)
@@ -166,40 +170,12 @@ build_one() {
 build_one a a
 build_one b b
 
-image_a="$( find "$output_dir/a" -type f -name "$artifact_glob" | LC_ALL=C sort )"
-image_a="${image_a%%$'\n'*}"
-image_b="$( find "$output_dir/b" -type f -name "$artifact_glob" | LC_ALL=C sort )"
-image_b="${image_b%%$'\n'*}"
-sha_a="$( sha256sum -- "$image_a" | cut --delimiter=' ' --fields=1 )"
-sha_b="$( sha256sum -- "$image_b" | cut --delimiter=' ' --fields=1 )"
-
-{
-   printf '%s\n' "reproducible-build-twice: $target ($flavor $arch, freshness=$freshness)"
-   printf '  A: %s  sha256 %s\n' "$image_a" "$sha_a"
-   printf '  B: %s  sha256 %s\n' "$image_b" "$sha_b"
-} | tee "$report"
-
-if [ "$sha_a" = "$sha_b" ]; then
-   printf '%s\n' "RESULT: $target is REPRODUCIBLE (bit-for-bit identical)" | tee --append "$report"
-   exit 0
-fi
-
-printf '%s\n' "RESULT: $target DIFFERS (not bit-reproducible)" | tee --append "$report"
-
-## Localize the difference with diffoscope on the two images directly: diffoscope
-## unpacks the container itself (iso -> squashfs -> files, qcow2 via qemu-img, ova
-## tar -> vmdk), so no custom extraction is needed and every target works. This is
-## only reached on a mismatch (a reproducibility failure), so the heavier diff is
-## a rare debug path; bound peak memory and keep TMPDIR on disk for a RAM-limited
-## host. diffoscope >= v302 (Debian trixie-backports) has the streaming fix that
-## avoids OOM on a large differing member. Best-effort: never mask the sha verdict.
-printf '%s\n' "localizing difference (diffoscope -> $output_dir/diffoscope.txt):" | tee --append "$report"
-TMPDIR="${TMPDIR:-/var/tmp}" diffoscope \
-   --max-diff-input-lines 100000 \
-   --max-diff-block-lines-saved 10000 \
-   --max-diff-block-lines 256 \
-   --max-report-size 10000000 \
-   --text "$output_dir/diffoscope.txt" \
-   "$image_a" "$image_b" >> "$report" 2>&1 || true
-
-exit 1
+## Verdict: delegate to the single canonical comparator (whole-file sha256, with
+## diffoscope to localize a mismatch) instead of re-implementing it here. It locates
+## exactly one artifact of $target under each dir, so the two build outputs collected
+## into a/ and b/ are compared bit-for-bit. Its exit maps onto ours: 0 identical
+## (reproducible), 1 differ, 2 setup / artifact-not-found.
+compare_bin="$source_code_folder_dist/packages/kicksecure/developer-meta-files/usr/bin/dm-reproducible-compare-artifacts"
+compare_rc=0
+"$compare_bin" --target "$target" --dir-a "$output_dir/a" --dir-b "$output_dir/b" --output "$report" || compare_rc="$?"
+exit "$compare_rc"
