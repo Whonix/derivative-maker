@@ -109,14 +109,33 @@ done
 ## Fall back to an installed dist-ai package on PATH.
 [ -n "${boot_tests_bin}" ] || boot_tests_bin="dm-image-boot-tests"
 
-## Boot an ISO via --iso (a live image), any other image via --disk (qcow2/raw/
-## vdi/vmdk). Session selection (user/sysmaint) works either way via dm-qemu's
-## SMBIOS kernel-cmdline injection.
-if [ "${image##*.}" = "iso" ]; then
-   test_args=(--iso "$image")
-else
-   test_args=(--disk "$image")
-fi
+## Boot media by kind. Session selection (user/sysmaint) works either way via
+## dm-qemu's SMBIOS kernel-cmdline injection.
+##   .iso -> live image (--iso)
+##   .ova -> a tar container dm-qemu does not accept; extract its .vmdk and boot
+##           that (--disk)
+##   else -> a VM disk image (qcow2/raw/vdi/vmdk) booted directly (--disk)
+case "${image##*.}" in
+   iso)
+      test_args=(--iso "$image")
+      ;;
+   ova)
+      ova_dir="$(mktemp --directory)"
+      ## Removed after the boot completes (the -snapshot boot reads the vmdk during
+      ## the run). Best-effort; the CI runner is ephemeral anyway.
+      trap 'rm --recursive --force -- "${ova_dir}"' EXIT
+      tar --extract --file "$image" --directory "$ova_dir"
+      ## First .vmdk via parameter expansion, not 'head -1': head would SIGPIPE
+      ## find/sort (exit 141 under pipefail) once their output exceeds the buffer.
+      ova_vmdk_list="$(find "$ova_dir" -type f -name '*.vmdk' | LC_ALL=C sort)"
+      ova_vmdk="${ova_vmdk_list%%$'\n'*}"
+      [ -n "$ova_vmdk" ] || { printf '%s\n' "${BASH_SOURCE[0]}: no .vmdk inside ${image}" >&2; exit 2; }
+      test_args=(--disk "$ova_vmdk")
+      ;;
+   *)
+      test_args=(--disk "$image")
+      ;;
+esac
 test_args+=(
    --arch "$arch"
    --session "$session"

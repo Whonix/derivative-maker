@@ -8,13 +8,15 @@ name: Boot Test
 ## runs 'systemcheck --cli --leak-tests --verbose'. Each boot-test leg's conclusion
 ## IS its pass/fail signal (0 pass, non-zero fail/setup, 77 SKIP).
 ##
-## Two image kinds are covered (image matrix):
+## Three image kinds are covered (image matrix):
 ##   - kicksecure-cli  -> qcow2 DISK, booted 'user' only (CLI ships no
 ##     user-sysmaint-split, so there is no sysmaint account/session).
 ##   - kicksecure-lxqt -> live ISO, booted 'user' AND 'sysmaint' (sysmaint exists
 ##     only on GUI/lxqt flavors). The sysmaint session is selected on the live ISO
 ##     via dm-qemu's SMBIOS kernel-cmdline injection (boot-role=sysmaint), the same
 ##     token the sysmaint GRUB entry adds.
+##   - kicksecure-cli -> virtualbox .ova, booted 'user' (the same CLI build that
+##     makes the qcow2 also emits the .ova; ci/boot-test extracts its .vmdk).
 ## The sysmaint legs are gated to the ISO/lxqt kind (see the boot-test step 'if').
 ##
 ## All boot logic lives in dist-ai's dm-image-boot-tests, which bundles dm-qemu
@@ -127,6 +129,18 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
+      - name: Upload built .ova (virtualbox)
+        ## The kicksecure-cli build emits qcow2 AND a virtualbox .ova in one run;
+        ## upload the .ova too so the boot lane can also boot-test it (ci/boot-test
+        ## extracts the .vmdk). No sysmaint on the CLI .ova (no user-sysmaint-split).
+        if: matrix.flavor == 'kicksecure-cli'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: boot-image-vbox
+          path: /home/runner/binary_mnt/**/Kicksecure-*.ova
+          if-no-files-found: error
+          retention-days: 2
+
   boot-test:
     needs: build
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
@@ -140,6 +154,7 @@ jobs:
         image_kind:
           - qcow2
           - iso
+          - vbox
         firmware:
           - bios
           - efi
@@ -192,11 +207,11 @@ jobs:
         env:
           IMAGE_KIND: ${{ matrix.image_kind }}
         run: |
-          if [ "${IMAGE_KIND}" = "iso" ]; then
-            find_glob='Kicksecure-*.iso'
-          else
-            find_glob='Kicksecure-*.qcow2'
-          fi
+          case "${IMAGE_KIND}" in
+            iso)  find_glob='Kicksecure-*.iso' ;;
+            vbox) find_glob='Kicksecure-*.ova' ;;
+            *)    find_glob='Kicksecure-*.qcow2' ;;
+          esac
           image_path="$(find boot-image -type f -name "${find_glob}" | head -1)"
           if [ -z "${image_path}" ]; then
             printf '%s\n' "no ${IMAGE_KIND} image found under boot-image/" >&2
