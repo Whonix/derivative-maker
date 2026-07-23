@@ -181,7 +181,7 @@ jobs:
           ARCH: ${{ env.BOOT_ARCH }}
           FIRMWARE: ${{ matrix.firmware }}
           SESSION: ${{ matrix.session }}
-        run: ./docker/derivative-maker-docker-run -- ci/github-boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${FIRMWARE}-${SESSION}.serial.log"
+        run: ./docker/derivative-maker-docker-run -- ci/boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${FIRMWARE}-${SESSION}.serial.log"
 
       - name: Upload serial log
         if: always()

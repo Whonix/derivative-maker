@@ -8,7 +8,7 @@
 ## Generic boot + functional test entrypoint, invoked from
 ## .github/workflows/local-boot-test.yml as:
 ##
-##   ./docker/derivative-maker-docker-run -- ci/github-boot-test \
+##   ./docker/derivative-maker-docker-run -- ci/boot-test \
 ##       --image <path> --arch <amd64|arm64> --firmware <bios|efi|efi-secureboot> \
 ##       --session <user|sysmaint>
 ##

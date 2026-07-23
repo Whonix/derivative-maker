@@ -133,7 +133,7 @@ export HOMEVAR
 ## concurrently on a resourceful host without colliding. UNSET by default: without a slot the layout
 ## is the historical 'derivative-binary/<version>' -- defaulting the slot to "main" was reverted
 ## because the extra '/main/' path level broke code hardcoding 'derivative-binary/<version>' (e.g.
-## ci/github-build's live-build / cowbuilder scratch cleanup). An explicit 'binary_build_folder_dist'
+## ci/build's live-build / cowbuilder scratch cleanup). An explicit 'binary_build_folder_dist'
 ## override still wins.
 export dist_build_slot="${dist_build_slot:-}"
 if [ -n "${binary_build_folder_dist:-}" ]; then

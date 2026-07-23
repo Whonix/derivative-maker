@@ -144,7 +144,7 @@ jobs:
 
       - name: Build ${{ matrix.copy }} via dm-build-official (kicksecure-cli smoke, ${{ env.REPRO_ARCH }})
         ## Route the build through the OFFICIAL orchestration
-        ## (help-steps/dm-build-official) rather than a separate ci/github-build
+        ## (help-steps/dm-build-official) rather than a separate ci/build
         ## path, so CI exercises the real official build with no duplicate build
         ## logic. Passed via an 'env VAR=val' prefix (the container entrypoint execs
         ## "$@", so this sets them inside the container without a docker-run change):

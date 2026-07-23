@@ -138,7 +138,7 @@ build_one() {
    ## pushd/popd rather than a '( cd && ... )' subshell: scopes the cd without a
    ## subshell (and dodges the errexit-in-conditional-subshell footgun).
    pushd -- "$source_code_folder_dist" >/dev/null
-   ./ci/github-build --arch "$arch" --target "$target" --flavor "$flavor" --freshness "$freshness" || build_rc="$?"
+   ./ci/build --arch "$arch" --target "$target" --flavor "$flavor" --freshness "$freshness" || build_rc="$?"
    popd >/dev/null
    if [ "$build_rc" -ne 0 ]; then
       printf '%s\n' "${0##*/}: build ${tag} failed (exit ${build_rc})" >&2

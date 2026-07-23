@@ -8,7 +8,7 @@
 ## Runs INSIDE the derivative-maker docker container, invoked from
 ## .github/workflows/local-build.yml as:
 ##
-##   ./docker/derivative-maker-docker-run -- ci/github-build --arch <amd64|arm64>
+##   ./docker/derivative-maker-docker-run -- ci/build --arch <amd64|arm64>
 ##
 ## Signs HEAD before building so build-steps.d/1100_sanity-tests' sq-git
 ## signature verification passes without the --allow-unsigned escape hatch,
