@@ -1,0 +1,189 @@
+---
+name: Boot Test
+
+## Repo-private boot + functional test lane (G-A-005 'local-' prefix): builds a
+## bootable qcow2 disk image once, then boots it across the firmware x session
+## matrix (SeaBIOS / OVMF EFI / OVMF Secure Boot, as the 'user' and 'sysmaint'
+## sessions) and, in each, logs in over the serial console and runs
+## 'systemcheck --leak-tests'. Each boot-test leg's conclusion IS its pass/fail
+## signal (dm-image-test exit: 0 pass, 5 booted-but-a-check-failed / no login,
+## 2 setup error).
+##
+## All boot logic reuses developer-meta-files' dm-qemu (qemu/firmware/Secure Boot
+## + SMBIOS kernel-cmdline injection) and dm-image-test (login + checks); this
+## workflow is a thin wrapper that builds an image and fans out the matrix, so the
+## shell stays lint-covered and locally runnable. See
+## agents/github-actions-security.md for the pinning / permissions patterns.
+
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: "Flavor to build and boot-test."
+        type: choice
+        options:
+          - kicksecure-cli
+          - kicksecure-lxqt
+  push:
+    branches:
+      - '**ci**'
+  schedule:
+    ## Weekly, Sundays 08:00 UTC (offset from the build lane at 07:00).
+    - cron: '0 8 * * 0'
+
+## Least privilege (rule 1): read the repo and use the Actions artifact backend
+## only.
+permissions:
+  contents: read
+
+## Per-ref cancellation (G-A-006).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BOOT_FLAVOR: ${{ inputs.flavor || 'kicksecure-cli' }}
+  BOOT_ARCH: amd64
+  ## qcow2 is the cleanest bootable disk image for dm-image-test --disk.
+  BOOT_TARGET: qcow2
+
+jobs:
+  build:
+    ## Fork-PR guard (rule 3).
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout repository (no submodules yet)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
+
+      - name: Free runner disk space
+        run: ./ci/free-disk
+
+      - name: Restore docker image cache
+        id: dmimg-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.dm-docker-image
+          key: ${{ runner.os }}-boot-dmimg-${{ hashFiles('docker/**') }}
+
+      - name: Load cached docker image
+        if: steps.dmimg-cache.outputs.cache-hit == 'true'
+        run: ./ci/dm-docker-image-cache load
+
+      - name: Build ${{ env.BOOT_FLAVOR }} ${{ env.BOOT_TARGET }} (${{ env.BOOT_ARCH }})
+        ## rule 4: route every value through env, never interpolate into run:.
+        env:
+          CI: "true"
+          ARCH: ${{ env.BOOT_ARCH }}
+          TARGET: ${{ env.BOOT_TARGET }}
+          FLAVOR: ${{ env.BOOT_FLAVOR }}
+          FRESHNESS: frozen
+        run: ./docker/derivative-maker-docker-run -- ci/github-build --arch "${ARCH}" --target "${TARGET}" --flavor "${FLAVOR}" --freshness "${FRESHNESS}"
+
+      - name: Save docker image to cache
+        if: steps.dmimg-cache.outputs.cache-hit != 'true'
+        run: ./ci/dm-docker-image-cache save
+
+      - name: Upload built qcow2 image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: boot-image
+          path: /home/runner/binary_mnt/**/Kicksecure-*.qcow2*
+          if-no-files-found: error
+          retention-days: 2
+
+  boot-test:
+    needs: build
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      ## Keep every leg running even if one fails, so a single firmware/session
+      ## regression does not mask the others.
+      fail-fast: false
+      matrix:
+        firmware:
+          - bios
+          - efi
+          - efi-secureboot
+        session:
+          - user
+          - sysmaint
+    steps:
+      - name: Checkout repository (no submodules yet)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: false
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
+
+      - name: Initialize developer-meta-files submodule
+        ## dm-qemu + dm-image-test live in the developer-meta-files submodule.
+        run: git submodule update --init --recursive packages/kicksecure/developer-meta-files
+
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
+
+      - name: Download built qcow2 image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: boot-image
+          path: boot-image
+
+      - name: Locate the qcow2 image
+        id: image
+        ## The build uploads under a version subfolder; find the single qcow2.
+        run: |
+          image_path="$(find boot-image -type f -name 'Kicksecure-*.qcow2' | head -1)"
+          if [ -z "${image_path}" ]; then
+            printf '%s\n' "no qcow2 image found under boot-image/" >&2
+            exit 1
+          fi
+          printf 'path=%s\n' "${image_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Boot-test (${{ matrix.firmware }}, ${{ matrix.session }})
+        ## rule 4: values via env, not interpolated into run:.
+        env:
+          IMAGE: ${{ steps.image.outputs.path }}
+          ARCH: ${{ env.BOOT_ARCH }}
+          FIRMWARE: ${{ matrix.firmware }}
+          SESSION: ${{ matrix.session }}
+        run: ./docker/derivative-maker-docker-run -- ci/github-boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${FIRMWARE}-${SESSION}.serial.log"
+
+      - name: Upload serial log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serial-log-${{ matrix.firmware }}-${{ matrix.session }}
+          path: boot-*.serial.log
+          if-no-files-found: warn
+          retention-days: 7

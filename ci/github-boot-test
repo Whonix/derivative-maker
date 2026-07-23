@@ -1,0 +1,117 @@
+#!/bin/bash
+
+## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Generic boot + functional test entrypoint, invoked from
+## .github/workflows/local-boot-test.yml as:
+##
+##   ./docker/derivative-maker-docker-run -- ci/github-boot-test \
+##       --image <path> --arch <amd64|arm64> --firmware <bios|efi|efi-secureboot> \
+##       --session <user|sysmaint>
+##
+## It installs the qemu/OVMF/pexpect runtime, then hands the image to
+## dm-image-test (which boots it via dm-qemu, logs in over the serial console and
+## runs 'systemcheck --leak-tests'). The exit code IS the pass/fail signal:
+##   0 pass, 5 booted-but-a-check-failed / no login, 2 setup error.
+##
+## dm-qemu owns qemu, firmware and Secure Boot; this script owns only dependency
+## setup, image discovery and dispatch to the right per-firmware wrapper.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+image=""
+arch=""
+firmware=""
+session="user"
+login_user="user"
+login_pass=""
+serial_log=""
+while [ "$#" -gt 0 ]; do
+   case "$1" in
+      --image)
+         [ "$#" -ge 2 ] || { printf '%s\n' "${BASH_SOURCE[0]}: --image requires a value" >&2 ; exit 2 ; }
+         image="$2"
+         shift 2
+         ;;
+      --arch)
+         [ "$#" -ge 2 ] || { printf '%s\n' "${BASH_SOURCE[0]}: --arch requires a value" >&2 ; exit 2 ; }
+         arch="$2"
+         shift 2
+         ;;
+      --firmware)
+         [ "$#" -ge 2 ] || { printf '%s\n' "${BASH_SOURCE[0]}: --firmware requires a value" >&2 ; exit 2 ; }
+         firmware="$2"
+         shift 2
+         ;;
+      --session)
+         [ "$#" -ge 2 ] || { printf '%s\n' "${BASH_SOURCE[0]}: --session requires a value" >&2 ; exit 2 ; }
+         session="$2"
+         shift 2
+         ;;
+      --login-user)
+         [ "$#" -ge 2 ] || { printf '%s\n' "${BASH_SOURCE[0]}: --login-user requires a value" >&2 ; exit 2 ; }
+         login_user="$2"
+         shift 2
+         ;;
+      --login-pass)
+         [ "$#" -ge 2 ] || { printf '%s\n' "${BASH_SOURCE[0]}: --login-pass requires a value" >&2 ; exit 2 ; }
+         login_pass="$2"
+         shift 2
+         ;;
+      --serial-log)
+         [ "$#" -ge 2 ] || { printf '%s\n' "${BASH_SOURCE[0]}: --serial-log requires a value" >&2 ; exit 2 ; }
+         serial_log="$2"
+         shift 2
+         ;;
+      *)
+         printf '%s\n' "${BASH_SOURCE[0]}: unexpected argument: $1" >&2
+         exit 2
+         ;;
+   esac
+done
+
+[ -n "$image" ]    || { printf '%s\n' "${BASH_SOURCE[0]}: --image is required" >&2 ; exit 2 ; }
+[ -n "$arch" ]     || { printf '%s\n' "${BASH_SOURCE[0]}: --arch is required" >&2 ; exit 2 ; }
+[ -f "$image" ]    || { printf '%s\n' "${BASH_SOURCE[0]}: no such image: $image" >&2 ; exit 2 ; }
+
+## Runtime dependencies. SeaBIOS ships with qemu-system-x86; ovmf provides both the
+## plain and the Secure-Boot OVMF firmware; qemu-efi-aarch64 provides arm64 edk2;
+## python3-pexpect drives the login conversation.
+sudo --non-interactive -- apt-get update
+sudo --non-interactive -- apt-get install --yes --no-install-recommends \
+   qemu-system-x86 qemu-system-arm qemu-utils ovmf qemu-efi-aarch64 \
+   python3-pexpect xorriso
+
+script_dir="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
+## dm-image-test + its wrappers are installed with developer-meta-files; in the
+## source tree they live under the submodule's usr/bin.
+dm_image_test_bin="${script_dir}/../packages/kicksecure/developer-meta-files/usr/bin/dm-image-test"
+if ! [ -x "$dm_image_test_bin" ]; then
+   ## Fall back to an installed copy on PATH.
+   dm_image_test_bin="dm-image-test"
+fi
+
+test_args=(
+   --disk "$image"
+   --arch "$arch"
+   --session "$session"
+   --login-user "$login_user"
+)
+[ -n "$firmware" ]   && test_args+=(--firmware "$firmware")
+[ -n "$login_pass" ] && test_args+=(--login-pass "$login_pass")
+[ -n "$serial_log" ] && test_args+=(--serial-log "$serial_log")
+
+printf '%s\n' "${BASH_SOURCE[0]}: boot-testing ${image} (arch=${arch} firmware=${firmware:-default} session=${session})"
+## Run dm-image-test and forward its exit code (errexit aborts with the child's
+## code on 5/2); avoid 'exec' so any future cleanup after this line still runs.
+dm_image_test_rc=0
+"$dm_image_test_bin" "${test_args[@]}" || dm_image_test_rc="$?"
+exit "$dm_image_test_rc"
