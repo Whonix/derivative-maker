@@ -109,8 +109,15 @@ done
 ## Fall back to an installed dist-ai package on PATH.
 [ -n "${boot_tests_bin}" ] || boot_tests_bin="dm-image-boot-tests"
 
-test_args=(
-   --disk "$image"
+## Boot an ISO via --iso (a live image), any other image via --disk (qcow2/raw/
+## vdi/vmdk). Session selection (user/sysmaint) works either way via dm-qemu's
+## SMBIOS kernel-cmdline injection.
+if [ "${image##*.}" = "iso" ]; then
+   test_args=(--iso "$image")
+else
+   test_args=(--disk "$image")
+fi
+test_args+=(
    --arch "$arch"
    --session "$session"
    --login-user "$login_user"
