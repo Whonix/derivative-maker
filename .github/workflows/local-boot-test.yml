@@ -153,19 +153,15 @@ jobs:
 
       - name: Check out dist-ai (boot harness)
         ## The boot harness (dm-image-boot-tests -> dm-qemu + dm-image-test) lives
-        ## in dist-ai. Checked out into the workspace so ci/boot-test finds it via
-        ## its '../dist-ai' resolver (works inside the build container too, since
-        ## the whole workspace is mounted). NOTE: org-ai-assisted/dist-ai is
-        ## private; this needs the repo to be readable by the token below. If the
-        ## default GITHUB_TOKEN cannot read it, set a DIST_AI_CHECKOUT_TOKEN secret
-        ## (a PAT with read access) -- this is the one piece to confirm in CI.
+        ## in dist-ai (public). Checked out into the workspace so ci/boot-test finds
+        ## it via its '../dist-ai' resolver (works inside the build container too,
+        ## since the whole workspace is mounted).
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ github.repository_owner }}/dist-ai
           path: dist-ai
           fetch-depth: 1
           persist-credentials: false
-          token: ${{ secrets.DIST_AI_CHECKOUT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Check out matching fork branch in cross-org submodules (if present)
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
