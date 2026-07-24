@@ -105,17 +105,22 @@ jobs:
 
       - name: Build ${{ matrix.flavor }} via dm-build-official (${{ env.BOOT_ARCH }})
         ## Build through the official orchestration -- the SAME single build path as
-        ## local-build.yml, no duplication. The 'env VAR=val' prefix injects the
-        ## build controls into the container (its entrypoint execs "$@"); see
-        ## local-build.yml for the rationale. dm-build-official builds this flavor's
-        ## image(s), which the boot-test job below locates and boots.
-        ## rule 4: route every value through env, never interpolate into run:.
+        ## local-build.yml, no duplication. dm-build-official does NOT sign, and the
+        ## build's sq-git check rejects an unsigned HEAD, so mint an ephemeral CI key
+        ## and sign+tag HEAD FIRST (mirrors ci/build). All three run in ONE
+        ## docker-run so the home-directory state signing-key-create creates persists
+        ## into sign-and-tag and the build. rule 4: shell vars from env, no ${{ }}
+        ## interpolation into run:.
         env:
           CI: "true"
           ARCH: ${{ env.BOOT_ARCH }}
           FLAVOR: ${{ matrix.flavor }}
           FRESHNESS: frozen
-        run: ./docker/derivative-maker-docker-run -- env "dist_build_target_arch=${ARCH}" "flavors_list=${FLAVOR}" ./help-steps/dm-build-official --freshness "${FRESHNESS}"
+        run: >-
+          ./docker/derivative-maker-docker-run --
+          bash -c "./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
+          env dist_build_target_arch='${ARCH}' flavors_list='${FLAVOR}'
+          ./help-steps/dm-build-official --freshness '${FRESHNESS}'"
 
       - name: Save docker image to cache
         if: steps.dmimg-cache.outputs.cache-hit != 'true'

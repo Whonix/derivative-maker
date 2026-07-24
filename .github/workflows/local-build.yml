@@ -155,12 +155,23 @@ jobs:
         ## CI=true (forwarded by docker-run) makes it reproducible-from-source with
         ## uploads mocked. --freshness frozen pins the snapshot so the two
         ## independent 'a'/'b' builds see identical package versions.
-        ## rule 4: route every value through env, never interpolate into run:.
+        ## dm-build-official does NOT sign, and the build's sq-git check rejects an
+        ## unsigned HEAD, so mint an ephemeral CI key and sign+tag HEAD FIRST (mirrors
+        ## ci/build) -- all in ONE docker-run so signing-key-create's home state
+        ## persists into sign-and-tag and the build. The ephemeral signature does not
+        ## break reproducibility: dist_build_version is pinned pre-sign and the image
+        ## content does not embed the commit signature.
+        ## rule 4: shell vars from env, never ${{ }} interpolation into run:.
         env:
           CI: "true"
           ARCH: ${{ env.REPRO_ARCH }}
           FRESHNESS: frozen
-        run: ./docker/derivative-maker-docker-run -- env "dist_build_target_arch=${ARCH}" flavors_list=kicksecure-cli ./help-steps/dm-build-official --freshness "${FRESHNESS}"
+        run: >-
+          ./docker/derivative-maker-docker-run --
+          bash -c "export dist_build_version=\"\$(git describe --always --abbrev=1000000000)\" &&
+          ./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
+          env dist_build_target_arch='${ARCH}' flavors_list=kicksecure-cli
+          ./help-steps/dm-build-official --freshness '${FRESHNESS}'"
 
       - name: Save docker image to cache
         if: steps.dmimg-cache.outputs.cache-hit != 'true'
