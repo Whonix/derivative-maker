@@ -218,7 +218,16 @@ for flavor_item in "${flavors_list[@]}"; do
       ;;
   esac
 
-  run_cmd ./derivative-maker "${build_args[@]}" "${multi_target_args[@]}" --flavor "$flavor_item" "$@"
+  ## A caller that needs ONLY the ISO (e.g. a CI boot-test whose sibling job
+  ## already provides the qcow2/VirtualBox images) can skip the heavy VM image
+  ## build here: building the qcow2 image plus the VirtualBox export (raw ->
+  ## vdi -> ova) after the ISO otherwise exhausts the CI runner's filesystem.
+  ## The ISO above is the sole artifact such a run consumes.
+  if [ "${dist_build_skip_multi_target_images:-}" = "true" ]; then
+    true "INFO: dist_build_skip_multi_target_images=true: skipping multi-target VM image build for ${flavor_item}."
+  else
+    run_cmd ./derivative-maker "${build_args[@]}" "${multi_target_args[@]}" --flavor "$flavor_item" "$@"
+  fi
 done
 
 ## Same source code for all of the following:
@@ -258,13 +267,20 @@ for flavor_item in "${flavors_list[@]}"; do
       ;;
   esac
 
-  ## Cannot use "${multi_target_args[@]}" here, because
-  ## help-steps/variables variable dist_server_with_upload_location_list is does not support multiple "--target"'s.
-  for ((i=0; i<${#multi_target_args[@]}; i+=2)); do
-    target_arg="${multi_target_args[i]}"
-    target_value="${multi_target_args[i+1]}"
-    run_cmd dm-upload-images "${build_args[@]}" "$target_arg" "$target_value" --flavor "$flavor_item" "$@"
-  done
+  ## Skip the VM image uploads too when their build was skipped above: the
+  ## qcow2/ova files do not exist, so dm-upload-images' file-existence check
+  ## would fail.
+  if [ "${dist_build_skip_multi_target_images:-}" = "true" ]; then
+    true "INFO: dist_build_skip_multi_target_images=true: skipping multi-target image upload for ${flavor_item}."
+  else
+    ## Cannot use "${multi_target_args[@]}" here, because
+    ## help-steps/variables variable dist_server_with_upload_location_list is does not support multiple "--target"'s.
+    for ((i=0; i<${#multi_target_args[@]}; i+=2)); do
+      target_arg="${multi_target_args[i]}"
+      target_value="${multi_target_args[i+1]}"
+      run_cmd dm-upload-images "${build_args[@]}" "$target_arg" "$target_value" --flavor "$flavor_item" "$@"
+    done
+  fi
 done
 
 true "$0: END"

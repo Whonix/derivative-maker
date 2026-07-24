@@ -111,15 +111,21 @@ jobs:
         ## docker-run so the home-directory state signing-key-create creates persists
         ## into sign-and-tag and the build. rule 4: shell vars from env, no ${{ }}
         ## interpolation into run:.
+        ## The ISO job needs ONLY the ISO; its sibling CLI job already builds the
+        ## qcow2 + VirtualBox images. Setting dist_build_skip_multi_target_images
+        ## skips the heavy post-ISO qcow2/ova build (raw -> vdi -> ova) that would
+        ## otherwise exhaust the runner filesystem.
         env:
           CI: "true"
           ARCH: ${{ env.BOOT_ARCH }}
           FLAVOR: ${{ matrix.flavor }}
           FRESHNESS: frozen
+          SKIP_MULTI: ${{ matrix.image_kind == 'iso' && 'true' || '' }}
         run: >-
           ./docker/derivative-maker-docker-run --
           bash -c "./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
           env dist_build_target_arch='${ARCH}' flavors_list='${FLAVOR}'
+          dist_build_skip_multi_target_images='${SKIP_MULTI}'
           ./help-steps/dm-build-official --freshness '${FRESHNESS}'"
 
       - name: Save docker image to cache
