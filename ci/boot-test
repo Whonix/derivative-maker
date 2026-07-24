@@ -111,26 +111,46 @@ done
 
 ## Boot media by kind. Session selection (user/sysmaint) works either way via
 ## dm-qemu's SMBIOS kernel-cmdline injection.
-##   .iso -> live image (--iso)
-##   .ova -> a tar container dm-qemu does not accept; extract its .vmdk and boot
-##           that (--disk)
-##   else -> a VM disk image (qcow2/raw/vdi/vmdk) booted directly (--disk)
-case "${image##*.}" in
-   iso)
+##   .iso          -> live image (--iso)
+##   .ova          -> a tar container dm-qemu does not accept; extract its .vmdk
+##                    and boot that (--disk)
+##   *.libvirt.xz  -> a qcow2/raw disk packed as tar.xz (dm-prepare-release
+##                    xz-packs the image and removes the bare disk file); extract
+##                    and boot the disk inside (--disk)
+##   else          -> a VM disk image (qcow2/raw/vdi/vmdk) booted directly (--disk)
+## Temp dir for archive extraction (.ova / .libvirt.xz), removed on exit via a
+## function (R-051: no inline trap command). Best-effort; the CI runner is
+## ephemeral anyway, and the -snapshot boot reads the extracted disk during the run.
+## style-ok: no-safe-rm -- a mktemp scratch dir on the ephemeral CI runner where
+## safe-rm (helper-scripts) is not guaranteed present; removed best-effort.
+extract_dir=""
+# shellcheck disable=SC2317  # invoked indirectly via 'trap ... EXIT'
+boot_test_cleanup() {
+   [ -n "${extract_dir}" ] && rm --recursive --force -- "${extract_dir}"
+}
+trap boot_test_cleanup EXIT
+
+case "$image" in
+   *.iso)
       test_args=(--iso "$image")
       ;;
-   ova)
-      ova_dir="$(mktemp --directory)"
-      ## Removed after the boot completes (the -snapshot boot reads the vmdk during
-      ## the run). Best-effort; the CI runner is ephemeral anyway.
-      trap 'rm --recursive --force -- "${ova_dir}"' EXIT
-      tar --extract --file "$image" --directory "$ova_dir"
+   *.ova)
+      extract_dir="$(mktemp --directory)"
+      tar --extract --file "$image" --directory "$extract_dir"
       ## First .vmdk via parameter expansion, not 'head -1': head would SIGPIPE
       ## find/sort (exit 141 under pipefail) once their output exceeds the buffer.
-      ova_vmdk_list="$(find "$ova_dir" -type f -name '*.vmdk' | LC_ALL=C sort)"
+      ova_vmdk_list="$(find "$extract_dir" -type f -name '*.vmdk' | LC_ALL=C sort)"
       ova_vmdk="${ova_vmdk_list%%$'\n'*}"
       [ -n "$ova_vmdk" ] || { printf '%s\n' "${BASH_SOURCE[0]}: no .vmdk inside ${image}" >&2; exit 2; }
       test_args=(--disk "$ova_vmdk")
+      ;;
+   *.xz)
+      extract_dir="$(mktemp --directory)"
+      tar --extract --xz --file "$image" --directory "$extract_dir"
+      disk_list="$(find "$extract_dir" -type f \( -name '*.qcow2' -o -name '*.raw' \) | LC_ALL=C sort)"
+      disk_img="${disk_list%%$'\n'*}"
+      [ -n "$disk_img" ] || { printf '%s\n' "${BASH_SOURCE[0]}: no .qcow2/.raw inside ${image}" >&2; exit 2; }
+      test_args=(--disk "$disk_img")
       ;;
    *)
       test_args=(--disk "$image")

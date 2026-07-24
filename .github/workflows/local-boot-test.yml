@@ -228,7 +228,9 @@ jobs:
           case "${IMAGE_KIND}" in
             iso)  find_glob='Kicksecure-*.iso' ;;
             vbox) find_glob='Kicksecure-*.ova' ;;
-            *)    find_glob='Kicksecure-*.qcow2' ;;
+            ## The qcow2 is shipped xz-packed ('.qcow2.libvirt.xz'); the bare
+            ## '.qcow2' is removed after packing. ci/boot-test extracts the tar.xz.
+            *)    find_glob='Kicksecure-*.qcow2.libvirt.xz' ;;
           esac
           image_path="$(find boot-image -type f -name "${find_glob}" | head -1)"
           if [ -z "${image_path}" ]; then
