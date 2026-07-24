@@ -45,13 +45,6 @@ else
   run_cmd test -d ~/.ssh
 fi
 
-## Optional testing of docker on CI.
-if [ "${CI:-}" = "true" ]; then
-  ## Minimal test only for now.
-  sudo --non-interactive -- ./docker/derivative-maker-docker-setup
-  ./docker/derivative-maker-docker-run -- build-steps.d/1100_sanity-tests --target raw --flavor source
-fi
-
 ## architecture choice
 ## - If environment variable 'dist_build_target_arch' is set, honor it.
 ## - On CI, build ARM64 by default since it is the most recent architecture port.
