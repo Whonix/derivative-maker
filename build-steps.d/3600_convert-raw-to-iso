@@ -207,7 +207,6 @@ lb config noauto \\
    --parent-mirror-chroot '${dist_build_apt_sources_mirror}' \\
    --parent-mirror-chroot-security '${dist_build_apt_sources_security_mirror}' \\
    --parent-mirror-debian-installer '${dist_build_apt_sources_mirror}' \\
-   --verbose \\
    --zsync false \\
    --sysmaint-enable \\
    --unrestricted-admin-enable \\
@@ -617,7 +616,12 @@ Not running any chroot scripts.${reset}"
 
    ## Package into an ISO
    # shellcheck disable=SC2086
-   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb binary --verbose --debug; then
+   ## No '--verbose': live-build's binary_rootfs turns '_VERBOSE=true' into
+   ## mksquashfs '-info', which lists EVERY packed file (100k+ on a full rootfs)
+   ## and floods the CI log until the runner's log storage fills ("No space left
+   ## on device"). '--debug' is kept for diagnostics; bootstrap/chroot above stay
+   ## '--verbose'.
+   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb binary --debug; then
       error "${bold}${red}ERROR: Live build binary stage failed!${reset}"
    fi
 
