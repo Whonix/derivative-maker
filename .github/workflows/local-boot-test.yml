@@ -132,6 +132,13 @@ jobs:
         if: steps.dmimg-cache.outputs.cache-hit != 'true'
         run: ./ci/dm-docker-image-cache save
 
+      ## Remove non-artifact build scratch (root-owned live-build cache, build
+      ## chroot, raw base) before uploading: the upload glob would otherwise hit
+      ## a scandir EACCES on the root-owned live-build cache, and this also frees
+      ## runner disk. Keeps the released image the upload step selects.
+      - name: Free build scratch (keep released image only)
+        run: ./ci/free-build-scratch
+
       - name: Upload built ${{ matrix.image_kind }} image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

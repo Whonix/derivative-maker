@@ -1,0 +1,64 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Remove non-artifact build scratch from the binary output tree, on CI, after a
+## build and before the artifact upload, so that:
+## - the upload glob does not traverse root-owned live-build cache directories
+##   (a scandir EACCES aborts actions/upload-artifact), and
+## - the runner reclaims disk between matrix legs.
+##
+## Keeps the RELEASED images (Kicksecure-*.{iso,qcow2*,ova} plus their detached
+## .asc/.sig/.sha512sums/.torrent siblings); removes the live-build working tree,
+## the per-flavor build chroot, and the raw base image -- none of which are
+## uploaded.
+##
+## CI-only by guard: never prune a developer's local build tree.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## style-ok: no-has -- runner-maintenance script; does not source derivative-maker helper-scripts.
+## style-ok: no-safe-rm -- removes root-owned CI build scratch best-effort; safe-rm is not present
+## on the hosted runner, and these are throwaway CI paths removed best-effort.
+
+if [ "${CI:-}" != "true" ]; then
+   printf '%s\n' "${0##*/}: refusing to prune build scratch outside CI (CI is not 'true')" >&2
+   exit 0
+fi
+
+binary_dir="${1:-/home/runner/binary_mnt}"
+
+if [ ! -d "$binary_dir" ]; then
+   printf '%s\n' "${0##*/}: no binary dir '${binary_dir}', nothing to prune"
+   exit 0
+fi
+
+before_kib="$(df --output=avail -- "$binary_dir" | tail --lines=1)"
+
+## Scratch entries under each version subfolder (depth 2). Matched by name at a
+## bounded depth so 'find' lists the (readable) version dir WITHOUT descending
+## into the root-owned scratch it is about to remove.
+scratch_names=(
+   live-build          ## live-build working tree (cache + chroot) -- the EACCES source
+   '*_image'           ## per-flavor build chroot, e.g. Kicksecure-LXQt_image
+   '*.raw'             ## raw base image -- never a released artifact
+   base-image.raw
+)
+
+for scratch_name in "${scratch_names[@]}"; do
+   while IFS= read -r -d '' scratch_path; do
+      printf '%s: removing %s\n' "${0##*/}" "$scratch_path"
+      sudo rm --recursive --force -- "$scratch_path" || true
+   done < <(find "$binary_dir" -mindepth 2 -maxdepth 2 -name "$scratch_name" -print0 2>/dev/null || true)
+done
+
+after_kib="$(df --output=avail -- "$binary_dir" | tail --lines=1)"
+printf '%s: reclaimed ~%s MiB under %s\n' "${0##*/}" "$(( (after_kib - before_kib) / 1024 ))" "$binary_dir"
