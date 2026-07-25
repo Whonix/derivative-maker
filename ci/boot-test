@@ -33,7 +33,10 @@ image=""
 arch=""
 firmware=""
 session="user"
-login_user="user"
+## Empty means "derive from --session": the user session runs the checks as the
+## 'user' account, the sysmaint session as the 'sysmaint' account (both exist under
+## user-sysmaint-split). An explicit --login-user overrides.
+login_user=""
 login_pass=""
 serial_log=""
 while [ "$#" -gt 0 ]; do
@@ -161,6 +164,9 @@ case "$image" in
       test_args=(--disk "$image")
       ;;
 esac
+## Run the checks as the account that owns the selected session unless the caller
+## pinned one: user session -> 'user', sysmaint session -> 'sysmaint'.
+[ -n "$login_user" ] || login_user="$session"
 test_args+=(
    --arch "$arch"
    --session "$session"
