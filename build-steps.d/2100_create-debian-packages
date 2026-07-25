@@ -399,6 +399,22 @@ create_derivative_distribution_debian_packages() {
 
    local genmkfile_bin="$source_code_folder_dist/packages/kicksecure/genmkfile/usr/bin/genmkfile"
 
+   ## Fast local iteration: with --skip-published-packages, a package edited WITHOUT a
+   ## debian/changelog bump keeps its published version and is skipped, so its stale
+   ## .deb lingers in the local repo and the edit never reaches the image. Delete the
+   ## packages named in 'dist_build_rebuild_packages' (space-separated SOURCE names)
+   ## from the local reprepro repo first -- they then read as unpublished and are
+   ## rebuilt, no changelog bump required. Only meaningful together with
+   ## --skip-published-packages (a normal build rebuilds everything anyway).
+   if [ "${dist_build_skip_published_packages:-}" = "true" ] && [ -n "${dist_build_rebuild_packages:-}" ]; then
+      local rebuild_pkg_item
+      for rebuild_pkg_item in $dist_build_rebuild_packages ; do
+         true "${cyan}INFO: force-rebuild: deleting stale '$rebuild_pkg_item' from the local repo.${reset}"
+         "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" remove "$dist_build_apt_codename" "$rebuild_pkg_item" || true
+         "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" removesrc "$dist_build_apt_codename" "$rebuild_pkg_item" || true
+      done
+   fi
+
    ## Phase 1: collect the packages that actually build on this target architecture. Reading
    ## debian/control directly (no 'pushd') so the list can then be driven in parallel.
    local derivative_name_item item base_name control_file

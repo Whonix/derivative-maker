@@ -189,6 +189,7 @@ Advanced Options:
   --only-packages 'p1 p2'         : Debug speed-up: rebuild ONLY these packages into the persistent local repo (reuse the rest from the prior build). Only safe if omitted packages' source is unchanged.
   --skip-packages                 : Debug speed-up: skip package building entirely and reuse the whole local package repo from the prior build. Only safe if NO package source changed.
   --skip-published-packages       : Debug speed-up: rebuild only packages whose debian/changelog version is not yet published in the local repo; skip the rest. Bump the changelog to force a rebuild.
+  --rebuild-packages '<p1 p2>'    : With --skip-published-packages, force-rebuild these SOURCE packages (space-separated) without a debian/changelog bump, by deleting them from the local repo first.
   --retry-max [attempts]          : Set maximum retry attempts. (default: 2)
   --retry-wait [seconds]          : Set wait time between retry attempts.
   --retry-before [script]         : Specify a script to run before retry. [default: none)
@@ -600,6 +601,14 @@ dist_build_one_parse_cmd() {
                export dist_build_skip_published_packages="true"
                true "${cyan}INFO: --skip-published-packages: rebuilding only changelog-bumped packages.${reset}"
                shift
+               ;;
+           --rebuild-packages)
+               ## Debug speed-up (with --skip-published-packages): force-rebuild these
+               ## SOURCE packages (space-separated) even without a debian/changelog bump,
+               ## by deleting them from the local repo first so they read as unpublished.
+               export dist_build_rebuild_packages="$2"
+               true "${cyan}INFO: --rebuild-packages: force-rebuilding '${2}'.${reset}"
+               shift 2
                ;;
            --sanity-tests)
                if [ "${2:-}" = "true" ]; then
