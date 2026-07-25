@@ -9,14 +9,14 @@ name: Boot Test
 ## IS its pass/fail signal (0 pass, non-zero fail/setup, 77 SKIP).
 ##
 ## One build flavor: kicksecure-debug (minimal boot-test image = boot chain +
-## hardening core + systemcheck + user-sysmaint-split). Its single build emits all
-## three image kinds, and because it ships user-sysmaint-split, EVERY kind carries a
-## sysmaint session -- sysmaint is a general Kicksecure feature (GRUB "SYSMAINT
-## Session" entry), not a live-ISO concept. So each kind is booted 'user' AND
-## 'sysmaint':
+## hardening core + systemcheck + user-sysmaint-split). Because it ships
+## user-sysmaint-split, EVERY image kind carries a sysmaint session -- sysmaint is a
+## general Kicksecure feature (GRUB "SYSMAINT Session" entry), not a live-ISO
+## concept. So each kind is booted 'user' AND 'sysmaint':
 ##   - qcow2 DISK      (the released disk image).
 ##   - live ISO        (the same packages, live-booted).
-##   - virtualbox .ova (the same build's ova; ci/boot-test extracts its .vmdk).
+##   - virtualbox .ova -- TEMPORARILY DISABLED (re-enable once stable; search
+##     'vbox temporarily disabled' -- build target, .ova upload, boot matrix).
 ## The sysmaint session is selected -- identically on every kind -- via dm-qemu's
 ## SMBIOS kernel-cmdline injection of 'boot-role=sysmaint
 ## systemd.unit=sysmaint-boot.target', the exact pair the sysmaint GRUB entry adds
@@ -51,6 +51,12 @@ concurrency:
 
 env:
   BOOT_ARCH: amd64
+  ## Temporary build speed-up: also cache the apt-download proxy cache
+  ## (~/approx_cache_mnt) across runs, so unchanged .debs are not re-downloaded.
+  ## Flip to 'false' for a clean build (e.g. if a stale download cache is
+  ## suspected). The derivative-package repo cache is always on and separate --
+  ## it is correctness-neutral (the freshness gate re-validates every package).
+  BASE_CACHE: "true"
 
 jobs:
   build:
@@ -134,8 +140,11 @@ jobs:
       ## (spurious diff) or let neither rebuild the packages (false green, masking
       ## real non-reproducibility). Here there is no such comparison, so a warm
       ## cache is pure speedup.
+      ## Restore-only here; the matching save runs at job end AFTER a chown (the
+      ## build writes these dirs as in-container uids the runner user cannot read,
+      ## so a plain post-save silently caches nothing -- that was the bug).
       - name: Restore derivative-package repo cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/binary_mnt/aptrepo_local
@@ -144,6 +153,15 @@ jobs:
           key: ${{ runner.os }}-boot-pkgrepo-${{ matrix.flavor }}-${{ matrix.image_kind }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-boot-pkgrepo-${{ matrix.flavor }}-${{ matrix.image_kind }}-${{ env.BOOT_ARCH }}-
+
+      - name: Restore apt-download cache (temporary speed-up)
+        if: env.BASE_CACHE == 'true'
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/approx_cache_mnt
+          key: ${{ runner.os }}-boot-aptdl-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-boot-aptdl-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-
 
       - name: Build ${{ matrix.flavor }} via dm-build-official (${{ env.BOOT_ARCH }})
         ## Build through the official orchestration -- the SAME single build path as
@@ -162,7 +180,10 @@ jobs:
           ARCH: ${{ env.BOOT_ARCH }}
           FLAVOR: ${{ matrix.flavor }}
           FRESHNESS: frozen
-          MULTI_TARGET_LIST: ${{ matrix.image_kind != 'iso' && 'virtualbox qcow2' || '' }}
+          ## vbox temporarily disabled (re-enable once stable): drop 'virtualbox'
+          ## so the non-iso job builds only the qcow2 and skips the raw->vdi->ova
+          ## conversion. Restore 'virtualbox qcow2' below to re-enable vbox.
+          MULTI_TARGET_LIST: ${{ matrix.image_kind != 'iso' && 'qcow2' || '' }}
         run: >-
           ./docker/derivative-maker-docker-run --
           bash -c "./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
@@ -181,6 +202,41 @@ jobs:
       - name: Free build scratch (keep released image only)
         run: ./ci/free-build-scratch
 
+      ## The build writes these under the bind mounts as in-container uids (the
+      ## package repo as 'user', the apt cache as 'approx' 101:102), which the
+      ## runner user cannot read -- so actions/cache/save would tar nothing. Chown
+      ## them to the runner first. 'always()' so a failed build still seeds the
+      ## cache with whatever it produced, speeding the retry.
+      - name: Make caches readable for save
+        if: always()
+        run: |
+          for cache_dir in \
+            "$HOME/binary_mnt/aptrepo_local" \
+            "$HOME/binary_mnt/packages-build-status" \
+            "$HOME/binary_mnt/genmkfile-packages-result" \
+            "$HOME/approx_cache_mnt"; do
+            if [ -e "$cache_dir" ]; then
+              sudo chown -R "$(id -u):$(id -g)" -- "$cache_dir" || true
+            fi
+          done
+
+      - name: Save derivative-package repo cache
+        if: always()
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            ~/binary_mnt/aptrepo_local
+            ~/binary_mnt/packages-build-status
+            ~/binary_mnt/genmkfile-packages-result
+          key: ${{ runner.os }}-boot-pkgrepo-${{ matrix.flavor }}-${{ matrix.image_kind }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
+
+      - name: Save apt-download cache (temporary speed-up)
+        if: always() && env.BASE_CACHE == 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/approx_cache_mnt
+          key: ${{ runner.os }}-boot-aptdl-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
+
       - name: Upload built ${{ matrix.image_kind }} image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -190,11 +246,11 @@ jobs:
           retention-days: 2
 
       - name: Upload built .ova (virtualbox)
-        ## The qcow2 build job requests 'virtualbox qcow2', so it emits the .ova
-        ## alongside the qcow2 in one run; upload the .ova too so the boot lane can
-        ## also boot-test it (ci/boot-test extracts the .vmdk). Same kicksecure-debug
-        ## package set as the qcow2, so it carries user-sysmaint-split (sysmaint too).
-        if: matrix.image_kind == 'qcow2'
+        ## vbox temporarily disabled (re-enable once stable): the non-iso job no
+        ## longer builds the .ova (MULTI_TARGET_LIST above). Re-enable by setting
+        ## 'if:' back to: matrix.image_kind == 'qcow2' (and restore 'virtualbox
+        ## qcow2' in MULTI_TARGET_LIST + the 'vbox' image_kind in the boot matrix).
+        if: false
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: boot-image-vbox
@@ -215,7 +271,11 @@ jobs:
         image_kind:
           - qcow2
           - iso
-          - vbox
+          ## vbox temporarily disabled (re-enable once stable): the build no longer
+          ## emits/uploads the .ova, so a vbox leg would have no artifact. Restore
+          ## '- vbox' here together with the build-side MULTI_TARGET_LIST + .ova
+          ## upload to bring it back.
+          # - vbox
         firmware:
           - bios
           - efi
@@ -223,8 +283,8 @@ jobs:
         session:
           - user
           - sysmaint
-        ## No exclusions: kicksecure-debug ships user-sysmaint-split, so every image
-        ## kind (qcow2 / iso / vbox) has a real sysmaint session, selected uniformly
+        ## No exclusions: kicksecure-debug ships user-sysmaint-split, so every built
+        ## image kind (qcow2 / iso) has a real sysmaint session, selected uniformly
         ## via dm-qemu's SMBIOS cmdline injection. Both sessions run on all kinds.
     steps:
       - name: Checkout repository (no submodules yet)
