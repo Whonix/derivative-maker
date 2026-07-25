@@ -657,6 +657,18 @@ Not running any chroot scripts.${reset}"
    ## chain can never fail a build whose ISO is already written (this
    ## codebase's ERR trap fires on a non-zero command even with errexit off).
    "$dist_source_help_steps_folder/unmount-lb" "${args[@]}" || true
+
+   ## On CI, reclaim the large live-build working tree (cache + chroot) now that
+   ## the ISO is finalized, popped out of, and unmounted: it is never a released
+   ## artifact, and freeing it here -- rather than after the whole build -- keeps a
+   ## disk-constrained CI runner from filling up during a later VM-image build.
+   ## Local builds keep it for inspection. (Formerly removed post-build by
+   ## ci/free-build-scratch, which now only handles the raw base images.)
+   ## style-ok: no-safe-rm -- root-owned throwaway CI live-build scratch, removed
+   ## best-effort; safe-rm is not guaranteed on the hosted runner.
+   if [ "${CI:-}" = "true" ]; then
+      $SUDO_TO_ROOT rm --recursive --force -- "${dist_live_build_folder}" || true
+   fi
 }
 
 main() {

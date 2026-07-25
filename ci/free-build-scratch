@@ -46,8 +46,11 @@ before_kib="$(df --output=avail -- "$binary_dir" | tail --lines=1)"
 ## Scratch entries under each version subfolder (depth 2). Matched by name at a
 ## bounded depth so 'find' lists the (readable) version dir WITHOUT descending
 ## into the root-owned scratch it is about to remove.
+## The live-build working tree is now reclaimed earlier, inside
+## build-steps.d/3600_convert-raw-to-iso right after the ISO is finalized (frees
+## disk mid-build); this sweep only handles the remaining raw scratch left after a
+## full build.
 scratch_names=(
-   live-build          ## live-build working tree (cache + chroot) -- the EACCES source
    '*_image'           ## per-flavor build chroot, e.g. Kicksecure-LXQt_image
    '*.raw'             ## raw base image -- never a released artifact
    base-image.raw
