@@ -8,16 +8,20 @@ name: Boot Test
 ## runs 'systemcheck --cli --leak-tests --verbose'. Each boot-test leg's conclusion
 ## IS its pass/fail signal (0 pass, non-zero fail/setup, 77 SKIP).
 ##
-## Three image kinds are covered (image matrix):
-##   - kicksecure-cli  -> qcow2 DISK, booted 'user' only (CLI ships no
-##     user-sysmaint-split, so there is no sysmaint account/session).
-##   - kicksecure-lxqt -> live ISO, booted 'user' AND 'sysmaint' (sysmaint exists
-##     only on GUI/lxqt flavors). The sysmaint session is selected on the live ISO
-##     via dm-qemu's SMBIOS kernel-cmdline injection (boot-role=sysmaint), the same
-##     token the sysmaint GRUB entry adds.
-##   - kicksecure-cli -> virtualbox .ova, booted 'user' (the same CLI build that
-##     makes the qcow2 also emits the .ova; ci/boot-test extracts its .vmdk).
-## The sysmaint legs are gated to the ISO/lxqt kind (see the boot-test step 'if').
+## One build flavor: kicksecure-debug (minimal boot-test image = boot chain +
+## hardening core + systemcheck + user-sysmaint-split). Its single build emits all
+## three image kinds, and because it ships user-sysmaint-split, EVERY kind carries a
+## sysmaint session -- sysmaint is a general Kicksecure feature (GRUB "SYSMAINT
+## Session" entry), not a live-ISO concept. So each kind is booted 'user' AND
+## 'sysmaint':
+##   - qcow2 DISK      (the released disk image).
+##   - live ISO        (the same packages, live-booted).
+##   - virtualbox .ova (the same build's ova; ci/boot-test extracts its .vmdk).
+## The sysmaint session is selected -- identically on every kind -- via dm-qemu's
+## SMBIOS kernel-cmdline injection of 'boot-role=sysmaint
+## systemd.unit=sysmaint-boot.target', the exact pair the sysmaint GRUB entry adds
+## (user-sysmaint-split grub.d_10_10_linux_sysmaint). SMBIOS injection is disk/ISO
+## agnostic, so no image kind is excluded from either session.
 ##
 ## All boot logic lives in dist-ai's dm-image-boot-tests, which bundles dm-qemu
 ## (qemu/firmware/Secure Boot + SMBIOS kernel-cmdline injection) and dm-image-test
@@ -65,7 +69,7 @@ jobs:
           - flavor: kicksecure-debug
             image_kind: qcow2
             upload_glob: Kicksecure-*.qcow2*
-          ## -> live ISO (carries the sysmaint session).
+          ## -> live ISO (same package set, live-booted).
           - flavor: kicksecure-debug
             image_kind: iso
             upload_glob: Kicksecure-*.iso
@@ -186,10 +190,11 @@ jobs:
           retention-days: 2
 
       - name: Upload built .ova (virtualbox)
-        ## The kicksecure-cli build emits qcow2 AND a virtualbox .ova in one run;
-        ## upload the .ova too so the boot lane can also boot-test it (ci/boot-test
-        ## extracts the .vmdk). No sysmaint on the CLI .ova (no user-sysmaint-split).
-        if: matrix.flavor == 'kicksecure-cli'
+        ## The qcow2 build job requests 'virtualbox qcow2', so it emits the .ova
+        ## alongside the qcow2 in one run; upload the .ova too so the boot lane can
+        ## also boot-test it (ci/boot-test extracts the .vmdk). Same kicksecure-debug
+        ## package set as the qcow2, so it carries user-sysmaint-split (sysmaint too).
+        if: matrix.image_kind == 'qcow2'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: boot-image-vbox
@@ -218,15 +223,9 @@ jobs:
         session:
           - user
           - sysmaint
-        ## sysmaint is a live-ISO concept (the maintenance session boots from the
-        ## ISO). Do not generate qcow2/vbox x sysmaint legs: the boot-test step
-        ## would skip and the job would still report a vacuous 'success', masking
-        ## the real coverage. Only iso runs both sessions.
-        exclude:
-          - image_kind: qcow2
-            session: sysmaint
-          - image_kind: vbox
-            session: sysmaint
+        ## No exclusions: kicksecure-debug ships user-sysmaint-split, so every image
+        ## kind (qcow2 / iso / vbox) has a real sysmaint session, selected uniformly
+        ## via dm-qemu's SMBIOS cmdline injection. Both sessions run on all kinds.
     steps:
       - name: Checkout repository (no submodules yet)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -287,10 +286,8 @@ jobs:
           printf 'path=%s\n' "${image_path}" >> "${GITHUB_OUTPUT}"
 
       - name: Boot-test (${{ matrix.image_kind }}, ${{ matrix.firmware }}, ${{ matrix.session }})
-        ## The sysmaint session only exists on GUI (lxqt) flavors, which here is the
-        ## live ISO; skip its legs for the CLI qcow2 disk (no user-sysmaint-split
-        ## account by design).
-        if: ${{ matrix.session != 'sysmaint' || matrix.image_kind == 'iso' }}
+        ## Every kind carries user-sysmaint-split, so both sessions run on all of
+        ## them -- no skip (a skipped leg would report a vacuous 'success').
         ## rule 4: values via env, not interpolated into run:.
         env:
           IMAGE: ${{ steps.image.outputs.path }}
