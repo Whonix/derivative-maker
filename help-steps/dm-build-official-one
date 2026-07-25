@@ -238,7 +238,13 @@ done
 ## - create-debian-packages builds all derivative .debs into the local repo once
 ##   (kept here with the exact union invocation so its target-conditional paths
 ##   match the historical behavior); Phase 3 reuses them via
-##   '--skip-published-packages'.
+##   '--skip-published-packages'. The shared build ITSELF also passes
+##   '--skip-published-packages': on a cold local repo every package is absent so
+##   dm_package_needs_rebuild returns true and all are built (a no-op vs. before),
+##   while a warm repo (e.g. a CI cache persisted across runs) lets unchanged
+##   packages be skipped -- only version-bumped or source-content-changed packages
+##   rebuild. Correctness is unchanged: a real edit still rebuilds (changelog
+##   version compare, else a source content hash).
 
 ## Use both '--target iso' and the VM targets for prepare-build-machine /
 ## cowbuilder-setup / local-dependencies, because ISO builds need additional
@@ -258,7 +264,9 @@ run_cmd ./build-steps.d/*_create-raw-image "${build_args[@]}" "${multi_target_ar
 unset dist_build_raw_base_image_create
 
 ## '--target iso' is required to download calamares from backports.
-run_cmd ./build-steps.d/*_create-debian-packages "${build_args[@]}" --target iso "${multi_target_args[@]}" --flavor source "$@"
+## '--skip-published-packages' makes a warm local repo (persisted across CI runs)
+## skip unchanged packages; a no-op on a cold repo (all packages absent -> built).
+run_cmd ./build-steps.d/*_create-debian-packages "${build_args[@]}" --target iso "${multi_target_args[@]}" --flavor source --skip-published-packages "$@"
 
 ############################################################
 ## Phase 3: per-flavor image builds (reuse Phase 2's shared work).

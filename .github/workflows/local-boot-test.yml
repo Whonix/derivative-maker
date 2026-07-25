@@ -106,6 +106,41 @@ jobs:
         if: steps.dmimg-cache.outputs.cache-hit == 'true'
         run: ./ci/dm-docker-image-cache load
 
+      ## Persist the built derivative-package repo across runs so unchanged
+      ## packages are NOT rebuilt (the ~50-package cowbuilder rebuild dominates
+      ## the build). The build container writes binary_build_folder_dist
+      ## (=/home/user/derivative-binary) to the bind-mounted host /home/runner/
+      ## binary_mnt (docker/derivative-maker-docker-run), so these three host
+      ## subfolders are exactly where create-debian-packages persists the repo:
+      ##   aptrepo_local/          -- the reprepro local repo (db + .deb pool) the
+      ##                              freshness gate queries for the published version
+      ##   packages-build-status/  -- the per-codename source-hash manifest that
+      ##                              detects a source edit without a changelog bump
+      ##   genmkfile-packages-result/ -- genmkfile's built-.deb output cache
+      ## On a WARM restore, the shared create-debian-packages runs with
+      ## --skip-published-packages (dm-build-official-one): a package whose
+      ## published version matches AND whose source hash is unchanged is skipped;
+      ## only changed packages rebuild. On a COLD miss all three are absent, every
+      ## package builds, and the post-job save seeds the cache for next time.
+      ## Unique primary key (run_id) -> always a miss -> always saves a fresh
+      ## entry; the restore-keys prefix warms from the most recent prior run.
+      ## Boot-test lane only -- NOT the repro lane (local-build.yml): that lane's
+      ## signal is bit-for-bit equality of two independent builds, and a package
+      ## cache would either make copy-a/copy-b start from different warm caches
+      ## (spurious diff) or let neither rebuild the packages (false green, masking
+      ## real non-reproducibility). Here there is no such comparison, so a warm
+      ## cache is pure speedup.
+      - name: Restore derivative-package repo cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            ~/binary_mnt/aptrepo_local
+            ~/binary_mnt/packages-build-status
+            ~/binary_mnt/genmkfile-packages-result
+          key: ${{ runner.os }}-boot-pkgrepo-${{ matrix.flavor }}-${{ matrix.image_kind }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-boot-pkgrepo-${{ matrix.flavor }}-${{ matrix.image_kind }}-${{ env.BOOT_ARCH }}-
+
       - name: Build ${{ matrix.flavor }} via dm-build-official (${{ env.BOOT_ARCH }})
         ## Build through the official orchestration -- the SAME single build path as
         ## local-build.yml, no duplication. dm-build-official does NOT sign, and the
