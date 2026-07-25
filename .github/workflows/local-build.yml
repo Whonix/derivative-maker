@@ -15,8 +15,9 @@ name: Build
 ## Until the images are fully reproducible this lane is EXPECTED to be red; that
 ## red is the honest "not there yet" signal and the diffoscope report artifact
 ## says exactly what still differs. The build runs through the official
-## orchestration (help-steps/dm-build-official) with flavors_list=kicksecure-cli
-## (a fast single-flavor smoke), so there is ONE build path and no duplicate build
+## orchestration (help-steps/dm-build-official) with a single-flavor smoke
+## (kicksecure-cli for qcow2/virtualbox, kicksecure-lxqt for iso), so there is
+## ONE build path and no duplicate build
 ## logic; all compare logic lives in developer-meta-files' dm-reproducible-compare-artifacts,
 ## so the shell stays lint-covered and locally runnable. See
 ## agents/github-actions-security.md for the pinning / permissions patterns.
@@ -25,13 +26,14 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "Which built image to compare (kicksecure-cli builds qcow2 + virtualbox)."
+        description: "Which built image to compare (qcow2/virtualbox build kicksecure-cli; iso builds kicksecure-lxqt)."
         type: choice
         ## A choice input defaults to the first option (qcow2); the env fallback
         ## below ('inputs.target || qcow2') covers schedule/push.
         options:
           - qcow2
           - virtualbox
+          - iso
   push:
     branches:
       - '**ci**'
@@ -59,12 +61,17 @@ concurrency:
 ## scheduled run (where inputs are empty). Fixed to amd64: the primary
 ## reproducibility target; arm64 is a follow-up.
 env:
-  ## dm-build-official builds virtualbox + qcow2 for kicksecure-cli on amd64 (no
-  ## iso -- iso is lxqt-only), so the compare target is qcow2 or virtualbox.
-  ## Default to qcow2: mountable, and the comparator descends the shipped
-  ## '.qcow2.libvirt.xz'. The flavor is fixed to kicksecure-cli (a fast smoke).
+  ## Compare target -> flavor: qcow2/virtualbox come from kicksecure-cli (a fast
+  ## smoke that builds both VM images on amd64); iso is lxqt-only, so target=iso
+  ## builds kicksecure-lxqt instead. Default to qcow2: mountable, and the
+  ## comparator descends the shipped '.qcow2.libvirt.xz'.
   REPRO_TARGET: ${{ inputs.target || 'qcow2' }}
   REPRO_ARCH: amd64
+  ## iso is produced only by the lxqt flavor; every other target by the cli smoke.
+  REPRO_FLAVOR: ${{ inputs.target == 'iso' && 'kicksecure-lxqt' || 'kicksecure-cli' }}
+  ## For an iso run, skip the multi-target VM images so only the iso is built (an
+  ## lxqt iso+qcow2+ova build on both runners is far heavier); empty otherwise.
+  REPRO_SKIP_MULTI: ${{ inputs.target == 'iso' && 'true' || '' }}
 
 jobs:
   build:
@@ -142,14 +149,17 @@ jobs:
         if: steps.dmimg-cache.outputs.cache-hit == 'true'
         run: ./ci/dm-docker-image-cache load
 
-      - name: Build ${{ matrix.copy }} via dm-build-official (kicksecure-cli smoke, ${{ env.REPRO_ARCH }})
+      - name: Build ${{ matrix.copy }} via dm-build-official (${{ env.REPRO_FLAVOR }}, ${{ env.REPRO_ARCH }})
         ## Route the build through the OFFICIAL orchestration
         ## (help-steps/dm-build-official) rather than a separate ci/build
         ## path, so CI exercises the real official build with no duplicate build
         ## logic. Passed via an 'env VAR=val' prefix (the container entrypoint execs
         ## "$@", so this sets them inside the container without a docker-run change):
-        ##   flavors_list=kicksecure-cli  -> fast SINGLE-flavor smoke (the script
-        ##       honours a flavors_list override; the release steps are flavor-aware)
+        ##   flavors_list=$FLAVOR         -> SINGLE-flavor smoke (cli for qcow2/
+        ##       virtualbox, lxqt for iso; the script honours a flavors_list
+        ##       override and the release steps are flavor-aware)
+        ##   dist_build_skip_multi_target_images=$SKIP_MULTI -> for an iso run,
+        ##       skip the VM images so only the iso is produced (empty otherwise)
         ##   dist_build_target_arch       -> pin the arch (dm-build-official-one
         ##       otherwise defaults CI to arm64)
         ## CI=true (forwarded by docker-run) makes it reproducible-from-source with
@@ -165,12 +175,15 @@ jobs:
         env:
           CI: "true"
           ARCH: ${{ env.REPRO_ARCH }}
+          FLAVOR: ${{ env.REPRO_FLAVOR }}
+          SKIP_MULTI: ${{ env.REPRO_SKIP_MULTI }}
           FRESHNESS: frozen
         run: >-
           ./docker/derivative-maker-docker-run --
           bash -c "export dist_build_version=\"\$(git describe --always --abbrev=1000000000)\" &&
           ./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
-          env dist_build_target_arch='${ARCH}' flavors_list=kicksecure-cli
+          env dist_build_target_arch='${ARCH}' flavors_list='${FLAVOR}'
+          dist_build_skip_multi_target_images='${SKIP_MULTI}'
           ./help-steps/dm-build-official --freshness '${FRESHNESS}'"
 
       - name: Save docker image to cache
