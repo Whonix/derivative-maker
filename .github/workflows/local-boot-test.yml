@@ -112,20 +112,20 @@ jobs:
         ## into sign-and-tag and the build. rule 4: shell vars from env, no ${{ }}
         ## interpolation into run:.
         ## The ISO job needs ONLY the ISO; its sibling CLI job already builds the
-        ## qcow2 + VirtualBox images. Setting dist_build_skip_multi_target_images
-        ## skips the heavy post-ISO qcow2/ova build (raw -> vdi -> ova) that would
-        ## otherwise exhaust the runner filesystem.
+        ## qcow2 + VirtualBox images. An EMPTY dist_build_multi_target_list builds
+        ## no post-ISO VM images (the raw -> vdi -> ova + qcow2 build would exhaust
+        ## the runner filesystem); the CLI job requests 'virtualbox qcow2'.
         env:
           CI: "true"
           ARCH: ${{ env.BOOT_ARCH }}
           FLAVOR: ${{ matrix.flavor }}
           FRESHNESS: frozen
-          SKIP_MULTI: ${{ matrix.image_kind == 'iso' && 'true' || '' }}
+          MULTI_TARGET_LIST: ${{ matrix.image_kind == 'iso' && '' || 'virtualbox qcow2' }}
         run: >-
           ./docker/derivative-maker-docker-run --
           bash -c "./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
           env dist_build_target_arch='${ARCH}' flavors_list='${FLAVOR}'
-          dist_build_skip_multi_target_images='${SKIP_MULTI}'
+          dist_build_multi_target_list='${MULTI_TARGET_LIST}'
           ./help-steps/dm-build-official --freshness '${FRESHNESS}'"
 
       - name: Save docker image to cache

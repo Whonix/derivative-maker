@@ -69,9 +69,10 @@ env:
   REPRO_ARCH: amd64
   ## iso is produced only by the lxqt flavor; every other target by the cli smoke.
   REPRO_FLAVOR: ${{ inputs.target == 'iso' && 'kicksecure-lxqt' || 'kicksecure-cli' }}
-  ## For an iso run, skip the multi-target VM images so only the iso is built (an
-  ## lxqt iso+qcow2+ova build on both runners is far heavier); empty otherwise.
-  REPRO_SKIP_MULTI: ${{ inputs.target == 'iso' && 'true' || '' }}
+  ## For an iso run, build no multi-target VM images so only the iso is produced
+  ## (an lxqt iso+qcow2+ova build on both runners is far heavier); the VM targets
+  ## build 'virtualbox qcow2' as usual.
+  REPRO_MULTI_TARGET_LIST: ${{ inputs.target == 'iso' && '' || 'virtualbox qcow2' }}
 
 jobs:
   build:
@@ -158,8 +159,8 @@ jobs:
         ##   flavors_list=$FLAVOR         -> SINGLE-flavor smoke (cli for qcow2/
         ##       virtualbox, lxqt for iso; the script honours a flavors_list
         ##       override and the release steps are flavor-aware)
-        ##   dist_build_skip_multi_target_images=$SKIP_MULTI -> for an iso run,
-        ##       skip the VM images so only the iso is produced (empty otherwise)
+        ##   dist_build_multi_target_list=$MULTI -> for an iso run, empty so only
+        ##       the iso is produced; 'virtualbox qcow2' for the VM targets
         ##   dist_build_target_arch       -> pin the arch (dm-build-official-one
         ##       otherwise defaults CI to arm64)
         ## CI=true (forwarded by docker-run) makes it reproducible-from-source with
@@ -176,14 +177,14 @@ jobs:
           CI: "true"
           ARCH: ${{ env.REPRO_ARCH }}
           FLAVOR: ${{ env.REPRO_FLAVOR }}
-          SKIP_MULTI: ${{ env.REPRO_SKIP_MULTI }}
+          MULTI: ${{ env.REPRO_MULTI_TARGET_LIST }}
           FRESHNESS: frozen
         run: >-
           ./docker/derivative-maker-docker-run --
           bash -c "export dist_build_version=\"\$(git describe --always --abbrev=1000000000)\" &&
           ./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
           env dist_build_target_arch='${ARCH}' flavors_list='${FLAVOR}'
-          dist_build_skip_multi_target_images='${SKIP_MULTI}'
+          dist_build_multi_target_list='${MULTI}'
           ./help-steps/dm-build-official --freshness '${FRESHNESS}'"
 
       - name: Save docker image to cache
