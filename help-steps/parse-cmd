@@ -193,6 +193,7 @@ Advanced Options:
   --rebuild-packages '<p1 p2>'    : With --skip-published-packages, force-rebuild these SOURCE packages (space-separated) without a debian/changelog bump, by deleting them from the local repo first.
   --skip-prepare-build-machine    : Shared-work speed-up: skip build-steps.d/*_prepare-build-machine. Only safe when the build machine was already prepared by an earlier run in the same session.
   --skip-cowbuilder-setup         : Shared-work speed-up: skip build-steps.d/*_cowbuilder-setup. Only safe when the cowbuilder chroot was already created by an earlier run in the same session.
+  --reuse-cowbuilder-base         : Speed-up: in build-steps.d/*_cowbuilder-setup, reuse an already-present cowbuilder base chroot instead of rebuilding it; if none exists yet, build one as usual. Unlike --skip-cowbuilder-setup this is safe when the base may or may not be present (e.g. a base restored from a CI cache).
   --skip-local-dependencies       : Shared-work speed-up: skip build-steps.d/*_local-dependencies. Only safe when the local dependencies were already installed by an earlier run in the same session.
   --retry-max [attempts]          : Set maximum retry attempts. (default: 2)
   --retry-wait [seconds]          : Set wait time between retry attempts.
@@ -632,6 +633,17 @@ dist_build_one_parse_cmd() {
                ## already created by an earlier run in the same session.
                export dist_build_skip_cowbuilder_setup="true"
                true "${cyan}INFO: --skip-cowbuilder-setup: reusing the existing cowbuilder chroot.${reset}"
+               shift
+               ;;
+           --reuse-cowbuilder-base)
+               ## Speed-up: 'build-steps.d/*_cowbuilder-setup' reuses an already-present
+               ## cowbuilder base chroot ('base.cow_<arch>') instead of the rm +
+               ## 'cowbuilder --create'. Unlike --skip-cowbuilder-setup (which skips the
+               ## whole step and needs the base to exist), the step still decides:
+               ## reuse if the base is present, else build a fresh one. Safe when a base
+               ## may or may not be present, e.g. one restored from a CI cache.
+               export dist_build_reuse_cowbuilder_base="true"
+               true "${cyan}INFO: --reuse-cowbuilder-base: reuse an existing cowbuilder base if present, else build fresh.${reset}"
                shift
                ;;
            --skip-local-dependencies)

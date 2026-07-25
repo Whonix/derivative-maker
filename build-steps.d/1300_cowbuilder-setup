@@ -157,7 +157,19 @@ cowbuilder_setup_do() {
 
       if [ "${skip:-}" = "true" ]; then
          true "${cyan}INFO: Skipping cowbuilder chroot creation.${reset}"
+      elif [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ] && [ -d "$base_folder" ]; then
+         ## --reuse-cowbuilder-base fast path: a base already exists and reuse was
+         ## requested, so skip the rm + 'cowbuilder --create'. The reuse-vs-build
+         ## decision lives HERE, not in the caller: a caller (e.g. CI restoring a
+         ## base from cache) always passes the flag, and this step reuses the base
+         ## if present or builds a fresh one below if not. Gate: only pass the flag
+         ## with a deterministic (frozen) base under a key that tracks the base
+         ## recipe; the repro lane and releases leave it off and always rebuild.
+         true "${cyan}INFO: --reuse-cowbuilder-base: reusing existing cowbuilder base '$base_folder'.${reset}"
       else
+         if [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ]; then
+            true "${cyan}INFO: --reuse-cowbuilder-base requested but no base at '$base_folder'; building a fresh one.${reset}"
+         fi
          ## Ensure the cowbuilder cache dir exists before 'cowbuilder --create'. The default is
          ## now '$binary_build_folder_dist/pbuilder' (derivative-binary/<slot>/pbuilder), which --
          ## unlike the pbuilder package's pre-created '/var/cache/pbuilder' -- does not exist yet;

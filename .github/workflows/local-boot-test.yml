@@ -163,6 +163,46 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-boot-aptdl-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-
 
+      ## Cache the cowbuilder base chroot (~/binary_mnt/pbuilder/base.cow_<arch>) as
+      ## a root-owned tarball. Key tracks the base recipe (1300 extrapackages) and
+      ## the apt sources/snapshot, so a base-affecting change invalidates it and a
+      ## fresh base is built. 1300_cowbuilder-setup reuses the restored base only
+      ## when --reuse-cowbuilder-base is passed to the build (below).
+      - name: Restore cowbuilder base cache (temporary speed-up)
+        if: env.BASE_CACHE == 'true'
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/cowbuilder-base-cache
+          key: ${{ runner.os }}-boot-cowbase-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ hashFiles('build-steps.d/1300_cowbuilder-setup', 'build_sources/**') }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-boot-cowbase-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ hashFiles('build-steps.d/1300_cowbuilder-setup', 'build_sources/**') }}-
+
+      - name: Unpack cowbuilder base into place (temporary speed-up)
+        if: env.BASE_CACHE == 'true'
+        ## sudo-extract so the root-owned chroot (ownership, setuid, device nodes) is
+        ## restored with full fidelity -- a runner-owned cache + chown would strip
+        ## setuid off sudo/fakeroot and break the base. Create ~/binary_mnt as the
+        ## runner FIRST so docker-run's volume_prepare (which only chowns a dir it
+        ## makes fresh) leaves the runner-owned mount and the root-owned base alone.
+        run: |
+          base_tar="$HOME/cowbuilder-base-cache/pbuilder-base.tar"
+          if [ -f "$base_tar" ]; then
+            ## Pre-create the mount as the runner (= HOST_USER, the container's
+            ## effective build uid) with docker-run's 770, so its volume_prepare --
+            ## which only touches a dir it makes fresh -- leaves the mount and the
+            ## root-owned base we drop into it alone. Cold runs skip this entirely,
+            ## so docker-run still creates/owns the mount exactly as before.
+            mkdir --parents -- "$HOME/binary_mnt"
+            chmod 0770 -- "$HOME/binary_mnt"
+            sudo mkdir --parents -- "$HOME/binary_mnt/pbuilder"
+            sudo tar --extract --preserve-permissions --xattrs --acls \
+              --numeric-owner --file "$base_tar" \
+              --directory "$HOME/binary_mnt/pbuilder"
+            printf '%s\n' "cowbuilder base restored from cache"
+          else
+            printf '%s\n' "no cached cowbuilder base; a fresh one will be built"
+          fi
+
       - name: Build ${{ matrix.flavor }} via dm-build-official (${{ env.BOOT_ARCH }})
         ## Build through the official orchestration -- the SAME single build path as
         ## local-build.yml, no duplication. dm-build-official does NOT sign, and the
@@ -184,12 +224,16 @@ jobs:
           ## so the non-iso job builds only the qcow2 and skips the raw->vdi->ova
           ## conversion. Restore 'virtualbox qcow2' below to re-enable vbox.
           MULTI_TARGET_LIST: ${{ matrix.image_kind != 'iso' && 'qcow2' || '' }}
+          ## Pass --reuse-cowbuilder-base only when the base cache is enabled (the
+          ## unpack step above restored a frozen base under a recipe-tracking key);
+          ## 1300_cowbuilder-setup then reuses it if present, else builds a fresh one.
+          COWBASE_REUSE_FLAG: ${{ env.BASE_CACHE == 'true' && '--reuse-cowbuilder-base' || '' }}
         run: >-
           ./docker/derivative-maker-docker-run --
           bash -c "./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
           env dist_build_target_arch='${ARCH}' flavors_list='${FLAVOR}'
           dist_build_multi_target_list='${MULTI_TARGET_LIST}'
-          ./help-steps/dm-build-official --freshness '${FRESHNESS}'"
+          ./help-steps/dm-build-official --freshness '${FRESHNESS}' ${COWBASE_REUSE_FLAG}"
 
       - name: Save docker image to cache
         if: steps.dmimg-cache.outputs.cache-hit != 'true'
@@ -236,6 +280,30 @@ jobs:
         with:
           path: ~/approx_cache_mnt
           key: ${{ runner.os }}-boot-aptdl-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
+
+      - name: Pack cowbuilder base for cache (temporary speed-up)
+        if: always() && env.BASE_CACHE == 'true'
+        ## sudo-tar so root ownership / setuid / device nodes are preserved inside
+        ## the archive; then chown only the tarball so the runner can save it.
+        run: |
+          base_dir="$HOME/binary_mnt/pbuilder/base.cow_${BOOT_ARCH}"
+          if sudo test -d "$base_dir"; then
+            mkdir --parents -- "$HOME/cowbuilder-base-cache"
+            sudo tar --create --preserve-permissions --xattrs --acls \
+              --numeric-owner --file "$HOME/cowbuilder-base-cache/pbuilder-base.tar" \
+              --directory "$HOME/binary_mnt/pbuilder" "base.cow_${BOOT_ARCH}"
+            sudo chown -R "$(id -u):$(id -g)" -- "$HOME/cowbuilder-base-cache"
+            printf '%s\n' "cowbuilder base packed for cache"
+          else
+            printf '%s\n' "no cowbuilder base to pack"
+          fi
+
+      - name: Save cowbuilder base cache (temporary speed-up)
+        if: always() && env.BASE_CACHE == 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/cowbuilder-base-cache
+          key: ${{ runner.os }}-boot-cowbase-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ hashFiles('build-steps.d/1300_cowbuilder-setup', 'build_sources/**') }}-${{ github.run_id }}
 
       - name: Upload built ${{ matrix.image_kind }} image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
