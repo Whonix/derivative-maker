@@ -183,6 +183,15 @@ jobs:
         session:
           - user
           - sysmaint
+        ## sysmaint is a live-ISO concept (the maintenance session boots from the
+        ## ISO). Do not generate qcow2/vbox x sysmaint legs: the boot-test step
+        ## would skip and the job would still report a vacuous 'success', masking
+        ## the real coverage. Only iso runs both sessions.
+        exclude:
+          - image_kind: qcow2
+            session: sysmaint
+          - image_kind: vbox
+            session: sysmaint
     steps:
       - name: Checkout repository (no submodules yet)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
