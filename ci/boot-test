@@ -127,6 +127,11 @@ extract_dir=""
 # shellcheck disable=SC2317  # invoked indirectly via 'trap ... EXIT'
 boot_test_cleanup() {
    [ -n "${extract_dir}" ] && rm --recursive --force -- "${extract_dir}"
+   ## Never let the cleanup status become the script's exit code: bash makes a
+   ## non-zero EXIT-trap return override an explicit 'exit 0'. With no extract dir
+   ## (the ISO path) the '[ -n "" ]' test is false (1), which otherwise fails an
+   ## otherwise-passing leg.
+   return 0
 }
 trap boot_test_cleanup EXIT
 
