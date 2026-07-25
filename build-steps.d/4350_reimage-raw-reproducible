@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -132,6 +134,19 @@ reimage_raw() {
    $SUDO_TO_ROOT truncate -s 0 -- "$reimage_tree/var/log/alternatives.log" 2>/dev/null || true
    $SUDO_TO_ROOT safe-rm --force -- "$reimage_tree/var/cache/ldconfig/aux-cache"
 
+   ## Strip the leaked blkid cache. /run is runtime tmpfs state that must be empty in a shipped image,
+   ## but blkid runs during late chroot activity (grub / initramfs) AFTER 80_cleanup deletes /run/blkid,
+   ## re-leaking blkid.tab (+ rotated blkid.tab.old) into the rootfs. Each embeds a wall-clock scan TIME
+   ## and the build host's loop DEVNO (e.g. /dev/mapper/loop0p3), so its CONTENT differs every build even
+   ## though mke2fs pins the mtime to SOURCE_DATE_EPOCH. Mirrors the ISO path (3600_convert-raw-to-iso).
+   $SUDO_TO_ROOT safe-rm --recursive --force -- "$reimage_tree/run/blkid"
+
+   ## Strip DKMS build logs. dkms writes <module>/<ver>/<kernel>/<arch>/log/make.log with a wall-clock
+   ## build timestamp when it (re)builds a module (e.g. tirdad); this happens after 80_cleanup removes
+   ## the earlier copy, so the log reappears with build-varying CONTENT (mtime pinned by mke2fs hides it
+   ## from a metadata manifest). The built modules stay; only the logs go. Mirrors 80_cleanup.
+   $SUDO_TO_ROOT find "$reimage_tree/var/lib/dkms" -type f -name 'make.log' -exec safe-rm --force -- {} \; 2>/dev/null || true
+
    ## update-locale writes /etc/locale.conf (target of the /etc/default/locale symlink) with its
    ## assignment lines in a non-deterministic order. Sort the file so it is identical every build;
    ## the header comment sorts before the KEY=value lines, whose order is irrelevant to consumers.
@@ -148,8 +163,13 @@ reimage_raw() {
    if ! $SUDO_TO_ROOT blkdiscard --zeroout "$dev_mapper_device"; then
       dd_err="$(LC_ALL=C $SUDO_TO_ROOT dd if=/dev/zero of="$dev_mapper_device" bs=1M 2>&1 1>/dev/null)" || true
       case "$dd_err" in
-         *"No space left on device"*) true ;;
-         *) printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: failed to zero $dev_mapper_device: ${dd_err}" >&2; return 1 ;;
+         *"No space left on device"*)
+            true
+            ;;
+         *)
+            printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: failed to zero $dev_mapper_device: ${dd_err}" >&2
+            return 1
+            ;;
       esac
    fi
 
@@ -179,7 +199,10 @@ reimage_raw() {
                   "set_super_value kbytes_written 0" ; do
       debugfs_err="$($SUDO_TO_ROOT debugfs -w -R "$sde_cmd" "$dev_mapper_device" 2>&1 1>/dev/null)"
       case "$debugfs_err" in
-         *"set_super_value:"*) printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: debugfs rejected '$sde_cmd': ${debugfs_err}" >&2; return 1 ;;
+         *"set_super_value:"*)
+            printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: debugfs rejected '$sde_cmd': ${debugfs_err}" >&2
+            return 1
+            ;;
       esac
    done
 
