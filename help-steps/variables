@@ -1293,10 +1293,10 @@ declare -a dist_build_files_to_upload
 
 ## Parallel to dist_build_files_to_upload: the upload destination for the file at
 ## the same index. A multi-target build (e.g. '--target virtualbox --target qcow2')
-## must send each image to ITS OWN location; the former single scalar was populated
-## first-writer-wins and sent every image to the first target's directory (a qcow2
-## landing in .../ova). installer-dist maps one file to two servers by pushing the
-## file twice, once per destination.
+## must send each image to ITS OWN location, so a single scalar destination shared
+## across all files cannot express it (it would send every image to one target's
+## directory, e.g. a qcow2 into .../ova). installer-dist maps one file to two
+## servers by pushing the file twice, once per destination.
 unset dist_build_upload_locations
 declare -a dist_build_upload_locations
 

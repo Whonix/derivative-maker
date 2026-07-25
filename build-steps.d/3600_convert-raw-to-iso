@@ -159,7 +159,7 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    ## verbatim; live-build's config/binary is written with an UNQUOTED heredoc that
    ## keeps the backslash, and later '.'-sourced, where '\$' -> '$' restores the
    ## literal '\${dm_smbios_extra}' into LB_BOOTAPPEND_LIVE -> APPEND_LIVE -> every
-   ## live menuentry. This replaces the former live-build binary_grub_cfg patch.
+   ## live menuentry.
 
    ## Sanity test.
    test -n "${dist_build_hostname}"
@@ -658,12 +658,11 @@ Not running any chroot scripts.${reset}"
    ## codebase's ERR trap fires on a non-zero command even with errexit off).
    "$dist_source_help_steps_folder/unmount-lb" "${args[@]}" || true
 
-   ## On CI, reclaim the large live-build working tree (cache + chroot) now that
-   ## the ISO is finalized, popped out of, and unmounted: it is never a released
-   ## artifact, and freeing it here -- rather than after the whole build -- keeps a
+   ## On CI, reclaim the large live-build working tree (cache + chroot) here, where
+   ## the ISO is finalized, popped out of and unmounted so the tree is unneeded: it
+   ## is never a released artifact, and freeing it at this point keeps a
    ## disk-constrained CI runner from filling up during a later VM-image build.
-   ## Local builds keep it for inspection. (Formerly removed post-build by
-   ## ci/free-build-scratch, which now only handles the raw base images.)
+   ## Local builds keep it for inspection.
    ## style-ok: no-safe-rm -- root-owned throwaway CI live-build scratch, removed
    ## best-effort; safe-rm is not guaranteed on the hosted runner.
    if [ "${CI:-}" = "true" ]; then
