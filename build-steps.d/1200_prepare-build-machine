@@ -35,6 +35,11 @@ source variables
 cd "$MYDIR"
 cd ..
 
+if [ "${dist_build_skip_prepare_build_machine:-}" = "true" ]; then
+   true "${bold}${cyan}INFO: run with '--skip-prepare-build-machine' switch, skipping ${BASH_SOURCE[0]}. ${reset}"
+   exit 0
+fi
+
 build_machine_setup() {
    ## https://github.com/QubesOS/qubes-issues/issues/1066
    $SUDO_TO_ROOT systemctl stop qubes-update-check.timer || true

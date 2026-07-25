@@ -33,6 +33,11 @@ source variables
 cd "$MYDIR"
 cd ..
 
+if [ "${dist_build_skip_cowbuilder_setup:-}" = "true" ]; then
+   true "${bold}${cyan}INFO: run with '--skip-cowbuilder-setup' switch, skipping ${BASH_SOURCE[0]}. ${reset}"
+   exit 0
+fi
+
 source_date_epoch_test() {
    if [ "${SOURCE_DATE_EPOCH:-}" = "" ]; then
       error "SOURCE_DATE_EPOCH is still unset!"

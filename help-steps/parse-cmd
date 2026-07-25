@@ -191,6 +191,9 @@ Advanced Options:
   --skip-packages                 : Debug speed-up: skip package building entirely and reuse the whole local package repo from the prior build. Only safe if NO package source changed.
   --skip-published-packages       : Debug speed-up: rebuild only packages that changed since the last build -- a new/changed debian/changelog version OR edited source content (auto-detected by a content hash); skip up-to-date ones. No changelog bump needed to pick up a source edit.
   --rebuild-packages '<p1 p2>'    : With --skip-published-packages, force-rebuild these SOURCE packages (space-separated) without a debian/changelog bump, by deleting them from the local repo first.
+  --skip-prepare-build-machine    : Shared-work speed-up: skip build-steps.d/*_prepare-build-machine. Only safe when the build machine was already prepared by an earlier run in the same session.
+  --skip-cowbuilder-setup         : Shared-work speed-up: skip build-steps.d/*_cowbuilder-setup. Only safe when the cowbuilder chroot was already created by an earlier run in the same session.
+  --skip-local-dependencies       : Shared-work speed-up: skip build-steps.d/*_local-dependencies. Only safe when the local dependencies were already installed by an earlier run in the same session.
   --retry-max [attempts]          : Set maximum retry attempts. (default: 2)
   --retry-wait [seconds]          : Set wait time between retry attempts.
   --retry-before [script]         : Specify a script to run before retry. [default: none)
@@ -613,6 +616,31 @@ dist_build_one_parse_cmd() {
                export dist_build_rebuild_packages="$2"
                true "${cyan}INFO: --rebuild-packages: force-rebuilding '${2}'.${reset}"
                shift 2
+               ;;
+           --skip-prepare-build-machine)
+               ## Shared-work speed-up: skip 'build-steps.d/*_prepare-build-machine'
+               ## entirely (it exits early at its top). Safe only when the build machine
+               ## was already prepared by an earlier run in the same session (e.g. the
+               ## first flavor of an official multi-flavor build).
+               export dist_build_skip_prepare_build_machine="true"
+               true "${cyan}INFO: --skip-prepare-build-machine: reusing the already prepared build machine.${reset}"
+               shift
+               ;;
+           --skip-cowbuilder-setup)
+               ## Shared-work speed-up: skip 'build-steps.d/*_cowbuilder-setup' entirely
+               ## (it exits early at its top). Safe only when the cowbuilder chroot was
+               ## already created by an earlier run in the same session.
+               export dist_build_skip_cowbuilder_setup="true"
+               true "${cyan}INFO: --skip-cowbuilder-setup: reusing the existing cowbuilder chroot.${reset}"
+               shift
+               ;;
+           --skip-local-dependencies)
+               ## Shared-work speed-up: skip 'build-steps.d/*_local-dependencies'
+               ## entirely (it exits early at its top). Safe only when the local
+               ## dependencies were already installed by an earlier run in the same session.
+               export dist_build_skip_local_dependencies="true"
+               true "${cyan}INFO: --skip-local-dependencies: reusing the already installed local dependencies.${reset}"
+               shift
                ;;
            --sanity-tests)
                if [ "${2:-}" = "true" ]; then

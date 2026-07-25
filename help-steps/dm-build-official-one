@@ -3,6 +3,18 @@
 ## Copyright (C) 2023 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
+## Official multi-flavor build orchestrator.
+##
+## Layout:
+## - Phase 1: per-flavor sanity tests.
+## - Phase 2: shared one-time work (build machine, cowbuilder, local
+##   dependencies, base raw image, derivative packages) -- runs exactly once
+##   for the whole flavor matrix.
+## - Phase 3: per-flavor image builds. Each reuses Phase 2's shared work via
+##   first-class '--skip-*' switches (owned by the individual build steps) plus
+##   the cached base raw image, so the expensive shared work is never repeated.
+## - Phase 4: source release + image upload.
+
 set -x
 set -o errexit
 set -o nounset
@@ -13,22 +25,32 @@ shopt -s shift_verbose
 
 true "$0: START"
 
+## Print the command instead of running it, for auditing this orchestrator.
+## Reachable via 'TESTING_MODE=1' (environment) or the '--show-steps' argument.
 run_cmd() {
   [ -n "${TESTING_MODE:-}" ] || TESTING_MODE=0
   if [ "${TESTING_MODE:-0}" -eq 1 ]; then
     set +x
-    printf '%s\n' "$@"
+    printf '%s\n' "$*"
   else
     "$@"
   fi
 }
 
-## This path to this script in the derivative-maker source code folder is help-steps/dm-build-official.
-## Go to root of the source code folder.
-## Only needed if one would 'cd ./help-steps' beforehand.
-#run_cmd cd ..
-
 true "INFO: 0: $0"
+
+## '--show-steps' is an alias for 'TESTING_MODE=1'. Filtered out of the
+## forwarded arguments because the downstream build steps do not know it.
+forwarded_args=()
+for arg_item in "$@"; do
+  if [ "$arg_item" = "--show-steps" ]; then
+    TESTING_MODE=1
+    export TESTING_MODE
+  else
+    forwarded_args+=("$arg_item")
+  fi
+done
+set -- ${forwarded_args[@]+"${forwarded_args[@]}"}
 
 if [ "${CI:-}" = "true" ]; then
   true "INFO: Skipping test if folder ~/.ssh exists on CI."
@@ -49,6 +71,7 @@ fi
 ## - If environment variable 'dist_build_target_arch' is set, honor it.
 ## - On CI, build ARM64 by default since it is the most recent architecture port.
 ## - Official builds default to Intel/AMD64 at the time of writing.
+build_args=()
 if ! [ "${dist_build_target_arch:-}" = "" ]; then
   architecture="$dist_build_target_arch"
 elif [ "${CI:-}" = "true" ]; then
@@ -175,48 +198,90 @@ fi
 ## (Maybe in the future for Whonix-Host.)
 ## The ISO should only be built for Kicksecure-LXQt for now.
 
+############################################################
+## Phase 1: per-flavor sanity tests.
+############################################################
+
 for flavor_item in "${flavors_list[@]}"; do
   ## Not yet using multi_target_args as the sanity test for Whonix-Gateway ISO would complain that the VMs
   ## have not been built yet.
   run_cmd ./build-steps.d/*_sanity-tests "${build_args[@]}" --target windows "${multi_target_args[@]}" --flavor "$flavor_item" "$@"
 done
 
-## Use both,
-## * 1) '--target iso', and,
-## * 2) "${multi_target_args[@]}"
-## for prepare-build-machine, because additional dependencies are required for building the ISO.
-run_cmd ./build-steps.d/*_prepare-build-machine "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor source "$@"
+############################################################
+## Phase 2: shared one-time work (runs exactly once).
+############################################################
 
+## These steps produce shared artifacts consumed by every per-flavor build in
+## Phase 3, so they run once, up front, with the FULL union target set. They are
+## invoked as individual build steps (rather than folded into the first
+## './derivative-maker' call) on purpose:
+##
+## - prepare-build-machine / cowbuilder-setup / local-dependencies install
+##   TARGET-SPECIFIC dependencies (verified: 1200 branches on dist_build_iso /
+##   install_to_root / raw / qcow2; 1300 builds an extra amd64 chroot for
+##   '--target virtualbox --arch arm64'; 1400 installs live-build for
+##   '--target iso' and downloads the VirtualBox Windows installer for
+##   '--target windows'). They must therefore see the UNION of targets
+##   ('--target iso --target windows' + the VM targets). No single per-flavor
+##   build carries that union (the first real build is Kicksecure-LXQt ISO,
+##   '--target iso' only), so union prep cannot be folded into it. They also
+##   must complete BEFORE the base raw image is created (grml-debootstrap etc.).
+## - The base raw image must be a PURE post-debootstrap / pre-package-install
+##   image so every flavor can reuse it. create-raw-image only "captures" it by
+##   naming its working file 'base-image.raw' (dist_build_raw_base_image_create);
+##   a full './derivative-maker' run would then install packages INTO that file
+##   (3500_install-packages mounts + chroots binary_image_raw_file), polluting
+##   the shared base. So the base image is created by a create-raw-image-only
+##   invocation, with a concrete VM flavor+target ('--flavor source' errors in
+##   create-raw-image; '--target iso' is a no-op there).
+## - create-debian-packages builds all derivative .debs into the local repo once
+##   (kept here with the exact union invocation so its target-conditional paths
+##   match the historical behavior); Phase 3 reuses them via
+##   '--skip-published-packages'.
+
+## Use both '--target iso' and the VM targets for prepare-build-machine /
+## cowbuilder-setup / local-dependencies, because ISO builds need additional
+## dependencies (live-build) and '--target windows' triggers the VirtualBox
+## Windows installer download.
+run_cmd ./build-steps.d/*_prepare-build-machine "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor source "$@"
 run_cmd ./build-steps.d/*_cowbuilder-setup "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor source "$@"
 run_cmd ./build-steps.d/*_local-dependencies "${build_args[@]}" --target iso --target windows "${multi_target_args[@]}" --flavor source "$@"
 
+## Create the shared base raw image once.
+## '--flavor source' would lead to variable dist_build_hostname being unset (and
+## create-raw-image errors on it), therefore using '--flavor kicksecure-cli'.
+## '--target iso' must not be used because the ISO is created using live-build,
+## not create-raw-image; create-raw-image would do nothing with '--target iso'.
 export dist_build_raw_base_image_create=true
-## '--flavor source' would lead to variable dist_build_hostname being unset.
-## Therefore using '--flavor kicksecure-cli' to create a raw base image.
-## '--target iso' must not be used because ISO is nowadays created using live-build, not create-raw-image.
-## create-raw-image would do nothing if using '--target iso'.
 run_cmd ./build-steps.d/*_create-raw-image "${build_args[@]}" "${multi_target_args[@]}" --flavor kicksecure-cli "$@"
 unset dist_build_raw_base_image_create
 
 ## '--target iso' is required to download calamares from backports.
 run_cmd ./build-steps.d/*_create-debian-packages "${build_args[@]}" --target iso "${multi_target_args[@]}" --flavor source "$@"
 
-## Fast. No need to skip.
-#SKIP_SCRIPTS+=" sanity-tests "
+############################################################
+## Phase 3: per-flavor image builds (reuse Phase 2's shared work).
+############################################################
 
-SKIP_SCRIPTS+=" prepare-build-machine "
-SKIP_SCRIPTS+=" cowbuilder-setup "
-## Using cached_binary_image_raw_file instead because we will set dist_build_use_cached_raw_base_image=true.
-## Variable cached_binary_image_raw_file will result in create-raw-image simply making a copy of the exiting raw image.
-#SKIP_SCRIPTS+=" create-raw-image "
-SKIP_SCRIPTS+=" local-dependencies "
-SKIP_SCRIPTS+=" create-debian-packages "
-export SKIP_SCRIPTS
+## Every per-flavor './derivative-maker' build reuses Phase 2's shared work:
+## - '--skip-prepare-build-machine', '--skip-cowbuilder-setup' and
+##   '--skip-local-dependencies' make those steps exit early (they already ran
+##   in Phase 2 with the union target set).
+## - '--skip-published-packages' rebuilds only packages that changed since
+##   Phase 2 (none, in a single official build), reusing the local repo.
+## - 'dist_build_use_cached_raw_base_image=true' makes create-raw-image copy the
+##   shared base-image.raw instead of running grml-debootstrap again.
+skip_shared_args=(
+  --skip-prepare-build-machine
+  --skip-cowbuilder-setup
+  --skip-local-dependencies
+  --skip-published-packages
+)
 
 dist_build_use_cached_raw_base_image=true
 export dist_build_use_cached_raw_base_image
 
-## Build and dm-prepare-release.
 for flavor_item in "${flavors_list[@]}"; do
   case "${flavor_item:-}" in
     kicksecure-lxqt|kicksecure-debug)
@@ -224,7 +289,7 @@ for flavor_item in "${flavors_list[@]}"; do
       ## kicksecure-debug boot-test flavor (a minimal live ISO for fast CI
       ## iteration). Not for Kicksecure CLI. Not yet for Whonix.
       true "INFO: ISO build flavor."
-      run_cmd ./derivative-maker "${build_args[@]}" --target iso --flavor "$flavor_item" "$@"
+      run_cmd ./derivative-maker "${build_args[@]}" "${skip_shared_args[@]}" --target iso --flavor "$flavor_item" "$@"
       ;;
     *)
       true "INFO: Non-ISO build flavor."
@@ -235,11 +300,15 @@ for flavor_item in "${flavors_list[@]}"; do
   ## flavor_multi_target_args / dist_build_multi_target_list above: an ISO-only leg
   ## sets it empty so only the ISO built above is produced).
   if [ "${#flavor_multi_target_args[@]}" -gt 0 ]; then
-    run_cmd ./derivative-maker "${build_args[@]}" "${flavor_multi_target_args[@]}" --flavor "$flavor_item" "$@"
+    run_cmd ./derivative-maker "${build_args[@]}" "${skip_shared_args[@]}" "${flavor_multi_target_args[@]}" --flavor "$flavor_item" "$@"
   else
     true "INFO: dist_build_multi_target_list empty: no multi-target VM image build for ${flavor_item}."
   fi
 done
+
+############################################################
+## Phase 4: source release + image upload.
+############################################################
 
 ## Same source code for all of the following:
 ## - desktop: LXQt versus CLI

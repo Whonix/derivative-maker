@@ -29,6 +29,11 @@ source variables
 cd "$MYDIR"
 cd ..
 
+if [ "${dist_build_skip_local_dependencies:-}" = "true" ]; then
+   true "${bold}${cyan}INFO: run with '--skip-local-dependencies' switch, skipping ${BASH_SOURCE[0]}. ${reset}"
+   exit 0
+fi
+
 update_apt_database() {
    $SUDO_TO_ROOT \
       apt-get \
