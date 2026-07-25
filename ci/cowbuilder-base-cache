@@ -1,0 +1,71 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Pack / unpack the cowbuilder base chroot ('base.cow_<arch>', root-owned) to
+## and from a plain tarball, so it can round-trip through the unprivileged
+## actions/cache. A runner-owned cache + chown would strip setuid off
+## sudo/fakeroot and lose device nodes, breaking the base; the sudo-tar preserves
+## ownership, setuid and device nodes inside the archive, and only the tarball is
+## chowned to the runner so actions/cache can read it.
+##
+##   pack    tar the base into <cache dir>/pbuilder-base.tar (before cache save)
+##   unpack  extract a cached base into place (before the build; 1300_cowbuilder-
+##           setup then reuses it via --reuse-cowbuilder-base, else builds fresh)
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+if [ "${CI:-}" != "true" ]; then
+   printf '%s\n' "${0##*/}: refusing to touch the base cache outside CI (CI is not 'true')" >&2
+   exit 0
+fi
+
+mode="${1:-}"
+arch="${BOOT_ARCH:-amd64}"
+runner_owner="$(id -u):$(id -g)"
+cache_dir="$HOME/cowbuilder-base-cache"
+base_tar="$cache_dir/pbuilder-base.tar"
+pbuilder_dir="$HOME/binary_mnt/pbuilder"
+base_name="base.cow_${arch}"
+
+case "$mode" in
+   pack)
+      if ! sudo test -d "$pbuilder_dir/$base_name"; then
+         printf '%s\n' "${0##*/}: no cowbuilder base at '$pbuilder_dir/$base_name' to pack"
+         exit 0
+      fi
+      mkdir --parents -- "$cache_dir"
+      sudo tar --create --preserve-permissions --xattrs --acls --numeric-owner \
+         --file "$base_tar" --directory "$pbuilder_dir" "$base_name"
+      sudo chown --recursive -- "$runner_owner" "$cache_dir"
+      printf '%s\n' "${0##*/}: packed cowbuilder base for cache"
+      ;;
+   unpack)
+      if [ ! -f "$base_tar" ]; then
+         printf '%s\n' "${0##*/}: no cached cowbuilder base; a fresh one will be built"
+         exit 0
+      fi
+      ## Pre-create the mount as the runner (= HOST_USER, the container's effective
+      ## build uid) with docker-run's 770, so docker-run's volume_prepare -- which
+      ## only touches a dir it makes fresh -- leaves the mount and the root-owned
+      ## base we drop into it alone.
+      mkdir --parents -- "$HOME/binary_mnt"
+      chmod 0770 -- "$HOME/binary_mnt"
+      sudo mkdir --parents -- "$pbuilder_dir"
+      sudo tar --extract --preserve-permissions --xattrs --acls --numeric-owner \
+         --file "$base_tar" --directory "$pbuilder_dir"
+      printf '%s\n' "${0##*/}: cowbuilder base restored from cache"
+      ;;
+   *)
+      printf '%s\n' "${0##*/}: usage: ${0##*/} pack|unpack" >&2
+      exit 64
+      ;;
+esac

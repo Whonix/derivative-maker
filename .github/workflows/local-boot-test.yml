@@ -179,29 +179,7 @@ jobs:
 
       - name: Unpack cowbuilder base into place (temporary speed-up)
         if: env.BASE_CACHE == 'true'
-        ## sudo-extract so the root-owned chroot (ownership, setuid, device nodes) is
-        ## restored with full fidelity -- a runner-owned cache + chown would strip
-        ## setuid off sudo/fakeroot and break the base. Create ~/binary_mnt as the
-        ## runner FIRST so docker-run's volume_prepare (which only chowns a dir it
-        ## makes fresh) leaves the runner-owned mount and the root-owned base alone.
-        run: |
-          base_tar="$HOME/cowbuilder-base-cache/pbuilder-base.tar"
-          if [ -f "$base_tar" ]; then
-            ## Pre-create the mount as the runner (= HOST_USER, the container's
-            ## effective build uid) with docker-run's 770, so its volume_prepare --
-            ## which only touches a dir it makes fresh -- leaves the mount and the
-            ## root-owned base we drop into it alone. Cold runs skip this entirely,
-            ## so docker-run still creates/owns the mount exactly as before.
-            mkdir --parents -- "$HOME/binary_mnt"
-            chmod 0770 -- "$HOME/binary_mnt"
-            sudo mkdir --parents -- "$HOME/binary_mnt/pbuilder"
-            sudo tar --extract --preserve-permissions --xattrs --acls \
-              --numeric-owner --file "$base_tar" \
-              --directory "$HOME/binary_mnt/pbuilder"
-            printf '%s\n' "cowbuilder base restored from cache"
-          else
-            printf '%s\n' "no cached cowbuilder base; a fresh one will be built"
-          fi
+        run: ./ci/cowbuilder-base-cache unpack
 
       - name: Build ${{ matrix.flavor }} via dm-build-official (${{ env.BOOT_ARCH }})
         ## Build through the official orchestration -- the SAME single build path as
@@ -253,16 +231,7 @@ jobs:
       ## cache with whatever it produced, speeding the retry.
       - name: Make caches readable for save
         if: always()
-        run: |
-          for cache_dir in \
-            "$HOME/binary_mnt/aptrepo_local" \
-            "$HOME/binary_mnt/packages-build-status" \
-            "$HOME/binary_mnt/genmkfile-packages-result" \
-            "$HOME/approx_cache_mnt"; do
-            if [ -e "$cache_dir" ]; then
-              sudo chown -R "$(id -u):$(id -g)" -- "$cache_dir" || true
-            fi
-          done
+        run: ./ci/cache-make-readable
 
       - name: Save derivative-package repo cache
         if: always()
@@ -283,20 +252,7 @@ jobs:
 
       - name: Pack cowbuilder base for cache (temporary speed-up)
         if: always() && env.BASE_CACHE == 'true'
-        ## sudo-tar so root ownership / setuid / device nodes are preserved inside
-        ## the archive; then chown only the tarball so the runner can save it.
-        run: |
-          base_dir="$HOME/binary_mnt/pbuilder/base.cow_${BOOT_ARCH}"
-          if sudo test -d "$base_dir"; then
-            mkdir --parents -- "$HOME/cowbuilder-base-cache"
-            sudo tar --create --preserve-permissions --xattrs --acls \
-              --numeric-owner --file "$HOME/cowbuilder-base-cache/pbuilder-base.tar" \
-              --directory "$HOME/binary_mnt/pbuilder" "base.cow_${BOOT_ARCH}"
-            sudo chown -R "$(id -u):$(id -g)" -- "$HOME/cowbuilder-base-cache"
-            printf '%s\n' "cowbuilder base packed for cache"
-          else
-            printf '%s\n' "no cowbuilder base to pack"
-          fi
+        run: ./ci/cowbuilder-base-cache pack
 
       - name: Save cowbuilder base cache (temporary speed-up)
         if: always() && env.BASE_CACHE == 'true'
@@ -394,24 +350,9 @@ jobs:
 
       - name: Locate the ${{ matrix.image_kind }} image
         id: image
-        ## The build uploads under a version subfolder; find the single image of the
-        ## wanted kind (qcow2 disk or live iso).
         env:
           IMAGE_KIND: ${{ matrix.image_kind }}
-        run: |
-          case "${IMAGE_KIND}" in
-            iso)  find_glob='Kicksecure-*.iso' ;;
-            vbox) find_glob='Kicksecure-*.ova' ;;
-            ## The qcow2 is shipped xz-packed ('.qcow2.libvirt.xz'); the bare
-            ## '.qcow2' is removed after packing. ci/boot-test extracts the tar.xz.
-            *)    find_glob='Kicksecure-*.qcow2.libvirt.xz' ;;
-          esac
-          image_path="$(find boot-image -type f -name "${find_glob}" | head -1)"
-          if [ -z "${image_path}" ]; then
-            printf '%s\n' "no ${IMAGE_KIND} image found under boot-image/" >&2
-            exit 1
-          fi
-          printf 'path=%s\n' "${image_path}" >> "${GITHUB_OUTPUT}"
+        run: ./ci/locate-boot-image
 
       - name: Boot-test (${{ matrix.image_kind }}, ${{ matrix.firmware }}, ${{ matrix.session }})
         ## Every kind carries user-sysmaint-split, so both sessions run on all of

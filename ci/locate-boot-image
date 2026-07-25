@@ -1,0 +1,46 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Locate the single built image of the requested kind (env IMAGE_KIND) under
+## the downloaded 'boot-image/' tree (the build uploads it inside a version
+## subfolder) and emit its path as the GitHub step output 'path' for the
+## downstream boot-test step.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+image_kind="${IMAGE_KIND:-}"
+if [ -z "$image_kind" ]; then
+   printf '%s\n' "${0##*/}: IMAGE_KIND must be set" >&2
+   exit 64
+fi
+
+case "$image_kind" in
+   iso)
+      find_glob='Kicksecure-*.iso'
+      ;;
+   vbox)
+      find_glob='Kicksecure-*.ova'
+      ;;
+   *)
+      ## The qcow2 is shipped xz-packed ('.qcow2.libvirt.xz'); the bare '.qcow2'
+      ## is removed after packing. ci/boot-test extracts the tar.xz.
+      find_glob='Kicksecure-*.qcow2.libvirt.xz'
+      ;;
+esac
+
+image_path="$(find boot-image -type f -name "$find_glob" | head --lines=1)"
+if [ -z "$image_path" ]; then
+   printf '%s\n' "${0##*/}: no ${image_kind} image found under boot-image/" >&2
+   exit 1
+fi
+
+printf 'path=%s\n' "$image_path" >> "${GITHUB_OUTPUT}"
