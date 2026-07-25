@@ -598,6 +598,27 @@ if [ "${dist_build_flavor:-}" = "kicksecure-lxqt" ]; then
       [ -n "${flavor_meta_packages_to_install:-}" ] || flavor_meta_packages_to_install=" kicksecure-baremetal-gui-lxqt "
    fi
 fi
+## Minimal CLI-only image for fast boot/grub/systemcheck iteration: the same base
+## as kicksecure-cli, but the 'kicksecure-debug' meta pulls only the boot chain +
+## hardening core + systemcheck (no GUI/browser/anonymity layer). Debug/test only.
+if [ "${dist_build_flavor:-}" = "kicksecure-debug" ]; then
+   [ -n "${SHORT_VMNAME:-}" ] || SHORT_VMNAME="Kicksecure"
+   [ -n "${VMNAME:-}" ] || VMNAME="Kicksecure-Debug"
+   [ -n "${VMRAM:-}" ] || VMRAM="768"
+   [ -n "${VRAM:-}" ] || VRAM="16"
+   [ -n "${dist_build_type_short:-}" ] || dist_build_type_short="kicksecure"
+   [ -n "${dist_build_desktop:-}" ] || dist_build_desktop="CLI"
+   [ -n "${dist_build_gui:-}" ] || dist_build_gui="false"
+   if [ "${dist_build_type:-}" = "vm" ]; then
+      [ -n "${dist_build_host_operating_system:-}" ] || dist_build_host_operating_system="false"
+      [ -n "${dist_build_type_long:-}" ] || dist_build_type_long="kicksecure"
+      [ -n "${flavor_meta_packages_to_install:-}" ] || flavor_meta_packages_to_install=" kicksecure-debug "
+   elif [ "${dist_build_type:-}" = "host" ]; then
+      [ -n "${dist_build_host_operating_system:-}" ] || dist_build_host_operating_system="true"
+      [ -n "${dist_build_type_long:-}" ] || dist_build_type_long="kicksecure-host"
+      [ -n "${flavor_meta_packages_to_install:-}" ] || flavor_meta_packages_to_install=" kicksecure-debug "
+   fi
+fi
 
 ## derivative_name_list is used by:
 ## - help-steps/variables to identify valid derivative names.

@@ -71,6 +71,7 @@ parse_cmd_flavor_error() {
 --flavor whonix-host-cli
 --flavor kicksecure-cli
 --flavor kicksecure-lxqt
+--flavor kicksecure-debug
 --flavor dist-installer-cli
 --flavor source
 ${reset}"
@@ -305,6 +306,8 @@ dist_build_one_parse_cmd() {
                elif [ "${dist_build_flavor:-}" = "kicksecure-cli" ]; then
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
                elif [ "${dist_build_flavor:-}" = "kicksecure-lxqt" ]; then
+                  build_machines_counter="$(( $build_machines_counter + 1 ))"
+               elif [ "${dist_build_flavor:-}" = "kicksecure-debug" ]; then
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
                elif [ "${dist_build_flavor:-}" = "dist-installer-cli" ]; then
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
