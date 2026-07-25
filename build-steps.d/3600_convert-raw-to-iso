@@ -150,6 +150,17 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    ##       also update at the same time grub-live:
    ##       /usr/lib/systemd/system/systemd-repart.service.d/30_grub-live.conf
 
+   ## The trailing '\\\${dm_smbios_extra}' in --bootappend-live is a GRUB variable
+   ## reference that must reach the generated grub.cfg UN-expanded, so a boot-tester
+   ## can inject extra kernel cmdline via 'qemu -smbios' (the reader at the top of
+   ## grub.cfg fills the variable; empty otherwise -> no-op). It survives four
+   ## layers by design: this printf's double quotes ('\\\$' -> '\$') write a literal
+   ## backslash-dollar into auto/config's single-quoted value; 'lb config' stores it
+   ## verbatim; live-build's config/binary is written with an UNQUOTED heredoc that
+   ## keeps the backslash, and later '.'-sourced, where '\$' -> '$' restores the
+   ## literal '\${dm_smbios_extra}' into LB_BOOTAPPEND_LIVE -> APPEND_LIVE -> every
+   ## live menuentry. This replaces the former live-build binary_grub_cfg patch.
+
    ## Sanity test.
    test -n "${dist_build_hostname}"
 
@@ -174,7 +185,7 @@ lb config noauto \\
    --archive-areas 'main contrib non-free non-free-firmware' \\
    --backports true \\
    --binary-image iso-hybrid \\
-   --bootappend-live 'rd.live.overlay.overlayfs=1 boot=live components splash live-config.hostname=${dist_build_hostname} rd.live.image root=live:CDLABEL=${dist_build_type_short} rd.live.dir=live rd.live.squashimg=filesystem.squashfs${serial_console_cmdline}' \\
+   --bootappend-live 'rd.live.overlay.overlayfs=1 boot=live components splash live-config.hostname=${dist_build_hostname} rd.live.image root=live:CDLABEL=${dist_build_type_short} rd.live.dir=live rd.live.squashimg=filesystem.squashfs${serial_console_cmdline} \\\${dm_smbios_extra}' \\
    --bootappend-live-failsafe 'none' \\
    --cache false \\
    --checksums md5 \\
