@@ -58,12 +58,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          ## CLI -> qcow2 disk image (no sysmaint).
-          - flavor: kicksecure-cli
+          ## kicksecure-debug (minimal boot-test flavor) for FAST iteration:
+          ## the boot chain + hardening core + systemcheck + user-sysmaint-split,
+          ## no GUI/browser/anonymity layer.
+          ## -> qcow2 disk image (also builds the VirtualBox ova).
+          - flavor: kicksecure-debug
             image_kind: qcow2
             upload_glob: Kicksecure-*.qcow2*
-          ## lxqt -> live ISO (has the sysmaint session).
-          - flavor: kicksecure-lxqt
+          ## -> live ISO (carries the sysmaint session).
+          - flavor: kicksecure-debug
             image_kind: iso
             upload_glob: Kicksecure-*.iso
     steps:

@@ -211,10 +211,10 @@ export dist_build_use_cached_raw_base_image
 ## Build and dm-prepare-release.
 for flavor_item in "${flavors_list[@]}"; do
   case "${flavor_item:-}" in
-    kicksecure-lxqt)
-      ## For now, create an ISO only for Kicksecure LXQt.
-      ## Not for Kicksecure CLI.
-      ## Not yet for Whonix.
+    kicksecure-lxqt|kicksecure-debug)
+      ## ISO is built for Kicksecure LXQt (the official live ISO) and for the
+      ## kicksecure-debug boot-test flavor (a minimal live ISO for fast CI
+      ## iteration). Not for Kicksecure CLI. Not yet for Whonix.
       true "INFO: ISO build flavor."
       run_cmd ./derivative-maker "${build_args[@]}" --target iso --flavor "$flavor_item" "$@"
       ;;
