@@ -1291,11 +1291,21 @@ mkdir --parents -- "${dist_binary_build_folder}"
 unset dist_build_files_to_upload
 declare -a dist_build_files_to_upload
 
+## Parallel to dist_build_files_to_upload: the upload destination for the file at
+## the same index. A multi-target build (e.g. '--target virtualbox --target qcow2')
+## must send each image to ITS OWN location; the former single scalar was populated
+## first-writer-wins and sent every image to the first target's directory (a qcow2
+## landing in .../ova). installer-dist maps one file to two servers by pushing the
+## file twice, once per destination.
+unset dist_build_upload_locations
+declare -a dist_build_upload_locations
+
 if [ "${dist_build_virtualbox:-}" = "true" ]; then
    [ -n "${ssh_uploader_account:-}" ] || ssh_uploader_account="root"
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/ova"
 
    dist_build_files_to_upload+=("$binary_image_ova_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/ova")
 fi
 
 if [ "${dist_build_iso:-}" = "true" ]; then
@@ -1303,6 +1313,7 @@ if [ "${dist_build_iso:-}" = "true" ]; then
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/iso"
 
    dist_build_files_to_upload+=("$binary_image_iso_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/iso")
 fi
 
 if [ "${dist_build_qcow2:-}" = "true" ]; then
@@ -1311,6 +1322,7 @@ if [ "${dist_build_qcow2:-}" = "true" ]; then
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/libvirt"
 
    dist_build_files_to_upload+=("$libvirt_target_qcow2_xz_archive_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/libvirt")
 fi
 
 ## Default this target flag at its source so consumers (notably
@@ -1332,7 +1344,12 @@ ${ssh_uploader_account}@kicksecure.com:/var/rsync/dist-installer-cli
 ${ssh_uploader_account}@whonix.org:/var/rsync/dist-installer-cli
 "
 
+   ## One image, two destination servers: push the file once per destination so
+   ## the per-index pairing uploads it to both.
    dist_build_files_to_upload+=("$binary_image_installer_dist_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@kicksecure.com:/var/rsync/dist-installer-cli")
+   dist_build_files_to_upload+=("$binary_image_installer_dist_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@whonix.org:/var/rsync/dist-installer-cli")
 fi
 
 if [ "${dist_build_windows_installer:-}" = "true" ]; then
@@ -1340,6 +1357,7 @@ if [ "${dist_build_windows_installer:-}" = "true" ]; then
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/windows"
 
    dist_build_files_to_upload+=("$binary_image_windows_installer_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/windows")
 fi
 
 if [ "${dist_build_source_archive:-}" = "true" ]; then
@@ -1347,6 +1365,7 @@ if [ "${dist_build_source_archive:-}" = "true" ]; then
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/source"
 
    dist_build_files_to_upload+=("$source_archive_xz_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/source")
 fi
 
 ## }}}
