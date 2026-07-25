@@ -72,7 +72,7 @@ env:
   ## For an iso run, build no multi-target VM images so only the iso is produced
   ## (an lxqt iso+qcow2+ova build on both runners is far heavier); the VM targets
   ## build 'virtualbox qcow2' as usual.
-  REPRO_MULTI_TARGET_LIST: ${{ inputs.target == 'iso' && '' || 'virtualbox qcow2' }}
+  REPRO_MULTI_TARGET_LIST: ${{ inputs.target != 'iso' && 'virtualbox qcow2' || '' }}
 
 jobs:
   build:

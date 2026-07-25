@@ -120,7 +120,7 @@ jobs:
           ARCH: ${{ env.BOOT_ARCH }}
           FLAVOR: ${{ matrix.flavor }}
           FRESHNESS: frozen
-          MULTI_TARGET_LIST: ${{ matrix.image_kind == 'iso' && '' || 'virtualbox qcow2' }}
+          MULTI_TARGET_LIST: ${{ matrix.image_kind != 'iso' && 'virtualbox qcow2' || '' }}
         run: >-
           ./docker/derivative-maker-docker-run --
           bash -c "./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
