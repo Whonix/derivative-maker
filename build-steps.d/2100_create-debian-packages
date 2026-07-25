@@ -566,6 +566,13 @@ create_derivative_distribution_debian_packages() {
       true "${cyan}INFO: reprepro (${reprepro_current}/${total_to_build}): ${item##*/} ${reset}"
       "$genmkfile_bin" reprepro-remove
       "$genmkfile_bin" reprepro-add
+      ## Record the source content hash so the next --skip-published-packages build
+      ## skips this package unless its source changes again (auto-detected, no
+      ## package name or changelog bump needed). See reprepro-freshness.bsh.
+      dm_source_hash_record \
+         "$(dm_source_hash_manifest_path "$dist_build_apt_codename")" \
+         "$(dpkg-parsechangelog --show-field Source --file "$item/debian/changelog")" \
+         "$(dm_package_source_hash "$item")"
       popd >/dev/null
    done
 
