@@ -129,34 +129,42 @@ if [ "${remote_derivative_packages:-}" = "true" ] || [ "${CI:-}" = "true" ]; the
   export rsync_cmd
 fi
 
+## Shared build-machine + base-image target scope: ALWAYS the per-arch default.
+## The sanity-tests, prepare-build-machine, cowbuilder-setup, local-dependencies,
+## the shared base raw image (create-raw-image requires at least one --target) and
+## the package build run ONCE for the whole flavor matrix, so they must carry the
+## full target set regardless of the per-flavor VM-image selection below.
 multi_target_args=()
+case "${architecture:-}" in
+  amd64)
+    ## VirtualBox ova + qcow2. (amd64 for Windows, Linux, Mac)
+    multi_target_args+=("--target" "virtualbox")
+    multi_target_args+=("--target" "qcow2")
+  ;;
+  arm64)
+    ## Only qcow2 for now; VirtualBox arm64 (Mac M1/M2) disabled pending CI.
+    multi_target_args+=("--target" "qcow2")
+  ;;
+  *)
+    ## '--target qcow2' might be the most universal.
+    multi_target_args+=("--target" "qcow2")
+  ;;
+esac
 
-## Build-scope override: 'dist_build_multi_target_list' is a space-separated list
-## of extra image targets built (and uploaded) after the ISO. When SET (even to
-## empty) it wins over the per-architecture default -- empty means "no multi-target
-## VM images", e.g. an ISO-only CI boot-test leg whose qcow2/VirtualBox images come
-## from a sibling job (building qcow2 + the raw->vdi->ova export after the ISO would
-## otherwise exhaust the CI runner's disk). Unset -> the per-arch default below.
+## Per-flavor VM image build+upload scope: 'dist_build_multi_target_list' (a
+## space-separated target list) overrides this when SET (even to empty). Empty
+## means "build only the ISO for this flavor" -- e.g. an ISO-only CI boot-test leg
+## whose qcow2/VirtualBox images come from a sibling job (the raw->vdi->ova + qcow2
+## build after the ISO would exhaust the runner disk). Unset -> same as the shared
+## default above. Only the per-flavor build/upload honor this; the shared steps
+## above keep the full default so the build machine and base image are prepared.
+flavor_multi_target_args=()
 if [ -n "${dist_build_multi_target_list+x}" ]; then
   for multi_target_item in ${dist_build_multi_target_list}; do
-    multi_target_args+=("--target" "$multi_target_item")
+    flavor_multi_target_args+=("--target" "$multi_target_item")
   done
 else
-  case "${architecture:-}" in
-    amd64)
-      ## VirtualBox ova + qcow2. (amd64 for Windows, Linux, Mac)
-      multi_target_args+=("--target" "virtualbox")
-      multi_target_args+=("--target" "qcow2")
-    ;;
-    arm64)
-      ## Only qcow2 for now; VirtualBox arm64 (Mac M1/M2) disabled pending CI.
-      multi_target_args+=("--target" "qcow2")
-    ;;
-    *)
-      ## '--target qcow2' might be the most universal.
-      multi_target_args+=("--target" "qcow2")
-    ;;
-  esac
+  flavor_multi_target_args=("${multi_target_args[@]}")
 fi
 
 ## multi_target_args comment:
@@ -223,11 +231,11 @@ for flavor_item in "${flavors_list[@]}"; do
       ;;
   esac
 
-  ## Build the multi-target VM images unless the target list is empty (see
-  ## dist_build_multi_target_list above: an ISO-only leg sets it empty so only the
-  ## ISO built above is produced).
-  if [ "${#multi_target_args[@]}" -gt 0 ]; then
-    run_cmd ./derivative-maker "${build_args[@]}" "${multi_target_args[@]}" --flavor "$flavor_item" "$@"
+  ## Build this flavor's VM images unless its target list is empty (see
+  ## flavor_multi_target_args / dist_build_multi_target_list above: an ISO-only leg
+  ## sets it empty so only the ISO built above is produced).
+  if [ "${#flavor_multi_target_args[@]}" -gt 0 ]; then
+    run_cmd ./derivative-maker "${build_args[@]}" "${flavor_multi_target_args[@]}" --flavor "$flavor_item" "$@"
   else
     true "INFO: dist_build_multi_target_list empty: no multi-target VM image build for ${flavor_item}."
   fi
@@ -270,11 +278,11 @@ for flavor_item in "${flavors_list[@]}"; do
       ;;
   esac
 
-  ## Upload the multi-target images in one call (dm-upload-images now routes each
+  ## Upload this flavor's VM images in one call (dm-upload-images now routes each
   ## --target to its own destination via the parallel upload-location array), or
-  ## skip when the target list is empty (their files were not built above).
-  if [ "${#multi_target_args[@]}" -gt 0 ]; then
-    run_cmd dm-upload-images "${build_args[@]}" "${multi_target_args[@]}" --flavor "$flavor_item" "$@"
+  ## skip when its target list is empty (their files were not built above).
+  if [ "${#flavor_multi_target_args[@]}" -gt 0 ]; then
+    run_cmd dm-upload-images "${build_args[@]}" "${flavor_multi_target_args[@]}" --flavor "$flavor_item" "$@"
   else
     true "INFO: dist_build_multi_target_list empty: no multi-target image upload for ${flavor_item}."
   fi
