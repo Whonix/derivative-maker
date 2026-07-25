@@ -147,15 +147,6 @@ reimage_raw() {
    ## from a metadata manifest). The built modules stay; only the logs go. Mirrors 80_cleanup.
    $SUDO_TO_ROOT find "$reimage_tree/var/lib/dkms" -type f -name 'make.log' -exec safe-rm --force -- {} \; 2>/dev/null || true
 
-   ## Strip the debconf runtime databases. 80_cleanup deletes config.dat (install-order-dependent
-   ## Owners/Flags, sometimes a temp path/PID) and passwords.dat (may hold mode-600 secrets), but late
-   ## chroot activity (dpkg / dpkg-reconfigure via grub / initramfs) can re-create config.dat AFTER it,
-   ## re-leaking build-varying content (and a would-be secret store). Delete both again here so they
-   ## never ship, deterministically. templates.dat is deterministic and required by dpkg-reconfigure, so
-   ## it stays. Mirrors 80_cleanup.
-   $SUDO_TO_ROOT safe-rm --force -- "$reimage_tree/var/cache/debconf/config.dat"
-   $SUDO_TO_ROOT safe-rm --force -- "$reimage_tree/var/cache/debconf/passwords.dat"
-
    ## update-locale writes /etc/locale.conf (target of the /etc/default/locale symlink) with its
    ## assignment lines in a non-deterministic order. Sort the file so it is identical every build;
    ## the header comment sorts before the KEY=value lines, whose order is irrelevant to consumers.
