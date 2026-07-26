@@ -191,4 +191,20 @@ else
    fi
 fi
 
+## After killing the processes that held the tree busy, UNMOUNT every mount UNDER
+## it (deepest first). Without this a still-mounted /sys, /dev/pts or /proc leaves
+## the tree un-copyable ('cp -al' -> "Invalid cross-device link") and un-removable
+## -- which breaks cowbuilder base setup (the base.cow -> cow.1 COW copy that
+## 'cowbuilder --execute' does) and chroot teardown. '--lazy --force' so a
+## transient-busy mount still detaches. Captured first so pipefail cannot abort on
+## an empty match.
+umount_kill_mounts="$(findmnt --raw --noheadings --output TARGET 2>/dev/null | awk -v base="${file_system_object%/}" '$0 == base || index($0, base"/") == 1' | LC_ALL=C sort --reverse || true)"
+if [ -n "${umount_kill_mounts}" ]; then
+   while IFS="" read -r umount_kill_mp; do
+      [ -n "${umount_kill_mp}" ] || continue
+      umount --lazy --force -- "${umount_kill_mp}" 2>/dev/null \
+         || printf '%s\n' "$0: WARNING: umount '${umount_kill_mp}' failed." >&2
+   done <<< "${umount_kill_mounts}"
+fi
+
 true "$0 INFO: end"
