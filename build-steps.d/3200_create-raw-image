@@ -52,22 +52,6 @@ create-debian-raw-image() {
    true "${cyan}INFO: Using the following /etc/apt/sources.list.d/derivative.sources for grml-debootstrap: ${reset}"
    $SUDO_TO_ROOT cat -- "/etc/debootstrap/etc/apt/sources.list.d/derivative.sources"
 
-   ## grml-debootstrap does NOT thread our apt options into its in-chroot 'apt-get
-   ## update' (it forwards only a whitelist of vars via CHROOT_VARIABLES, not
-   ## '$DPKG_OPTIONS'), so for '--freshness frozen' the chroot's apt rejects the
-   ## intentionally-old snapshot Release ("Release file ... is expired"). Passing
-   ## 'Acquire::Check-Valid-Until=false' via DIST_APTGETOPT (help-steps/variables)
-   ## covers cowbuilder/pbuilder but not this chroot; drop it as an apt.conf into the
-   ## chroot overlay instead ('/etc/debootstrap/etc/' is copied into the image by
-   ## grml-debootstrap, exactly like the sources above), so EVERY chroot apt call
-   ## accepts it. Archive-key signature verification (Signed-By) is unaffected;
-   ## '--freshness current' omits this and keeps the Valid-Until check.
-   if [ "${dist_build_apt_freshness:-}" = "frozen" ]; then
-      $SUDO_TO_ROOT mkdir --parents "/etc/debootstrap/etc/apt/apt.conf.d"
-      printf '%s\n' 'Acquire::Check-Valid-Until "false";' \
-         | $SUDO_TO_ROOT tee "/etc/debootstrap/etc/apt/apt.conf.d/30_derivative-frozen.conf" >/dev/null
-   fi
-
    ## TODO
    ## /etc/resolv.conf of host leaks into image.
    ## https://git-tails.immerda.ch/tails/plain/config/chroot_local-includes/etc/NetworkManager/dispatcher.d/00-resolv-over-clearnet
