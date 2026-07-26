@@ -372,12 +372,19 @@ reprepro_add_newer_packages_from_third_party_repositories() {
       "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" removesrc "$dist_build_apt_codename" "$package" || true
    done
 
+   ## nullglob is OFF in this path: reprepro_add_newer... runs from the download_*
+   ## functions BEFORE create_derivative_distribution_debian_packages sets nullglob,
+   ## so an unmatched glob stays literal. Skip it (a set may have only .deb or only
+   ## .dsc) -- the includedeb/includedsc below have no '|| true', unlike the remove
+   ## loops, so a literal-glob path would fail the build under errexit.
    for file_name in "$temp_newer_packages/"*".deb" ; do
+      [ -e "$file_name" ] || continue
       package_absolute_path="$(readlink -f "$file_name")"
       "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" includedeb "$dist_build_apt_codename" "$package_absolute_path"
    done
 
    for file_name in "$temp_newer_packages/"*".dsc" ; do
+      [ -e "$file_name" ] || continue
       package_absolute_path="$(readlink -f "$file_name")"
       "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" includedsc "$dist_build_apt_codename" "$package_absolute_path"
    done

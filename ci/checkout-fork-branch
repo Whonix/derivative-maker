@@ -27,6 +27,12 @@ if ! fetch_log="$(git fetch origin -- "${FORK_BRANCH}" 2>&1)"; then
    exit 0
 fi
 
-if git switch --quiet --detach -- "refs/remotes/origin/${FORK_BRANCH}"; then
-   printf '%s\n' "switch ${displaypath:-${PWD}} (origin: ${submodule_url}) -> origin/${FORK_BRANCH}"
+## The fetch succeeded, so the branch exists on origin -- a switch failure here is
+## a real error (e.g. a remote whose refspec does not populate refs/remotes/origin/*),
+## NOT the benign "branch absent" case handled above. Surface it instead of the
+## if/no-else swallowing it (exit 0) and silently keeping the parent's gitlink.
+if ! git switch --quiet --detach -- "refs/remotes/origin/${FORK_BRANCH}"; then
+   printf '%s\n' "ERROR ${displaypath:-${PWD}} (origin: ${submodule_url}): fetched origin/${FORK_BRANCH} but switch failed" >&2
+   exit 1
 fi
+printf '%s\n' "switch ${displaypath:-${PWD}} (origin: ${submodule_url}) -> origin/${FORK_BRANCH}"
