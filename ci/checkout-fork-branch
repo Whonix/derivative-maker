@@ -22,23 +22,11 @@ fi
 
 submodule_url="$(git remote get-url origin 2>/dev/null || printf '%s' '<no-origin>')"
 
-## Per-submodule branch pin. grml-debootstrap's shared fork branch carries
-## live reproducibility WIP that is a moving target and intermittently breaks
-## the build; pin it to a branch this project advances deliberately so an
-## unrelated push cannot change what CI builds. Falls back (fetch fails ->
-## exit 0) to the parent's gitlink, same as any submodule lacking the branch.
-effective_branch="${FORK_BRANCH}"
-case "${name:-${displaypath:-}}" in
-   grml-debootstrap|*/grml-debootstrap)
-      effective_branch="boot-test-pin"
-      ;;
-esac
-
-if ! fetch_log="$(git fetch origin -- "${effective_branch}" 2>&1)"; then
+if ! fetch_log="$(git fetch origin -- "${FORK_BRANCH}" 2>&1)"; then
    printf '%s\n' "no-ref ${displaypath:-${PWD}} (origin: ${submodule_url}): ${fetch_log}"
    exit 0
 fi
 
-if git switch --quiet --detach -- "refs/remotes/origin/${effective_branch}"; then
-   printf '%s\n' "switch ${displaypath:-${PWD}} (origin: ${submodule_url}) -> origin/${effective_branch}"
+if git switch --quiet --detach -- "refs/remotes/origin/${FORK_BRANCH}"; then
+   printf '%s\n' "switch ${displaypath:-${PWD}} (origin: ${submodule_url}) -> origin/${FORK_BRANCH}"
 fi
