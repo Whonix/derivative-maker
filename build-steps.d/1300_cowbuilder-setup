@@ -152,26 +152,62 @@ cowbuilder_setup_do() {
       ## base_folder
       set_cowbuilder_folders
 
+      ## mmdebstrap creates NO usable device nodes (notably '/dev/ptmx') when the base
+      ## directory is on a 'nodev'-mounted filesystem: Qubes mounts '/home' nodev, and
+      ## under Docker the cowbuilder base lives on the bind-mounted build volume there.
+      ## The base then lacks '/dev/ptmx', and cowbuilder's pbuilder mountproc aborts
+      ## binding '/dev/pts/ptmx' onto it ("mount: .../dev/ptmx: mount point does not
+      ## exist") in both '--create' and '--execute'. 'nodev' only blocks OPENING device
+      ## nodes, not creating them; clear it on the base's own mount (bind + remount) so
+      ## mmdebstrap produces real nodes, matching a normal (e.g. CI) dev-capable fs. No-op
+      ## where the base fs already permits device nodes, so CI is unaffected. The bind
+      ## mount is torn down with the ephemeral build container.
+      $SUDO_TO_ROOT mkdir --parents -- "$cowbuilder_cache_dir"
+      local cowbuilder_base_mount_options
+      cowbuilder_base_mount_options="$($SUDO_TO_ROOT findmnt --noheadings --output OPTIONS --target "$cowbuilder_cache_dir")"
+      case ",${cowbuilder_base_mount_options}," in
+         *,nodev,*)
+            true "${cyan}INFO: cowbuilder base filesystem '$cowbuilder_cache_dir' is mounted 'nodev'; clearing it so mmdebstrap can create device nodes.${reset}"
+            $SUDO_TO_ROOT mount --bind -- "$cowbuilder_cache_dir" "$cowbuilder_cache_dir"
+            $SUDO_TO_ROOT mount -o remount,bind,dev "$cowbuilder_cache_dir"
+            ;;
+      esac
+
+      ## --reuse-cowbuilder-base fast path: a base already exists and reuse was
+      ## requested, so skip the rm + 'cowbuilder --create'. The reuse-vs-build
+      ## decision lives HERE, not in the caller: a caller (e.g. CI restoring a
+      ## base from cache) always passes the flag, and this step reuses the base
+      ## if present (and healthy) or builds a fresh one below if not. Gate: only
+      ## pass the flag with a deterministic (frozen) base under a key that tracks
+      ## the base recipe; the repro lane and releases leave it off and always rebuild.
+      ##
+      ## Health check before trusting the base: a base left broken by an interrupted
+      ## or no-mknod create (device nodes absent -- e.g. '/dev/ptmx' missing, or
+      ## created as a regular file) would make the later 'cowbuilder --execute' fail
+      ## ("mount: .../dev/ptmx: mount point does not exist") once reused, silently
+      ## propagating the breakage across every build that reuses it. Require
+      ## '/dev/ptmx' to be a real character device; otherwise rebuild.
+      local cowbuilder_base_reusable
+      cowbuilder_base_reusable=false
       if [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ] && [ -d "$base_folder" ]; then
-         ## --reuse-cowbuilder-base fast path: a base already exists and reuse was
-         ## requested, so skip the rm + 'cowbuilder --create'. The reuse-vs-build
-         ## decision lives HERE, not in the caller: a caller (e.g. CI restoring a
-         ## base from cache) always passes the flag, and this step reuses the base
-         ## if present or builds a fresh one below if not. Gate: only pass the flag
-         ## with a deterministic (frozen) base under a key that tracks the base
-         ## recipe; the repro lane and releases leave it off and always rebuild.
+         if $SUDO_TO_ROOT test -c "$base_folder/dev/ptmx"; then
+            cowbuilder_base_reusable=true
+         else
+            true "${cyan}INFO: --reuse-cowbuilder-base: existing base '$base_folder' is broken (no '/dev/ptmx' character device); rebuilding.${reset}"
+         fi
+      fi
+
+      if [ "$cowbuilder_base_reusable" = "true" ]; then
          true "${cyan}INFO: --reuse-cowbuilder-base: reusing existing cowbuilder base '$base_folder'.${reset}"
       else
-         if [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ]; then
+         if [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ] && [ ! -d "$base_folder" ]; then
             true "${cyan}INFO: --reuse-cowbuilder-base requested but no base at '$base_folder'; building a fresh one.${reset}"
          fi
-         ## Ensure the cowbuilder cache dir exists before 'cowbuilder --create'. Under
-         ## '--reuse-cowbuilder-base' it is relocated to '$binary_build_folder_dist/pbuilder'
-         ## (see help-steps/variables), which -- unlike the pbuilder package's pre-created
-         ## '/var/cache/pbuilder' -- does not exist yet; cowbuilder fails ("Could not create
-         ## basepath") if the parent of '$base_folder' is missing. Harmless when it already
-         ## exists (the default '/var/cache/pbuilder').
-         $SUDO_TO_ROOT mkdir --parents -- "$cowbuilder_cache_dir"
+         ## '$cowbuilder_cache_dir' (the parent of '$base_folder') already exists here:
+         ## created above before the nodev remount. Under '--reuse-cowbuilder-base' it is
+         ## relocated to '$binary_build_folder_dist/pbuilder' (see help-steps/variables),
+         ## which -- unlike the pbuilder package's pre-created '/var/cache/pbuilder' -- does
+         ## not exist until then; cowbuilder fails ("Could not create basepath") without it.
          if [ -d "$base_folder" ]; then
             $SUDO_TO_ROOT "$dist_source_help_steps_folder/umount_kill.sh" "$base_folder"
             $SUDO_TO_ROOT safe-rm --recursive --force -- "$base_folder"
