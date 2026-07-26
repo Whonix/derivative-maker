@@ -65,8 +65,24 @@ case "$mode" in
          --file "$base_tar" --directory "$pbuilder_dir"
       printf '%s\n' "${0##*/}: cowbuilder base restored from cache"
       ;;
+   free)
+      ## Remove the relocated cowbuilder base tree. Under --reuse-cowbuilder-base the
+      ## base lives in the build tree ('$pbuilder_dir'); it is packed to cache by
+      ## 'pack' above, then removed here (before the artifact upload) so upload-artifact
+      ## does not EACCES walking into the root-owned 0700 chroot. No-op if absent
+      ## (default builds keep the base at /var/cache/pbuilder, outside this tree).
+      if sudo -- test -d "$pbuilder_dir"; then
+         ## style-ok: no-safe-rm -- runs on the hosted CI runner where safe-rm
+         ## (dist-ai-config/helper-scripts) is not present; a throwaway root-owned
+         ## chroot removed best-effort before the artifact upload.
+         sudo rm --recursive --force -- "$pbuilder_dir"
+         printf '%s\n' "${0##*/}: freed cowbuilder base tree '$pbuilder_dir'"
+      else
+         printf '%s\n' "${0##*/}: no cowbuilder base tree at '$pbuilder_dir' to free"
+      fi
+      ;;
    *)
-      printf '%s\n' "${0##*/}: usage: ${0##*/} pack|unpack" >&2
+      printf '%s\n' "${0##*/}: usage: ${0##*/} pack|unpack|free" >&2
       exit 64
       ;;
 esac

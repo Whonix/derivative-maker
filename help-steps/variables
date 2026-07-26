@@ -1678,9 +1678,10 @@ elif [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ]; then
    ## a caller (CI) can pack/cache and restore it across runs -- the default
    ## '/var/cache/pbuilder' is container-internal and not visible to the runner.
    ## binary_build_folder_dist already carries any '--build-slot', so this stays
-   ## slot-isolated. The base is a 0700 root-owned chroot; 'ci/free-build-scratch'
-   ## removes it before the artifact upload so upload-artifact does not EACCES
-   ## walking into it (the very reason the non-reuse default stays out of this tree).
+   ## slot-isolated. The base is a 0700 root-owned chroot; 'ci/cowbuilder-base-cache
+   ## free' removes it (after the pack) before the artifact upload so upload-artifact
+   ## does not EACCES walking into it (the very reason the non-reuse default stays out
+   ## of this tree).
    cowbuilder_cache_dir="$binary_build_folder_dist/pbuilder"
 elif [ -n "${dist_build_slot:-}" ]; then
    cowbuilder_cache_dir="/var/cache/pbuilder/$dist_build_slot"

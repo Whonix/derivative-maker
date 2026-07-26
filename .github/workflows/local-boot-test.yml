@@ -217,20 +217,22 @@ jobs:
         if: steps.dmimg-cache.outputs.cache-hit != 'true'
         run: ./ci/dm-docker-image-cache save
 
-      ## Pack the cowbuilder base into its tarball BEFORE free-build-scratch runs:
-      ## under --reuse-cowbuilder-base the base lives in this tree, and
-      ## free-build-scratch deletes it (so upload-artifact does not EACCES on the
-      ## 0700 chroot). No-op when there is no base in the tree.
+      ## Pack the cowbuilder base into its tarball BEFORE it is freed below: under
+      ## --reuse-cowbuilder-base the base lives in this tree; freeing it (so the
+      ## upload glob does not scandir-EACCES the 0700 chroot) must follow the pack.
+      ## No-op when there is no base in the tree.
       - name: Pack cowbuilder base for cache (temporary speed-up)
         if: always() && env.BASE_CACHE == 'true'
         run: ./ci/cowbuilder-base-cache pack
 
-      ## Remove non-artifact build scratch (root-owned live-build cache, build
-      ## chroot, raw base, cowbuilder base) before uploading: the upload glob would
-      ## otherwise hit a scandir EACCES on the root-owned dirs, and this also frees
-      ## runner disk. Keeps the released image the upload step selects.
-      - name: Free build scratch (keep released image only)
-        run: ./ci/free-build-scratch
+      ## Free the relocated cowbuilder base tree (root-owned 0700) after packing so
+      ## upload-artifact does not EACCES on it. The other build scratch is freed at
+      ## its source: the per-flavor raw in build-steps.d/5300_free-build-scratch, and
+      ## the shared base-image.raw + residual build chroot at the Phase-3 boundary in
+      ## help-steps/dm-build-official-one -- so no separate scratch-cleanup script.
+      - name: Free cowbuilder base tree (temporary speed-up)
+        if: always() && env.BASE_CACHE == 'true'
+        run: ./ci/cowbuilder-base-cache free
 
       ## The build writes these under the bind mounts as in-container uids (the
       ## package repo as 'user', the apt cache as 'approx' 101:102), which the

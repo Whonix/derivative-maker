@@ -310,6 +310,18 @@ for flavor_item in "${flavors_list[@]}"; do
   fi
 done
 
+## On CI, free the shared CROSS-flavor post-debootstrap base-image.raw now that
+## ALL flavors are built: a per-flavor build-step must not remove it while a later
+## flavor still consumes it, so it happens here at the loop boundary. Fixed
+## container mount path (/home/user/derivative-binary); 'variables' is intentionally
+## NOT sourced here (it re-runs build machinery). base-image.raw is user-owned, so
+## 'find -delete' (no rm) suffices. The per-flavor build chroot ('*_image', root-
+## owned) is already removed by unmount-raw on the success path. A local build keeps
+## the base for inspection.
+if [ "${CI:-}" = "true" ]; then
+  find /home/user/derivative-binary -mindepth 2 -maxdepth 2 -name base-image.raw -delete 2>/dev/null || true
+fi
+
 ############################################################
 ## Phase 4: source release + image upload.
 ############################################################
