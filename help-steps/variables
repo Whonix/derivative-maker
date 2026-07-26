@@ -967,6 +967,19 @@ if [ "${APPROX_PROXY_ENABLE}" = "yes" ]; then
    #LIVEBUILD_PREFIX+=" env http_proxy=${REPO_PROXY} https_proxy=${REPO_PROXY} ALL_PROXY=${REPO_PROXY}"
 fi
 
+## '--freshness frozen' pins snapshot.debian.org timestamps whose Release
+## 'Valid-Until' is intentionally in the past; tell apt to accept them rather than
+## abort ("Release file ... is expired"). Added to DIST_APTGETOPT so it reaches EVERY
+## apt path the build drives -- cowbuilder/pbuilder (via the APTGETOPT array in the
+## generated pbuilder config) and grml-debootstrap's in-chroot apt during raw-image
+## creation (via DPKG_OPTIONS, set from DIST_APTGETOPT in 3200_create-raw-image) --
+## instead of per-source 'Check-Valid-Until: no' edits. Archive-key signature
+## verification (Signed-By) is unaffected; 'current' builds keep the check.
+if [ "${dist_build_apt_freshness:-}" = "frozen" ]; then
+   aptgetopt_add "Acquire::Check-Valid-Until=false"
+   aptgetopt_conf_add "Acquire::Check-Valid-Until \"false\";"
+fi
+
 ## Help update-torbrowser and other software find the Tor server if using
 ## '--connection tor'.
 if [ "${dist_build_sources_clearnet_or_onion:-}" = 'onion' ]; then

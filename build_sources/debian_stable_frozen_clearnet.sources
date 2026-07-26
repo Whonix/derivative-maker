@@ -35,17 +35,10 @@
 ## deb13u2) than the docker base image pulled from trixie-updates (deb13u4),
 ## producing "held broken packages". trixie-updates lives in the main archive
 ## (debian-frozen), same URI as trixie.
-## Check-Valid-Until: no -- a frozen snapshot is INTENTIONALLY old, so its Release
-## 'Valid-Until' will be in the past; accept it instead of erroring. This must live in
-## the sources stanza (not only 'Acquire::Check-Valid-Until=false' in DIST_APTGETOPT)
-## because apt invocations that never see that option -- notably grml-debootstrap's
-## in-chroot 'apt-get update' during raw-image creation -- otherwise abort ("Release
-## file ... is expired"). Archive-key signature verification (Signed-By) is unaffected.
 Types: deb
 URIs: http://127.0.0.1:9977/debian-frozen/20260720T082444Z
 Suites: trixie trixie-updates
 Components: main contrib non-free non-free-firmware
-Check-Valid-Until: no
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
@@ -53,7 +46,6 @@ Types: deb
 URIs: http://127.0.0.1:9977/debian-security-frozen/20260720T082444Z
 Suites: trixie-security
 Components: main contrib non-free non-free-firmware
-Check-Valid-Until: no
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 

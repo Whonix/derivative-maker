@@ -30,10 +30,6 @@ URIs: http://127.0.0.1:9977/debian-frozen
 ## build machine carries (see debian_stable_frozen_clearnet.sources).
 Suites: forky forky-updates
 Components: main contrib non-free non-free-firmware
-## Frozen snapshot has an expired Release Valid-Until by design; accept it (signature
-## still verified). Needed for apt paths without Acquire::Check-Valid-Until=false, e.g.
-## grml-debootstrap's in-chroot apt during raw-image creation.
-Check-Valid-Until: no
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
@@ -41,7 +37,6 @@ Types: deb
 URIs: http://127.0.0.1:9977/debian-security-frozen
 Suites: forky-security
 Components: main contrib non-free non-free-firmware
-Check-Valid-Until: no
 Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 
