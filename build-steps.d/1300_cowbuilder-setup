@@ -170,11 +170,12 @@ cowbuilder_setup_do() {
          if [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ]; then
             true "${cyan}INFO: --reuse-cowbuilder-base requested but no base at '$base_folder'; building a fresh one.${reset}"
          fi
-         ## Ensure the cowbuilder cache dir exists before 'cowbuilder --create'. The default is
-         ## now '$binary_build_folder_dist/pbuilder' (derivative-binary/<slot>/pbuilder), which --
-         ## unlike the pbuilder package's pre-created '/var/cache/pbuilder' -- does not exist yet;
-         ## cowbuilder fails ("Could not create basepath") if the parent of '$base_folder' is
-         ## missing. Harmless when it already exists (e.g. an explicit /var/cache/pbuilder override).
+         ## Ensure the cowbuilder cache dir exists before 'cowbuilder --create'. Under
+         ## '--reuse-cowbuilder-base' it is relocated to '$binary_build_folder_dist/pbuilder'
+         ## (see help-steps/variables), which -- unlike the pbuilder package's pre-created
+         ## '/var/cache/pbuilder' -- does not exist yet; cowbuilder fails ("Could not create
+         ## basepath") if the parent of '$base_folder' is missing. Harmless when it already
+         ## exists (the default '/var/cache/pbuilder').
          $SUDO_TO_ROOT mkdir --parents -- "$cowbuilder_cache_dir"
          if [ -d "$base_folder" ]; then
             $SUDO_TO_ROOT "$dist_source_help_steps_folder/umount_kill.sh" "$base_folder"

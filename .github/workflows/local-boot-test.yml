@@ -217,9 +217,17 @@ jobs:
         if: steps.dmimg-cache.outputs.cache-hit != 'true'
         run: ./ci/dm-docker-image-cache save
 
+      ## Pack the cowbuilder base into its tarball BEFORE free-build-scratch runs:
+      ## under --reuse-cowbuilder-base the base lives in this tree, and
+      ## free-build-scratch deletes it (so upload-artifact does not EACCES on the
+      ## 0700 chroot). No-op when there is no base in the tree.
+      - name: Pack cowbuilder base for cache (temporary speed-up)
+        if: always() && env.BASE_CACHE == 'true'
+        run: ./ci/cowbuilder-base-cache pack
+
       ## Remove non-artifact build scratch (root-owned live-build cache, build
-      ## chroot, raw base) before uploading: the upload glob would otherwise hit
-      ## a scandir EACCES on the root-owned live-build cache, and this also frees
+      ## chroot, raw base, cowbuilder base) before uploading: the upload glob would
+      ## otherwise hit a scandir EACCES on the root-owned dirs, and this also frees
       ## runner disk. Keeps the released image the upload step selects.
       - name: Free build scratch (keep released image only)
         run: ./ci/free-build-scratch
@@ -249,10 +257,6 @@ jobs:
         with:
           path: ~/approx_cache_mnt
           key: ${{ runner.os }}-boot-aptdl-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
-
-      - name: Pack cowbuilder base for cache (temporary speed-up)
-        if: always() && env.BASE_CACHE == 'true'
-        run: ./ci/cowbuilder-base-cache pack
 
       - name: Save cowbuilder base cache (temporary speed-up)
         if: always() && env.BASE_CACHE == 'true'

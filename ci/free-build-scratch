@@ -62,5 +62,16 @@ for scratch_name in "${scratch_names[@]}"; do
    done < <(find "$binary_dir" -mindepth 2 -maxdepth 2 -name "$scratch_name" -print0 2>/dev/null || true)
 done
 
+## Under '--reuse-cowbuilder-base' the cowbuilder base chroot is relocated into
+## this tree ('$binary_build_folder_dist/pbuilder', bind-mounted so CI can cache
+## it; see help-steps/variables). It is a 0700 root-owned chroot -- remove it so
+## upload-artifact does not EACCES walking into it. The CI base-cache pack step
+## runs BEFORE this, so the tarball is already saved. No-op for default builds
+## (base at /var/cache/pbuilder, outside this tree).
+if [ -d "$binary_dir/pbuilder" ]; then
+   printf '%s: removing %s\n' "${0##*/}" "$binary_dir/pbuilder"
+   sudo rm --recursive --force -- "$binary_dir/pbuilder" || true
+fi
+
 after_kib="$(df --output=avail -- "$binary_dir" | tail --lines=1)"
 printf '%s: reclaimed ~%s MiB under %s\n' "${0##*/}" "$(( (after_kib - before_kib) / 1024 ))" "$binary_dir"
