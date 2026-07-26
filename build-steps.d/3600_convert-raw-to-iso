@@ -461,7 +461,13 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
       | head -n1 \
       | cut -d' ' -f5-)" || true
 
-   sed -i "s/LB_BOOTAPPEND_LIVE=\"\(.*\)\"/LB_BOOTAPPEND_LIVE=\"\1 ${live_build_bootloader_config}\"/" config/binary
+   ## Escape the replacement for sed -- backslash FIRST, then '&' (whole-match) and
+   ## the '/' delimiter -- so a kernel cmdline param carrying any of those (e.g. a
+   ## path-valued option) cannot break sed or corrupt the LB_BOOTAPPEND_LIVE value.
+   live_build_bootloader_config_sed_escaped="${live_build_bootloader_config//\\/\\\\}"
+   live_build_bootloader_config_sed_escaped="${live_build_bootloader_config_sed_escaped//&/\\&}"
+   live_build_bootloader_config_sed_escaped="${live_build_bootloader_config_sed_escaped//\//\\/}"
+   sed -i "s/LB_BOOTAPPEND_LIVE=\"\(.*\)\"/LB_BOOTAPPEND_LIVE=\"\1 ${live_build_bootloader_config_sed_escaped}\"/" config/binary
 
    ## Get rid of the temp bootloader, we don't need it anymore and it will
    ## cause installation issues
