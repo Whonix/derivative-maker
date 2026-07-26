@@ -152,12 +152,7 @@ cowbuilder_setup_do() {
       ## base_folder
       set_cowbuilder_folders
 
-      ## For development. Skipping base cowbuilder chroot creation during cowbuilder_execute_script development.
-      #skip=true
-
-      if [ "${skip:-}" = "true" ]; then
-         true "${cyan}INFO: Skipping cowbuilder chroot creation.${reset}"
-      elif [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ] && [ -d "$base_folder" ]; then
+      if [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ] && [ -d "$base_folder" ]; then
          ## --reuse-cowbuilder-base fast path: a base already exists and reuse was
          ## requested, so skip the rm + 'cowbuilder --create'. The reuse-vs-build
          ## decision lives HERE, not in the caller: a caller (e.g. CI restoring a

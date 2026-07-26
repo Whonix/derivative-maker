@@ -399,20 +399,26 @@ create_derivative_distribution_debian_packages() {
 
    local genmkfile_bin="$source_code_folder_dist/packages/kicksecure/genmkfile/usr/bin/genmkfile"
 
-   ## Fast local iteration: with --skip-published-packages, a package edited WITHOUT a
-   ## debian/changelog bump keeps its published version and is skipped, so its stale
-   ## .deb lingers in the local repo and the edit never reaches the image. Delete the
-   ## packages named in 'dist_build_rebuild_packages' (space-separated SOURCE names)
-   ## from the local reprepro repo first -- they then read as unpublished and are
-   ## rebuilt, no changelog bump required. Only meaningful together with
-   ## --skip-published-packages (a normal build rebuilds everything anyway).
-   if [ "${dist_build_skip_published_packages:-}" = "true" ] && [ -n "${dist_build_rebuild_packages:-}" ]; then
-      local rebuild_pkg_item
-      for rebuild_pkg_item in $dist_build_rebuild_packages ; do
-         true "${cyan}INFO: force-rebuild: deleting stale '$rebuild_pkg_item' from the local repo.${reset}"
-         "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" remove "$dist_build_apt_codename" "$rebuild_pkg_item" || true
-         "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" removesrc "$dist_build_apt_codename" "$rebuild_pkg_item" || true
-      done
+   ## --rebuild-packages: force-rebuild the named SOURCE packages (space-separated)
+   ## without a debian/changelog bump. The two cases below are self-documenting.
+   if [ -n "${dist_build_rebuild_packages:-}" ]; then
+      if [ "${dist_build_skip_published_packages:-}" = "true" ]; then
+         ## With --skip-published-packages an already-published package is skipped, so a
+         ## package edited without a changelog bump keeps its published version and its
+         ## stale .deb lingers. Delete the named packages from the local reprepro repo so
+         ## they read as unpublished and rebuild.
+         true "${cyan}INFO: --rebuild-packages + --skip-published-packages: force-rebuilding by deleting from the local repo.${reset}"
+         local rebuild_pkg_item
+         for rebuild_pkg_item in $dist_build_rebuild_packages ; do
+            true "${cyan}INFO: force-rebuild: deleting stale '$rebuild_pkg_item' from the local repo.${reset}"
+            "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" remove "$dist_build_apt_codename" "$rebuild_pkg_item" || true
+            "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" removesrc "$dist_build_apt_codename" "$rebuild_pkg_item" || true
+         done
+      else
+         ## Without --skip-published-packages a normal build rebuilds every package anyway,
+         ## so there is nothing to force (deleting would be a pointless repo mutation).
+         true "${cyan}INFO: --rebuild-packages without --skip-published-packages: nothing to do; a normal build rebuilds every package.${reset}"
+      fi
    fi
 
    ## Phase 1: collect the packages that actually build on this target architecture. Reading
