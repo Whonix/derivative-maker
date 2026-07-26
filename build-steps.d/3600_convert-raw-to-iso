@@ -658,16 +658,11 @@ Not running any chroot scripts.${reset}"
    ## codebase's ERR trap fires on a non-zero command even with errexit off).
    "$dist_source_help_steps_folder/unmount-lb" "${args[@]}" || true
 
-   ## On CI, reclaim the large live-build working tree (cache + chroot) here, where
-   ## the ISO is finalized, popped out of and unmounted so the tree is unneeded: it
-   ## is never a released artifact, and freeing it at this point keeps a
-   ## disk-constrained CI runner from filling up during a later VM-image build.
-   ## Local builds keep it for inspection.
-   ## style-ok: no-safe-rm -- root-owned throwaway CI live-build scratch, removed
-   ## best-effort; safe-rm is not guaranteed on the hosted runner.
-   if [ "${CI:-}" = "true" ]; then
-      $SUDO_TO_ROOT rm --recursive --force -- "${dist_live_build_folder}" || true
-   fi
+   ## Reclaim the large live-build working tree (cache + chroot) here, where the ISO
+   ## is finalized, popped out of and unmounted so the tree is unneeded: it is never a
+   ## released artifact, and freeing it keeps a disk-constrained runner from filling up
+   ## during a later VM-image build. Safe on any build (the ISO is already written).
+   $SUDO_TO_ROOT safe-rm --recursive --force -- "${dist_live_build_folder}" || true
 }
 
 main() {
