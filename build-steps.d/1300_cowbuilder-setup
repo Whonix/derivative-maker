@@ -152,24 +152,26 @@ cowbuilder_setup_do() {
       ## base_folder
       set_cowbuilder_folders
 
-      ## mmdebstrap creates NO usable device nodes (notably '/dev/ptmx') when the base
-      ## directory is on a 'nodev'-mounted filesystem: Qubes mounts '/home' nodev, and
-      ## under Docker the cowbuilder base lives on the bind-mounted build volume there.
-      ## The base then lacks '/dev/ptmx', and cowbuilder's pbuilder mountproc aborts
-      ## binding '/dev/pts/ptmx' onto it ("mount: .../dev/ptmx: mount point does not
-      ## exist") in both '--create' and '--execute'. 'nodev' only blocks OPENING device
-      ## nodes, not creating them; clear it on the base's own mount (bind + remount) so
-      ## mmdebstrap produces real nodes, matching a normal (e.g. CI) dev-capable fs. No-op
-      ## where the base fs already permits device nodes, so CI is unaffected. The bind
-      ## mount is torn down with the ephemeral build container.
+      ## The cowbuilder base needs a 'dev'- AND 'suid'-capable filesystem, like a normal
+      ## (e.g. CI) build host. Qubes mounts '/home' 'nosuid,nodev', and under Docker the
+      ## base lives on the bind-mounted build volume there. Two failures follow:
+      ##  - 'nodev' makes mmdebstrap SKIP device-node creation, so the base lacks
+      ##    '/dev/ptmx' and cowbuilder's pbuilder mountproc aborts binding
+      ##    '/dev/pts/ptmx' onto it ("mount: .../dev/ptmx: mount point does not exist").
+      ##  - 'nosuid' strips setuid, so in-chroot 'su'/'sudo' (used e.g. by the vbox
+      ##    guest-additions installer's get_su_cmd) cannot escalate and the build aborts.
+      ## Both mount flags only restrict USE, not creation; clear them on the base's own
+      ## mount (bind + remount 'dev,suid') so the chroot behaves like a normal build fs.
+      ## No-op where the base fs already permits both, so CI is unaffected. The bind mount
+      ## is torn down with the ephemeral build container.
       $SUDO_TO_ROOT mkdir --parents -- "$cowbuilder_cache_dir"
       local cowbuilder_base_mount_options
       cowbuilder_base_mount_options="$($SUDO_TO_ROOT findmnt --noheadings --output OPTIONS --target "$cowbuilder_cache_dir")"
       case ",${cowbuilder_base_mount_options}," in
-         *,nodev,*)
-            true "${cyan}INFO: cowbuilder base filesystem '$cowbuilder_cache_dir' is mounted 'nodev'; clearing it so mmdebstrap can create device nodes.${reset}"
+         *,nodev,*|*,nosuid,*)
+            true "${cyan}INFO: cowbuilder base filesystem '$cowbuilder_cache_dir' is mounted 'nodev'/'nosuid'; clearing so the chroot has working device nodes and setuid.${reset}"
             $SUDO_TO_ROOT mount --bind -- "$cowbuilder_cache_dir" "$cowbuilder_cache_dir"
-            $SUDO_TO_ROOT mount -o remount,bind,dev "$cowbuilder_cache_dir"
+            $SUDO_TO_ROOT mount -o remount,bind,dev,suid "$cowbuilder_cache_dir"
             ;;
       esac
 
