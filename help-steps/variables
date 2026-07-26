@@ -1189,6 +1189,19 @@ set_default_variable dist_binary_build_folder "${binary_build_folder_dist}/${dis
 set_default_variable binary_image_raw_file "${dist_binary_build_folder}/${SHORT_VMNAME}-${dist_build_desktop}-${dist_build_version}.${target_architecture_pretty_name}.raw"
 set_default_variable binary_image_qcow2_file "${dist_binary_build_folder}/${SHORT_VMNAME}-${dist_build_desktop}-${dist_build_version}.${target_architecture_pretty_name}.qcow2"
 
+## Shared post-debootstrap base image, selected via --base-image-role (set only on
+## the dm-build-official-one shared-base invocations). Path defined once here.
+## 'create' redirects the raw OUTPUT to the shared base-image.raw so
+## grml-debootstrap writes the reusable, pre-package-install base; 'consume' points
+## the cached INPUT at it so create-raw-image copies the base instead of re-running
+## grml-debootstrap. Neither set -> normal per-flavor raw (unchanged default).
+set_default_variable base_image_raw_file "${dist_binary_build_folder}/base-image.raw"
+if [ "${dist_build_base_image_role:-}" = "create" ]; then
+   binary_image_raw_file="$base_image_raw_file"
+elif [ "${dist_build_base_image_role:-}" = "consume" ]; then
+   cached_binary_image_raw_file="$base_image_raw_file"
+fi
+
 ## Working folder for the intermediate VirtualBox '.vdi' created by
 ## 'build-steps.d/*_create-vbox-vm'. Deliberately on a sibling of
 ## '$binary_build_folder_dist' under '$HOMEVAR' rather than the chroot's

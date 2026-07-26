@@ -195,6 +195,7 @@ Advanced Options:
   --skip-cowbuilder-setup         : Shared-work speed-up: skip build-steps.d/*_cowbuilder-setup. Only safe when the cowbuilder chroot was already created by an earlier run in the same session.
   --reuse-cowbuilder-base         : Speed-up: in build-steps.d/*_cowbuilder-setup, reuse an already-present cowbuilder base chroot instead of rebuilding it; if none exists yet, build one as usual. Unlike --skip-cowbuilder-setup this is safe when the base may or may not be present (e.g. a base restored from a CI cache).
   --skip-local-dependencies       : Shared-work speed-up: skip build-steps.d/*_local-dependencies. Only safe when the local dependencies were already installed by an earlier run in the same session.
+  --base-image-role <create|consume> : Internal (dm-build-official-one): shared post-debootstrap base handling. 'create' captures the pure base as base-image.raw (create-raw-image only); 'consume' copies that base instead of re-running grml-debootstrap.
   --retry-max [attempts]          : Set maximum retry attempts. (default: 2)
   --retry-wait [seconds]          : Set wait time between retry attempts.
   --retry-before [script]         : Specify a script to run before retry. [default: none)
@@ -645,6 +646,25 @@ dist_build_one_parse_cmd() {
                export dist_build_reuse_cowbuilder_base="true"
                true "${cyan}INFO: --reuse-cowbuilder-base: reuse an existing cowbuilder base if present, else build fresh.${reset}"
                shift
+               ;;
+           --base-image-role)
+               ## Internal (dm-build-official-one). Selects the shared post-debootstrap
+               ## base-image.raw role applied in help-steps/variables: 'create' captures
+               ## the pure pre-package-install image as base-image.raw (a create-raw-image
+               ## only invocation, so a full run never installs packages into the shared
+               ## base); 'consume' copies that base instead of re-running grml-debootstrap.
+               ## Enum -> fail loud on a typo.
+               case "${2:-}" in
+                  create|consume)
+                     export dist_build_base_image_role="${2}"
+                     true "${cyan}INFO: --base-image-role set to: $dist_build_base_image_role${reset}"
+                     ;;
+                  *)
+                     printf '%s\n' "${red}${bold}ERROR: --base-image-role must be 'create' or 'consume', got: '${2:-}'.${reset}"
+                     exit 1
+                     ;;
+               esac
+               shift 2
                ;;
            --skip-local-dependencies)
                ## Shared-work speed-up: skip 'build-steps.d/*_local-dependencies'

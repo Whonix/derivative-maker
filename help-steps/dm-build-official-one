@@ -229,7 +229,7 @@ done
 ##   must complete BEFORE the base raw image is created (grml-debootstrap etc.).
 ## - The base raw image must be a PURE post-debootstrap / pre-package-install
 ##   image so every flavor can reuse it. create-raw-image only "captures" it by
-##   naming its working file 'base-image.raw' (dist_build_raw_base_image_create);
+##   naming its working file 'base-image.raw' (--base-image-role create);
 ##   a full './derivative-maker' run would then install packages INTO that file
 ##   (3500_install-packages mounts + chroots binary_image_raw_file), polluting
 ##   the shared base. So the base image is created by a create-raw-image-only
@@ -259,9 +259,7 @@ run_cmd ./build-steps.d/*_local-dependencies "${build_args[@]}" --target iso --t
 ## create-raw-image errors on it), therefore using '--flavor kicksecure-cli'.
 ## '--target iso' must not be used because the ISO is created using live-build,
 ## not create-raw-image; create-raw-image would do nothing with '--target iso'.
-export dist_build_raw_base_image_create=true
-run_cmd ./build-steps.d/*_create-raw-image "${build_args[@]}" "${multi_target_args[@]}" --flavor kicksecure-cli "$@"
-unset dist_build_raw_base_image_create
+run_cmd ./build-steps.d/*_create-raw-image "${build_args[@]}" "${multi_target_args[@]}" --flavor kicksecure-cli --base-image-role create "$@"
 
 ## '--target iso' is required to download calamares from backports.
 ## '--skip-published-packages' makes a warm local repo (persisted across CI runs)
@@ -278,17 +276,15 @@ run_cmd ./build-steps.d/*_create-debian-packages "${build_args[@]}" --target iso
 ##   in Phase 2 with the union target set).
 ## - '--skip-published-packages' rebuilds only packages that changed since
 ##   Phase 2 (none, in a single official build), reusing the local repo.
-## - 'dist_build_use_cached_raw_base_image=true' makes create-raw-image copy the
-##   shared base-image.raw instead of running grml-debootstrap again.
+## - '--base-image-role consume' makes create-raw-image copy the shared
+##   base-image.raw instead of running grml-debootstrap again.
 skip_shared_args=(
   --skip-prepare-build-machine
   --skip-cowbuilder-setup
   --skip-local-dependencies
   --skip-published-packages
+  --base-image-role consume
 )
-
-dist_build_use_cached_raw_base_image=true
-export dist_build_use_cached_raw_base_image
 
 for flavor_item in "${flavors_list[@]}"; do
   case "${flavor_item:-}" in
