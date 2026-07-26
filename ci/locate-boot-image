@@ -32,7 +32,7 @@ case "$image_kind" in
       ;;
    *)
       ## The qcow2 is shipped xz-packed ('.qcow2.libvirt.xz'); the bare '.qcow2'
-      ## is removed after packing. ci/boot-test extracts the tar.xz.
+      ## is removed after packing. dm-boot-test extracts the tar.xz.
       find_glob='Kicksecure-*.qcow2.libvirt.xz'
       ;;
 esac

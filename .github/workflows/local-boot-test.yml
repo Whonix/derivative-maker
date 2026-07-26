@@ -329,10 +329,10 @@ jobs:
         run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
 
       - name: Check out dist-ai (boot harness)
-        ## The boot harness (dm-image-boot-tests -> dm-qemu + dm-image-test) lives in
-        ## dist-ai (public). Checked out into the workspace so ci/boot-test finds it
-        ## via its '../dist-ai' resolver (works inside the build container too, since
-        ## the whole workspace is mounted).
+        ## The boot harness + CI front-end (dm-boot-test -> dm-image-boot-tests ->
+        ## dm-qemu + dm-image-test) lives in dist-ai (public). Checked out into the
+        ## workspace so the boot step can call dist-ai/usr/bin/dm-boot-test (works
+        ## inside the build container too, since the whole workspace is mounted).
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: ${{ github.repository_owner }}/dist-ai
@@ -368,8 +368,9 @@ jobs:
           FIRMWARE: ${{ matrix.firmware }}
           SESSION: ${{ matrix.session }}
           KIND: ${{ matrix.image_kind }}
-        ## ci/boot-test dispatches --iso vs --disk by the image extension.
-        run: ./docker/derivative-maker-docker-run -- ci/boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${KIND}-${FIRMWARE}-${SESSION}.serial.log"
+        ## dm-boot-test (in dist-ai) dispatches --iso vs --disk by the image
+        ## extension. dist-ai is mounted at ./dist-ai inside the workspace/container.
+        run: ./docker/derivative-maker-docker-run -- dist-ai/usr/bin/dm-boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${KIND}-${FIRMWARE}-${SESSION}.serial.log"
 
       - name: Upload serial log
         if: always()
