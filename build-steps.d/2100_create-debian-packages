@@ -487,7 +487,8 @@ create_derivative_distribution_debian_packages() {
       ## the free-slot loop below would then spin forever on 'wait -n' with no children to reap.
       case "${dist_build_package_jobs}" in
          '' | *[!0-9]* | 0* )
-            error "dist_build_package_jobs must be a positive integer (got: '${dist_build_package_jobs}')." ;;
+            error "dist_build_package_jobs must be a positive integer (got: '${dist_build_package_jobs}')."
+            ;;
       esac
       max_jobs="$dist_build_package_jobs"
    fi
