@@ -29,7 +29,8 @@ if [ "${CI:-}" != "true" ]; then
 fi
 
 mode="${1:-}"
-arch="${BOOT_ARCH:-amd64}"
+[ -n "${BOOT_ARCH:-}" ] || BOOT_ARCH="amd64"
+arch="$BOOT_ARCH"
 runner_owner="$(id -u):$(id -g)"
 cache_dir="$HOME/cowbuilder-base-cache"
 base_tar="$cache_dir/pbuilder-base.tar"
@@ -38,7 +39,7 @@ base_name="base.cow_${arch}"
 
 case "$mode" in
    pack)
-      if ! sudo test -d "$pbuilder_dir/$base_name"; then
+      if ! sudo -- test -d "$pbuilder_dir/$base_name"; then
          printf '%s\n' "${0##*/}: no cowbuilder base at '$pbuilder_dir/$base_name' to pack"
          exit 0
       fi
