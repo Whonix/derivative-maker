@@ -29,9 +29,11 @@
 ## once exhaust RAM/disk on a modest host. The verdict is NOT re-implemented here:
 ## the two build outputs are collected into a/ and b/ and handed to the single
 ## canonical comparator, developer-meta-files' dm-reproducible-compare-artifacts
-## (whole-file sha256, plus diffoscope to localize a mismatch to the specific
-## in-image file). This script owns the build-twice orchestration; the comparison
-## lives in exactly one place.
+## (whole-file sha256 for the verdict, plus a BEST-EFFORT diffoscope explanation
+## when they differ -- it may be truncated or skipped, so it is a diagnosis aid,
+## not a guarantee of localizing the mismatch to a specific in-image file). This
+## script owns the build-twice orchestration; the comparison lives in exactly one
+## place.
 ##
 ## Exit: 0 reproducible, 1 differ, 2 usage / artifact-not-found, 3 a build failed.
 
@@ -170,8 +172,8 @@ build_one() {
 build_one a a
 build_one b b
 
-## Verdict: delegate to the single canonical comparator (whole-file sha256, with
-## diffoscope to localize a mismatch) instead of re-implementing it here. It locates
+## Verdict: delegate to the single canonical comparator (whole-file sha256, with a
+## best-effort diffoscope explanation) instead of re-implementing it here. It locates
 ## exactly one artifact of $target under each dir, so the two build outputs collected
 ## into a/ and b/ are compared bit-for-bit. Its exit maps onto ours: 0 identical
 ## (reproducible), 1 differ, 2 setup / artifact-not-found.
