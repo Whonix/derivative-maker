@@ -5,10 +5,13 @@
 
 ## AI-Assisted
 
-## Runs INSIDE the derivative-maker docker container, invoked from
-## .github/workflows/local-build.yml as:
+## Runs INSIDE the derivative-maker docker container:
 ##
 ##   ./docker/derivative-maker-docker-run -- ci/build --arch <amd64|arm64>
+##
+## Callers: ci/reproducible-build-twice, and manual/local builds.
+## .github/workflows/local-build.yml does NOT use this script -- it drives
+## help-steps/dm-build-official through the same docker-run wrapper.
 ##
 ## Signs HEAD before building so build-steps.d/1100_sanity-tests' sq-git
 ## signature verification passes without the --allow-unsigned escape hatch,
