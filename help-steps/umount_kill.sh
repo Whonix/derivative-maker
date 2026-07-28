@@ -191,4 +191,29 @@ else
    fi
 fi
 
+## After killing the processes that held the tree busy, UNMOUNT every mount UNDER
+## it (deepest first). Without this a still-mounted /sys, /dev/pts or /proc leaves
+## the tree un-copyable ('cp -al' -> "Invalid cross-device link") and un-removable
+## -- which breaks cowbuilder base setup (the base.cow -> cow.1 COW copy that
+## 'cowbuilder --execute' does) and chroot teardown. '--lazy --force' so a
+## transient-busy mount still detaches. Captured first so pipefail cannot abort on
+## an empty match.
+## STRICT submounts only ('base/...'), never 'base' itself: the tree's own root
+## mount belongs to the caller, not this reaper. unchroot-raw calls this on
+## '$CHROOT_FOLDER' between install-packages' chroot cycles purely to kill lingering
+## chroot processes; the ext4 root that mount-raw put there must stay mounted until
+## unmount-raw removes it. Matching 'base' too would pull that root out mid-build and
+## the next chroot lands in an empty directory ("chroot: failed to run command
+## 'mkdir': No such file or directory"). Callers that DO want 'base' gone unmount it
+## themselves (unmount-helper), and the cowbuilder callers pass a plain directory
+## that is not a mountpoint, so excluding 'base' changes nothing for them.
+umount_kill_mounts="$(findmnt --raw --noheadings --output TARGET 2>/dev/null | awk -v base="${file_system_object%/}" 'index($0, base"/") == 1' | LC_ALL=C sort --reverse || true)"
+if [ -n "${umount_kill_mounts}" ]; then
+   while IFS="" read -r umount_kill_mp; do
+      [ -n "${umount_kill_mp}" ] || continue
+      umount --lazy --force -- "${umount_kill_mp}" 2>/dev/null \
+         || printf '%s\n' "$0: WARNING: umount '${umount_kill_mp}' failed." >&2
+   done <<< "${umount_kill_mounts}"
+fi
+
 true "$0 INFO: end"

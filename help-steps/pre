@@ -195,7 +195,13 @@ error() {
    $output_cmd "${blue}############################################################${reset}"
    error_reason="${bold}message:${reset} $*
 "
-   error_ "See above! (There should be a bold, red message surrounded by blue hashtags (#).)"
+   ## 'fatal_error_no_retry' is INTENTIONALLY not defined as a command. Calling a
+   ## non-existent command raises exit code 127 ("command not found"), which trips
+   ## the ERR trap and enters the exception handler; exception_handler_retry matches
+   ## this exact name in last_failed_bash_command and skips auto-retry, because a
+   ## deliberate error() is a real failure, not a transient one worth retrying. Do
+   ## NOT define it -- the "command not found" IS the mechanism.
+   fatal_error_no_retry "See above! (There should be a bold, red message surrounded by blue hashtags (#).)"
    true
 }
 
@@ -339,8 +345,8 @@ ${cyan}${bold}############################################################${rese
       fi
       [ -n "${dist_build_auto_retry:-}" ] || dist_build_auto_retry="2"
       [ -n "${dist_build_wait_auto_retry:-}" ] || dist_build_wait_auto_retry="5"
-      if [ "${first:-}" = "error_" ]; then
-         $output_cmd 'INFO: No auto retry because first item of last_failed_bash_command is "error_".'
+      if [ "${first:-}" = "fatal_error_no_retry" ]; then
+         $output_cmd 'INFO: No auto retry: last_failed_bash_command is the deliberate-error sentinel "fatal_error_no_retry" (see error() -- an intentionally undefined command).'
       elif [ "${dist_build_auto_retry_counter:-0}" -gt "$dist_build_auto_retry" ]; then
          $output_cmd "${cyan}${bold}INFO: Auto retried (--retry-max) already $dist_build_auto_retry times. No more auto retry. ${reset}"
       else

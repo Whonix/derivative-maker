@@ -71,6 +71,7 @@ parse_cmd_flavor_error() {
 --flavor whonix-host-cli
 --flavor kicksecure-cli
 --flavor kicksecure-lxqt
+--flavor kicksecure-debug
 --flavor dist-installer-cli
 --flavor source
 ${reset}"
@@ -188,7 +189,13 @@ Advanced Options:
   --sanity-tests [true|false]     : Enable or disable chroot script sanity tests for faster build speed (default: false).
   --only-packages 'p1 p2'         : Debug speed-up: rebuild ONLY these packages into the persistent local repo (reuse the rest from the prior build). Only safe if omitted packages' source is unchanged.
   --skip-packages                 : Debug speed-up: skip package building entirely and reuse the whole local package repo from the prior build. Only safe if NO package source changed.
-  --skip-published-packages       : Debug speed-up: rebuild only packages whose debian/changelog version is not yet published in the local repo; skip the rest. Bump the changelog to force a rebuild.
+  --skip-published-packages       : Debug speed-up: rebuild only packages that changed since the last build -- a new/changed debian/changelog version OR edited source content (auto-detected by a content hash); skip up-to-date ones. No changelog bump needed to pick up a source edit.
+  --rebuild-packages '<p1 p2>'    : With --skip-published-packages, force-rebuild these SOURCE packages (space-separated) without a debian/changelog bump, by deleting them from the local repo first.
+  --skip-prepare-build-machine    : Shared-work speed-up: skip build-steps.d/*_prepare-build-machine. Only safe when the build machine was already prepared by an earlier run in the same session.
+  --skip-cowbuilder-setup         : Shared-work speed-up: skip build-steps.d/*_cowbuilder-setup. Only safe when the cowbuilder chroot was already created by an earlier run in the same session.
+  --reuse-cowbuilder-base         : Speed-up: in build-steps.d/*_cowbuilder-setup, reuse an already-present cowbuilder base chroot instead of rebuilding it; if none exists yet, build one as usual. Unlike --skip-cowbuilder-setup this is safe when the base may or may not be present (e.g. a base restored from a CI cache).
+  --skip-local-dependencies       : Shared-work speed-up: skip build-steps.d/*_local-dependencies. Only safe when the local dependencies were already installed by an earlier run in the same session.
+  --base-image-role <create|consume> : Internal (dm-build-official-one): shared post-debootstrap base handling. 'create' captures the pure base as base-image.raw (create-raw-image only); 'consume' copies that base instead of re-running grml-debootstrap.
   --retry-max [attempts]          : Set maximum retry attempts. (default: 2)
   --retry-wait [seconds]          : Set wait time between retry attempts.
   --retry-before [script]         : Specify a script to run before retry. [default: none)
@@ -304,6 +311,8 @@ dist_build_one_parse_cmd() {
                elif [ "${dist_build_flavor:-}" = "kicksecure-cli" ]; then
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
                elif [ "${dist_build_flavor:-}" = "kicksecure-lxqt" ]; then
+                  build_machines_counter="$(( $build_machines_counter + 1 ))"
+               elif [ "${dist_build_flavor:-}" = "kicksecure-debug" ]; then
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
                elif [ "${dist_build_flavor:-}" = "dist-installer-cli" ]; then
                   build_machines_counter="$(( $build_machines_counter + 1 ))"
@@ -595,10 +604,74 @@ dist_build_one_parse_cmd() {
                ;;
            --skip-published-packages)
                ## Debug speed-up: within 2100_create-debian-packages, skip each package already
-               ## published in the local repo at its current debian/changelog version (built by a prior
-               ## run), rebuilding only version-bumped ones. Bump the changelog to force a rebuild.
+               ## published in the local repo whose changelog version AND source content are
+               ## unchanged since the last build; rebuild the rest. A source edit is auto-detected
+               ## by content hash, so no changelog bump is needed to force a rebuild.
                export dist_build_skip_published_packages="true"
-               true "${cyan}INFO: --skip-published-packages: rebuilding only changelog-bumped packages.${reset}"
+               true "${cyan}INFO: --skip-published-packages: rebuilding only changed packages (version or source content).${reset}"
+               shift
+               ;;
+           --rebuild-packages)
+               ## Debug speed-up (with --skip-published-packages): force-rebuild these
+               ## SOURCE packages (space-separated) even without a debian/changelog bump,
+               ## by deleting them from the local repo first so they read as unpublished.
+               export dist_build_rebuild_packages="$2"
+               true "${cyan}INFO: --rebuild-packages: force-rebuilding '${2}'.${reset}"
+               shift 2
+               ;;
+           --skip-prepare-build-machine)
+               ## Shared-work speed-up: skip 'build-steps.d/*_prepare-build-machine'
+               ## entirely (it exits early at its top). Safe only when the build machine
+               ## was already prepared by an earlier run in the same session (e.g. the
+               ## first flavor of an official multi-flavor build).
+               export dist_build_skip_prepare_build_machine="true"
+               true "${cyan}INFO: --skip-prepare-build-machine: reusing the already prepared build machine.${reset}"
+               shift
+               ;;
+           --skip-cowbuilder-setup)
+               ## Shared-work speed-up: skip 'build-steps.d/*_cowbuilder-setup' entirely
+               ## (it exits early at its top). Safe only when the cowbuilder chroot was
+               ## already created by an earlier run in the same session.
+               export dist_build_skip_cowbuilder_setup="true"
+               true "${cyan}INFO: --skip-cowbuilder-setup: reusing the existing cowbuilder chroot.${reset}"
+               shift
+               ;;
+           --reuse-cowbuilder-base)
+               ## Speed-up: 'build-steps.d/*_cowbuilder-setup' reuses an already-present
+               ## cowbuilder base chroot ('base.cow_<arch>') instead of the rm +
+               ## 'cowbuilder --create'. Unlike --skip-cowbuilder-setup (which skips the
+               ## whole step and needs the base to exist), the step still decides:
+               ## reuse if the base is present, else build a fresh one. Safe when a base
+               ## may or may not be present, e.g. one restored from a CI cache.
+               export dist_build_reuse_cowbuilder_base="true"
+               true "${cyan}INFO: --reuse-cowbuilder-base: reuse an existing cowbuilder base if present, else build fresh.${reset}"
+               shift
+               ;;
+           --base-image-role)
+               ## Internal (dm-build-official-one). Selects the shared post-debootstrap
+               ## base-image.raw role applied in help-steps/variables: 'create' captures
+               ## the pure pre-package-install image as base-image.raw (a create-raw-image
+               ## only invocation, so a full run never installs packages into the shared
+               ## base); 'consume' copies that base instead of re-running grml-debootstrap.
+               ## Enum -> fail loud on a typo.
+               case "${2:-}" in
+                  create|consume)
+                     export dist_build_base_image_role="${2}"
+                     true "${cyan}INFO: --base-image-role set to: $dist_build_base_image_role${reset}"
+                     ;;
+                  *)
+                     printf '%s\n' "${red}${bold}ERROR: --base-image-role must be 'create' or 'consume', got: '${2:-}'.${reset}"
+                     exit 1
+                     ;;
+               esac
+               shift 2
+               ;;
+           --skip-local-dependencies)
+               ## Shared-work speed-up: skip 'build-steps.d/*_local-dependencies'
+               ## entirely (it exits early at its top). Safe only when the local
+               ## dependencies were already installed by an earlier run in the same session.
+               export dist_build_skip_local_dependencies="true"
+               true "${cyan}INFO: --skip-local-dependencies: reusing the already installed local dependencies.${reset}"
                shift
                ;;
            --sanity-tests)

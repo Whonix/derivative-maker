@@ -372,12 +372,19 @@ reprepro_add_newer_packages_from_third_party_repositories() {
       "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" removesrc "$dist_build_apt_codename" "$package" || true
    done
 
+   ## nullglob is OFF in this path: reprepro_add_newer... runs from the download_*
+   ## functions BEFORE create_derivative_distribution_debian_packages sets nullglob,
+   ## so an unmatched glob stays literal. Skip it (a set may have only .deb or only
+   ## .dsc) -- the includedeb/includedsc below have no '|| true', unlike the remove
+   ## loops, so a literal-glob path would fail the build under errexit.
    for file_name in "$temp_newer_packages/"*".deb" ; do
+      [ -e "$file_name" ] || continue
       package_absolute_path="$(readlink -f "$file_name")"
       "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" includedeb "$dist_build_apt_codename" "$package_absolute_path"
    done
 
    for file_name in "$temp_newer_packages/"*".dsc" ; do
+      [ -e "$file_name" ] || continue
       package_absolute_path="$(readlink -f "$file_name")"
       "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" includedsc "$dist_build_apt_codename" "$package_absolute_path"
    done
@@ -398,6 +405,28 @@ create_derivative_distribution_debian_packages() {
    shopt -s dotglob
 
    local genmkfile_bin="$source_code_folder_dist/packages/kicksecure/genmkfile/usr/bin/genmkfile"
+
+   ## --rebuild-packages: force-rebuild the named SOURCE packages (space-separated)
+   ## without a debian/changelog bump. The two cases below are self-documenting.
+   if [ -n "${dist_build_rebuild_packages:-}" ]; then
+      if [ "${dist_build_skip_published_packages:-}" = "true" ]; then
+         ## With --skip-published-packages an already-published package is skipped, so a
+         ## package edited without a changelog bump keeps its published version and its
+         ## stale .deb lingers. Delete the named packages from the local reprepro repo so
+         ## they read as unpublished and rebuild.
+         true "${cyan}INFO: --rebuild-packages + --skip-published-packages: force-rebuilding by deleting from the local repo.${reset}"
+         local rebuild_pkg_item
+         for rebuild_pkg_item in $dist_build_rebuild_packages ; do
+            true "${cyan}INFO: force-rebuild: deleting stale '$rebuild_pkg_item' from the local repo.${reset}"
+            "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" remove "$dist_build_apt_codename" "$rebuild_pkg_item" || true
+            "$dist_developer_meta_files_folder/usr/bin/dm-reprepro-wrapper" removesrc "$dist_build_apt_codename" "$rebuild_pkg_item" || true
+         done
+      else
+         ## Without --skip-published-packages a normal build rebuilds every package anyway,
+         ## so there is nothing to force (deleting would be a pointless repo mutation).
+         true "${cyan}INFO: --rebuild-packages without --skip-published-packages: nothing to do; a normal build rebuilds every package.${reset}"
+      fi
+   fi
 
    ## Phase 1: collect the packages that actually build on this target architecture. Reading
    ## debian/control directly (no 'pushd') so the list can then be driven in parallel.
@@ -471,7 +500,8 @@ create_derivative_distribution_debian_packages() {
       ## the free-slot loop below would then spin forever on 'wait -n' with no children to reap.
       case "${dist_build_package_jobs}" in
          '' | *[!0-9]* | 0* )
-            error "dist_build_package_jobs must be a positive integer (got: '${dist_build_package_jobs}')." ;;
+            error "dist_build_package_jobs must be a positive integer (got: '${dist_build_package_jobs}')."
+            ;;
       esac
       max_jobs="$dist_build_package_jobs"
    fi
@@ -550,6 +580,13 @@ create_derivative_distribution_debian_packages() {
       true "${cyan}INFO: reprepro (${reprepro_current}/${total_to_build}): ${item##*/} ${reset}"
       "$genmkfile_bin" reprepro-remove
       "$genmkfile_bin" reprepro-add
+      ## Record the source content hash so the next --skip-published-packages build
+      ## skips this package unless its source changes again (auto-detected, no
+      ## package name or changelog bump needed). See reprepro-freshness.bsh.
+      dm_source_hash_record \
+         "$(dm_source_hash_manifest_path "$dist_build_apt_codename")" \
+         "$(dpkg-parsechangelog --show-field Source --file "$item/debian/changelog")" \
+         "$(dm_package_source_hash "$item")"
       popd >/dev/null
    done
 

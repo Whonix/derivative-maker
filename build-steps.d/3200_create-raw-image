@@ -25,15 +25,9 @@ source variables
 create-debian-raw-image() {
    mkdir --parents "$binary_build_folder_dist/"
 
-   if [ "${dist_build_raw_base_image_create:-}" = "true" ]; then
-      true "${cyan}${BASH_SOURCE[0]} INFO: Changing binary_image_raw_file path, because dist_build_raw_base_image_create=true.${reset}"
-      binary_image_raw_file="${dist_binary_build_folder}/base-image.raw"
-   fi
-
-   if [ "${dist_build_use_cached_raw_base_image:-}" = "true" ]; then
-      true "${cyan}${BASH_SOURCE[0]} INFO: Setting cached_binary_image_raw_file path, because dist_build_use_cached_raw_base_image=true.${reset}"
-      cached_binary_image_raw_file="${dist_binary_build_folder}/base-image.raw"
-   fi
+   ## The shared-base role (--base-image-role create|consume) is applied in
+   ## help-steps/variables: 'create' points binary_image_raw_file at base-image.raw,
+   ## 'consume' sets cached_binary_image_raw_file to it (the copy branch below).
 
    if [ ! "${cached_binary_image_raw_file:-}" = "" ]; then
       true "${cyan}${BASH_SOURCE[0]} INFO: copy and use cached_binary_image_raw_file '$cached_binary_image_raw_file'...${reset}"

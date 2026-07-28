@@ -1,0 +1,41 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Chown the CI package-repo + apt-download cache directories from the
+## in-container build uids that wrote them (the package repo as 'user', the apt
+## download cache as the 'approx' 101:102) to the runner user, so a subsequent
+## unprivileged actions/cache/save can read and tar them. Without this the save
+## silently caches nothing.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## style-ok: no-safe-rm -- this script only chowns CI cache dirs, it removes nothing.
+
+if [ "${CI:-}" != "true" ]; then
+   printf '%s\n' "${0##*/}: refusing to chown cache dirs outside CI (CI is not 'true')" >&2
+   exit 0
+fi
+
+runner_owner="$(id -u):$(id -g)"
+
+cache_dirs=(
+   "$HOME/binary_mnt/aptrepo_local"
+   "$HOME/binary_mnt/packages-build-status"
+   "$HOME/binary_mnt/genmkfile-packages-result"
+   "$HOME/approx_cache_mnt"
+)
+
+for cache_dir in "${cache_dirs[@]}"; do
+   if [ -e "$cache_dir" ]; then
+      sudo chown --recursive -- "$runner_owner" "$cache_dir" || true
+   fi
+done

@@ -150,6 +150,17 @@ Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
    ##       also update at the same time grub-live:
    ##       /usr/lib/systemd/system/systemd-repart.service.d/30_grub-live.conf
 
+   ## The trailing '\\\${dm_smbios_extra}' in --bootappend-live is a GRUB variable
+   ## reference that must reach the generated grub.cfg UN-expanded, so a boot-tester
+   ## can inject extra kernel cmdline via 'qemu -smbios' (the reader at the top of
+   ## grub.cfg fills the variable; empty otherwise -> no-op). It survives four
+   ## layers by design: this printf's double quotes ('\\\$' -> '\$') write a literal
+   ## backslash-dollar into auto/config's single-quoted value; 'lb config' stores it
+   ## verbatim; live-build's config/binary is written with an UNQUOTED heredoc that
+   ## keeps the backslash, and later '.'-sourced, where '\$' -> '$' restores the
+   ## literal '\${dm_smbios_extra}' into LB_BOOTAPPEND_LIVE -> APPEND_LIVE -> every
+   ## live menuentry.
+
    ## Sanity test.
    test -n "${dist_build_hostname}"
 
@@ -174,7 +185,7 @@ lb config noauto \\
    --archive-areas 'main contrib non-free non-free-firmware' \\
    --backports true \\
    --binary-image iso-hybrid \\
-   --bootappend-live 'rd.live.overlay.overlayfs=1 boot=live components splash live-config.hostname=${dist_build_hostname} rd.live.image root=live:CDLABEL=${dist_build_type_short} rd.live.dir=live rd.live.squashimg=filesystem.squashfs${serial_console_cmdline}' \\
+   --bootappend-live 'rd.live.overlay.overlayfs=1 boot=live components splash live-config.hostname=${dist_build_hostname} rd.live.image root=live:CDLABEL=${dist_build_type_short} rd.live.dir=live rd.live.squashimg=filesystem.squashfs${serial_console_cmdline} \\\${dm_smbios_extra}' \\
    --bootappend-live-failsafe 'none' \\
    --cache false \\
    --checksums md5 \\
@@ -207,7 +218,6 @@ lb config noauto \\
    --parent-mirror-chroot '${dist_build_apt_sources_mirror}' \\
    --parent-mirror-chroot-security '${dist_build_apt_sources_security_mirror}' \\
    --parent-mirror-debian-installer '${dist_build_apt_sources_mirror}' \\
-   --verbose \\
    --zsync false \\
    --sysmaint-enable \\
    --unrestricted-admin-enable \\
@@ -451,7 +461,13 @@ Trusted: yes" > archives/derivative-localrepo.sources.chroot
       | head -n1 \
       | cut -d' ' -f5-)" || true
 
-   sed -i "s/LB_BOOTAPPEND_LIVE=\"\(.*\)\"/LB_BOOTAPPEND_LIVE=\"\1 ${live_build_bootloader_config}\"/" config/binary
+   ## Escape the replacement for sed -- backslash FIRST, then '&' (whole-match) and
+   ## the '/' delimiter -- so a kernel cmdline param carrying any of those (e.g. a
+   ## path-valued option) cannot break sed or corrupt the LB_BOOTAPPEND_LIVE value.
+   live_build_bootloader_config_sed_escaped="${live_build_bootloader_config//\\/\\\\}"
+   live_build_bootloader_config_sed_escaped="${live_build_bootloader_config_sed_escaped//&/\\&}"
+   live_build_bootloader_config_sed_escaped="${live_build_bootloader_config_sed_escaped//\//\\/}"
+   sed -i "s/LB_BOOTAPPEND_LIVE=\"\(.*\)\"/LB_BOOTAPPEND_LIVE=\"\1 ${live_build_bootloader_config_sed_escaped}\"/" config/binary
 
    ## Get rid of the temp bootloader, we don't need it anymore and it will
    ## cause installation issues
@@ -617,7 +633,12 @@ Not running any chroot scripts.${reset}"
 
    ## Package into an ISO
    # shellcheck disable=SC2086
-   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb binary --verbose --debug; then
+   ## No '--verbose': live-build's binary_rootfs turns '_VERBOSE=true' into
+   ## mksquashfs '-info', which lists EVERY packed file (100k+ on a full rootfs)
+   ## and floods the CI log until the runner's log storage fills ("No space left
+   ## on device"). '--debug' is kept for diagnostics; bootstrap/chroot above stay
+   ## '--verbose'.
+   if ! $SUDO_TO_ROOT ${UNSHARE_PID_NS:-} lb binary --debug; then
       error "${bold}${red}ERROR: Live build binary stage failed!${reset}"
    fi
 
@@ -642,6 +663,12 @@ Not running any chroot scripts.${reset}"
    ## chain can never fail a build whose ISO is already written (this
    ## codebase's ERR trap fires on a non-zero command even with errexit off).
    "$dist_source_help_steps_folder/unmount-lb" "${args[@]}" || true
+
+   ## Reclaim the large live-build working tree (cache + chroot) here, where the ISO
+   ## is finalized, popped out of and unmounted so the tree is unneeded: it is never a
+   ## released artifact, and freeing it keeps a disk-constrained runner from filling up
+   ## during a later VM-image build. Safe on any build (the ISO is already written).
+   $SUDO_TO_ROOT safe-rm --recursive --force -- "${dist_live_build_folder}" || true
 }
 
 main() {

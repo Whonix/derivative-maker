@@ -27,6 +27,13 @@ if ! fetch_log="$(git fetch origin -- "${FORK_BRANCH}" 2>&1)"; then
    exit 0
 fi
 
-if git switch --quiet --detach -- "refs/remotes/origin/${FORK_BRANCH}"; then
-   printf '%s\n' "switch ${displaypath:-${PWD}} (origin: ${submodule_url}) -> origin/${FORK_BRANCH}"
-fi
+## The fetch succeeded (branch exists), so check it out. Detach onto FETCH_HEAD --
+## which 'git fetch origin -- BRANCH' always sets -- rather than
+## 'refs/remotes/origin/BRANCH': a submodule whose remote refspec does not populate
+## 'refs/remotes/origin/*' (e.g. a single-branch submodule clone, as grml-debootstrap
+## is here) leaves that tracking ref absent, which used to abort the switch. FETCH_HEAD
+## is always valid after the fetch, so every submodule with a matching fork branch is
+## checked out uniformly -- no per-submodule special-casing. 'errexit' surfaces a
+## genuine switch failure.
+git switch --quiet --detach FETCH_HEAD
+printf '%s\n' "switch ${displaypath:-${PWD}} (origin: ${submodule_url}) -> origin/${FORK_BRANCH}"

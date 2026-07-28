@@ -1,0 +1,226 @@
+#!/bin/bash
+
+## Copyright (C) 2025 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Runs INSIDE the derivative-maker docker container, invoked from
+## .github/workflows/local-build.yml as:
+##
+##   ./docker/derivative-maker-docker-run -- ci/build --arch <amd64|arm64>
+##
+## Signs HEAD before building so build-steps.d/1100_sanity-tests' sq-git
+## signature verification passes without the --allow-unsigned escape hatch,
+## then builds the kicksecure-cli image for the given architecture.
+##
+## Signing and building run in a SINGLE container invocation (unlike
+## ci/dry-run.d/{150,200,300}, which are separate steps in a persistent
+## systemd container) so home-directory state created by signing-key-create
+## beyond the mounted ~/.gnupg survives into sign-and-tag and the build.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+arch=""
+target="virtualbox"
+flavor="kicksecure-cli"
+freshness=""
+while [ "$#" -gt 0 ]; do
+   case "$1" in
+      --arch)
+         if [ "$#" -lt 2 ]; then
+            printf '%s\n' "${BASH_SOURCE[0]}: --arch requires a value" >&2
+            exit 1
+         fi
+         arch="$2"
+         shift 2
+         ;;
+      --target)
+         if [ "$#" -lt 2 ]; then
+            printf '%s\n' "${BASH_SOURCE[0]}: --target requires a value" >&2
+            exit 1
+         fi
+         target="$2"
+         shift 2
+         ;;
+      --flavor)
+         if [ "$#" -lt 2 ]; then
+            printf '%s\n' "${BASH_SOURCE[0]}: --flavor requires a value" >&2
+            exit 1
+         fi
+         flavor="$2"
+         shift 2
+         ;;
+      --freshness)
+         if [ "$#" -lt 2 ]; then
+            printf '%s\n' "${BASH_SOURCE[0]}: --freshness requires a value" >&2
+            exit 1
+         fi
+         freshness="$2"
+         shift 2
+         ;;
+      *)
+         printf '%s\n' "${BASH_SOURCE[0]}: unexpected argument: $1" >&2
+         exit 1
+         ;;
+   esac
+done
+
+case "${arch}" in
+   amd64 | arm64)
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --arch <amd64|arm64> is required (got: '${arch}')" >&2
+      exit 1
+      ;;
+esac
+
+case "${target}" in
+   virtualbox | iso | qcow2)
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --target <virtualbox|iso|qcow2> is required (got: '${target}')" >&2
+      exit 1
+      ;;
+esac
+
+## Fail fast on an unknown flavor: parse-cmd's CI gate silently degrades an
+## unrecognized real-build combination to a dry-run, which would look green
+## while building nothing.
+case "${flavor}" in
+   kicksecure-cli | kicksecure-lxqt)
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --flavor <kicksecure-cli|kicksecure-lxqt> is required (got: '${flavor}')" >&2
+      exit 1
+      ;;
+esac
+
+## --freshness is mandatory for an image build (enforced by help-steps/parse-cmd), so require
+## it here too. The reproducibility lane always passes 'frozen'; 'current' is accepted for a
+## non-reproducible smoke build.
+case "${freshness}" in
+   frozen | current)
+      ;;
+   *)
+      printf '%s\n' "${BASH_SOURCE[0]}: --freshness <frozen|current> is required (got: '${freshness}')" >&2
+      exit 1
+      ;;
+esac
+
+cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
+
+## The ISO build leaves live-build's work tree (bootstrap/chroot cache,
+## root-owned with 0700 entries such as 'etc/ssl/private') under the
+## version folder of the bind-mounted output directory. The workflow's
+## upload-artifact directory scan fails on those entries with EACCES, and
+## gigabytes of chroot cache are not a useful artifact anyway. Remove the
+## tree after the build; the '.iso' and the logs are siblings and stay.
+## Registered as an EXIT trap so a FAILED build does not leave the
+## unreadable tree behind for the 'if: always()' upload step either.
+iso_workdir_cleanup() {
+   local mount_list mount_target
+
+   if [ ! "${target}" = "iso" ]; then
+      return 0
+   fi
+   ## A failed build can abort between 3600_convert-raw-to-iso's 'mount --bind' of the HOST
+   ## /dev, /proc, /sys into the lb chroot and the matching umount. The
+   ## step's own exception handler tears that down ('unmount-lb'), but stay
+   ## safe even if that failed too: unmount anything below the tree,
+   ## deepest first, and refuse to let the recursive deletion cross a
+   ## filesystem boundary ('--one-file-system'), so a still-mounted bind
+   ## can never route the rm into the real /dev.
+   mount_list="$(findmnt --list --noheadings --output TARGET | sort --reverse)" || mount_list=""
+   while IFS="" read -r mount_target; do
+      case "${mount_target}" in
+         "${HOME}"/derivative-binary/*/live-build/*)
+            sudo --non-interactive umount --lazy -- "${mount_target}" || true
+            ;;
+      esac
+   done <<< "${mount_list}"
+   ## '|| true': best-effort cleanup must not fail an otherwise-successful
+   ## build. '--one-file-system' still refuses to cross a mount boundary
+   ## (it exits non-zero when it skips one), so /dev can never be deleted
+   ## through a leftover bind mount regardless of this guard.
+   sudo --non-interactive safe-rm --one-file-system -r -f -- "${HOME}/derivative-binary/"*/live-build || true
+}
+
+trap iso_workdir_cleanup EXIT
+
+## Reproducibility: pin the image version to the PRE-SIGN source commit.
+##
+## The CI lane has no offline maintainer key, so signing-key-create mints a FRESH
+## key per runner VM and sign-and-tag amends HEAD ('commit --amend -S' -> new
+## commit sha) and tags it '<base>_<sha>_<fpr>'. help-steps/variables then derives
+## dist_build_version from 'git describe', which resolves to that ephemeral tag --
+## so the per-build key fingerprint and amended sha would land in the image
+## FILENAME and content, making two independent builds differ for a reason that is
+## not the build's fault (the ephemeral CI signature), not a real reproducibility
+## defect. A real reproducer checks out the same PUBLIC signed release tag and
+## never re-signs, so its version is stable.
+##
+## Capture the version from HEAD BEFORE signing -- both independent builds check
+## out the same source commit, so they share it -- and export it, so
+## help-steps/variables uses it verbatim (its 'if unset' guard) instead of
+## re-deriving it from the post-sign HEAD.
+dist_build_version="$(git describe --always --abbrev=1000000000)"
+export dist_build_version
+
+## Create signing material (idempotent; signing-key-create never overwrites an
+## existing key) and sign+tag HEAD. Mirrors ci/dry-run.d/150_signing-key-create
+## and ci/dry-run.d/200_sign-and-tag.
+./help-steps/signing-key-create
+./help-steps/sign-and-tag
+
+## --allow-uncommitted and --allow-untagged mirror ci/dry-run.d/300 (still
+## required by the build after signing); --allow-unsigned is intentionally
+## omitted so the sq-git verification runs against a real signature. Note the
+## key is a fresh CI key minted by signing-key-create, so a green check
+## exercises the signing/verification MECHANISM end to end -- it is a
+## self-signed build, not maintainer provenance.
+##
+## '--target iso' implies '--type host' (help-steps/parse-cmd
+## implicit_dist_type_host), so '--type vm' is passed only for the VM
+## target.
+type_args=()
+if [ "${target}" = "virtualbox" ] || [ "${target}" = "qcow2" ]; then
+   type_args=(--type vm)
+fi
+
+## No '--serial-console-enable': it would install the serial-console-enable package,
+## making the reproducibility-tested image diverge from the production image (which
+## omits it), and nothing in CI boot-tests these images (the lane builds twice and
+## compares). A manual dm-qemu boot-test injects a serial console at run time via
+## SMBIOS ('--smbios-append "dm-cmdline=console=ttyS0,115200n8"'; the GRUB reader
+## ships in vm-config-dist by default), so no baked-in divergence is needed.
+
+## '--freshness' is mandatory (validated above). '--freshness frozen' pins the
+## snapshot.debian.org timestamp (build_sources/debian_stable_frozen_*), so two independent
+## builds pull identical package versions -- required for a meaningful reproducibility
+## comparison. The value is re-validated by help-steps/parse-cmd.
+##
+## '--remote-derivative-packages false': build the Kicksecure/Whonix derivative packages
+## LOCALLY from the source tree instead of pulling prebuilt ones from the remote repo. A
+## reproducible build must not embed opaque prebuilt packages -- a third party can only
+## reproduce the image if every derivative package is built from the same source. Trade-off: the
+## build is slower (it compiles all derivative packages) in exchange for being reproducible.
+##
+## '--unsafe-io true': eatmydata elides fsync in the disposable cowbuilder chroot -- repro-safe
+## (no byte that lands in a .deb/.iso changes; SOURCE_DATE_EPOCH still enforces determinism).
+./derivative-maker \
+   --flavor "${flavor}" \
+   --target "${target}" \
+   "${type_args[@]}" \
+   --freshness "${freshness}" \
+   --arch "${arch}" \
+   --allow-uncommitted true \
+   --allow-untagged true \
+   --freedom false \
+   --repo true \
+   --remote-derivative-packages false

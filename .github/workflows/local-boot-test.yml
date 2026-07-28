@@ -1,0 +1,384 @@
+---
+name: Boot Test
+
+## Repo-private boot + functional test lane (G-A-005 'local-' prefix): builds
+## bootable images via dm-build-official, then boots each across the firmware x
+## session matrix (SeaBIOS / OVMF EFI / OVMF Secure Boot, as the 'user' and
+## 'sysmaint' sessions) and, in each, drives a login-free root serial shell and
+## runs 'systemcheck --cli --leak-tests --verbose'. Each boot-test leg's conclusion
+## IS its pass/fail signal (0 pass, non-zero fail/setup, 77 SKIP).
+##
+## One build flavor: kicksecure-debug (minimal boot-test image = boot chain +
+## hardening core + systemcheck + user-sysmaint-split). Because it ships
+## user-sysmaint-split, EVERY image kind carries a sysmaint session -- sysmaint is a
+## general Kicksecure feature (GRUB "SYSMAINT Session" entry), not a live-ISO
+## concept. So each kind is booted 'user' AND 'sysmaint':
+##   - qcow2 DISK      (the released disk image).
+##   - live ISO        (the same packages, live-booted).
+##   - virtualbox .ova -- TEMPORARILY DISABLED (re-enable once stable; search
+##     'vbox temporarily disabled' -- build target, .ova upload, boot matrix).
+## The sysmaint session is selected -- identically on every kind -- via dm-qemu's
+## SMBIOS kernel-cmdline injection of 'boot-role=sysmaint
+## systemd.unit=sysmaint-boot.target', the exact pair the sysmaint GRUB entry adds
+## (user-sysmaint-split grub.d_10_10_linux_sysmaint). SMBIOS injection is disk/ISO
+## agnostic, so no image kind is excluded from either session.
+##
+## All boot logic lives in dist-ai's dm-image-boot-tests, which bundles dm-qemu
+## (qemu/firmware/Secure Boot + SMBIOS kernel-cmdline injection) and dm-image-test
+## (login + checks). This workflow is a thin wrapper that builds the images, checks
+## out dist-ai and fans out the matrix, so the shell stays lint-covered and locally
+## runnable. See agents/github-actions-security.md for the pinning / permissions
+## patterns.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**ci**'
+  schedule:
+    ## Weekly, Sundays 08:00 UTC (offset from the build lane at 07:00).
+    - cron: '0 8 * * 0'
+
+## Least privilege (rule 1): read the repo and use the Actions artifact backend
+## only.
+permissions:
+  contents: read
+
+## Per-ref cancellation (G-A-006).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BOOT_ARCH: amd64
+  ## Temporary build speed-up: also cache the apt-download proxy cache
+  ## (~/approx_cache_mnt) across runs, so unchanged .debs are not re-downloaded.
+  ## Flip to 'false' for a clean build (e.g. if a stale download cache is
+  ## suspected). The derivative-package repo cache is always on and separate --
+  ## it is correctness-neutral (the freshness gate re-validates every package).
+  BASE_CACHE: "true"
+
+jobs:
+  build:
+    ## Fork-PR guard (rule 3).
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          ## kicksecure-debug (minimal boot-test flavor) for FAST iteration:
+          ## the boot chain + hardening core + systemcheck + user-sysmaint-split,
+          ## no GUI/browser/anonymity layer.
+          ## -> qcow2 disk image (also builds the VirtualBox ova).
+          - flavor: kicksecure-debug
+            image_kind: qcow2
+            upload_glob: Kicksecure-*.qcow2*
+          ## -> live ISO (same package set, live-booted).
+          - flavor: kicksecure-debug
+            image_kind: iso
+            upload_glob: Kicksecure-*.iso
+    steps:
+      - name: Checkout repository (no submodules yet)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
+
+      - name: Free runner disk space
+        run: ./ci/free-disk
+
+      - name: Restore docker image cache
+        id: dmimg-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.dm-docker-image
+          key: ${{ runner.os }}-boot-dmimg-${{ hashFiles('docker/**') }}
+
+      - name: Load cached docker image
+        if: steps.dmimg-cache.outputs.cache-hit == 'true'
+        run: ./ci/dm-docker-image-cache load
+
+      ## Persist the built derivative-package repo across runs so unchanged
+      ## packages are NOT rebuilt (the ~50-package cowbuilder rebuild dominates
+      ## the build). The build container writes binary_build_folder_dist
+      ## (=/home/user/derivative-binary) to the bind-mounted host /home/runner/
+      ## binary_mnt (docker/derivative-maker-docker-run), so these three host
+      ## subfolders are exactly where create-debian-packages persists the repo:
+      ##   aptrepo_local/          -- the reprepro local repo (db + .deb pool) the
+      ##                              freshness gate queries for the published version
+      ##   packages-build-status/  -- the per-codename source-hash manifest that
+      ##                              detects a source edit without a changelog bump
+      ##   genmkfile-packages-result/ -- genmkfile's built-.deb output cache
+      ## On a WARM restore, the shared create-debian-packages runs with
+      ## --skip-published-packages (dm-build-official-one): a package whose
+      ## published version matches AND whose source hash is unchanged is skipped;
+      ## only changed packages rebuild. On a COLD miss all three are absent, every
+      ## package builds, and the post-job save seeds the cache for next time.
+      ## Unique primary key (run_id) -> always a miss -> always saves a fresh
+      ## entry; the restore-keys prefix warms from the most recent prior run.
+      ## Boot-test lane only -- NOT the repro lane (local-build.yml): that lane's
+      ## signal is bit-for-bit equality of two independent builds, and a package
+      ## cache would either make copy-a/copy-b start from different warm caches
+      ## (spurious diff) or let neither rebuild the packages (false green, masking
+      ## real non-reproducibility). Here there is no such comparison, so a warm
+      ## cache is pure speedup.
+      ## Restore-only here; the matching save runs at job end AFTER a chown (the
+      ## build writes these dirs as in-container uids the runner user cannot read,
+      ## so a plain post-save silently caches nothing -- that was the bug).
+      - name: Restore derivative-package repo cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            ~/binary_mnt/aptrepo_local
+            ~/binary_mnt/packages-build-status
+            ~/binary_mnt/genmkfile-packages-result
+          key: ${{ runner.os }}-boot-pkgrepo-${{ matrix.flavor }}-${{ matrix.image_kind }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-boot-pkgrepo-${{ matrix.flavor }}-${{ matrix.image_kind }}-${{ env.BOOT_ARCH }}-
+
+      - name: Restore apt-download cache (temporary speed-up)
+        if: env.BASE_CACHE == 'true'
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/approx_cache_mnt
+          key: ${{ runner.os }}-boot-aptdl-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-boot-aptdl-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-
+
+      ## Cache the cowbuilder base chroot (~/binary_mnt/pbuilder/base.cow_<arch>) as
+      ## a root-owned tarball. Key tracks the base recipe (1300 extrapackages) and
+      ## the apt sources/snapshot, so a base-affecting change invalidates it and a
+      ## fresh base is built. 1300_cowbuilder-setup reuses the restored base only
+      ## when --reuse-cowbuilder-base is passed to the build (below).
+      - name: Restore cowbuilder base cache (temporary speed-up)
+        if: env.BASE_CACHE == 'true'
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/cowbuilder-base-cache
+          key: ${{ runner.os }}-boot-cowbase-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ hashFiles('build-steps.d/1300_cowbuilder-setup', 'build_sources/**') }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-boot-cowbase-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ hashFiles('build-steps.d/1300_cowbuilder-setup', 'build_sources/**') }}-
+
+      - name: Unpack cowbuilder base into place (temporary speed-up)
+        if: env.BASE_CACHE == 'true'
+        run: ./ci/cowbuilder-base-cache unpack
+
+      - name: Build ${{ matrix.flavor }} via dm-build-official (${{ env.BOOT_ARCH }})
+        ## Build through the official orchestration -- the SAME single build path as
+        ## local-build.yml, no duplication. dm-build-official does NOT sign, and the
+        ## build's sq-git check rejects an unsigned HEAD, so mint an ephemeral CI key
+        ## and sign+tag HEAD FIRST (mirrors ci/build). All three run in ONE
+        ## docker-run so the home-directory state signing-key-create creates persists
+        ## into sign-and-tag and the build. rule 4: shell vars from env, no ${{ }}
+        ## interpolation into run:.
+        ## The ISO job needs ONLY the ISO; its sibling CLI job already builds the
+        ## qcow2 + VirtualBox images. An EMPTY dist_build_multi_target_list builds
+        ## no post-ISO VM images (the raw -> vdi -> ova + qcow2 build would exhaust
+        ## the runner filesystem); the CLI job requests 'virtualbox qcow2'.
+        env:
+          CI: "true"
+          ARCH: ${{ env.BOOT_ARCH }}
+          FLAVOR: ${{ matrix.flavor }}
+          FRESHNESS: frozen
+          ## vbox temporarily disabled (re-enable once stable): drop 'virtualbox'
+          ## so the non-iso job builds only the qcow2 and skips the raw->vdi->ova
+          ## conversion. Restore 'virtualbox qcow2' below to re-enable vbox.
+          MULTI_TARGET_LIST: ${{ matrix.image_kind != 'iso' && 'qcow2' || '' }}
+          ## Pass --reuse-cowbuilder-base only when the base cache is enabled (the
+          ## unpack step above restored a frozen base under a recipe-tracking key);
+          ## 1300_cowbuilder-setup then reuses it if present, else builds a fresh one.
+          COWBASE_REUSE_FLAG: ${{ env.BASE_CACHE == 'true' && '--reuse-cowbuilder-base' || '' }}
+        run: >-
+          ./docker/derivative-maker-docker-run --
+          bash -c "./help-steps/signing-key-create && ./help-steps/sign-and-tag &&
+          env dist_build_target_arch='${ARCH}' flavors_list='${FLAVOR}'
+          dist_build_multi_target_list='${MULTI_TARGET_LIST}'
+          ./help-steps/dm-build-official --freshness '${FRESHNESS}' ${COWBASE_REUSE_FLAG}"
+
+      - name: Save docker image to cache
+        if: steps.dmimg-cache.outputs.cache-hit != 'true'
+        run: ./ci/dm-docker-image-cache save
+
+      ## Pack the cowbuilder base into its tarball BEFORE it is freed below: under
+      ## --reuse-cowbuilder-base the base lives in this tree; freeing it (so the
+      ## upload glob does not scandir-EACCES the 0700 chroot) must follow the pack.
+      ## No-op when there is no base in the tree.
+      - name: Pack cowbuilder base for cache (temporary speed-up)
+        if: always() && env.BASE_CACHE == 'true'
+        run: ./ci/cowbuilder-base-cache pack
+
+      ## Free the relocated cowbuilder base tree (root-owned 0700) after packing so
+      ## upload-artifact does not EACCES on it. The other build scratch is freed at
+      ## its source: the per-flavor raw in build-steps.d/5300_free-build-scratch, and
+      ## the shared base-image.raw + residual build chroot at the Phase-3 boundary in
+      ## help-steps/dm-build-official-one -- so no separate scratch-cleanup script.
+      - name: Free cowbuilder base tree (temporary speed-up)
+        if: always() && env.BASE_CACHE == 'true'
+        run: ./ci/cowbuilder-base-cache free
+
+      ## The build writes these under the bind mounts as in-container uids (the
+      ## package repo as 'user', the apt cache as 'approx' 101:102), which the
+      ## runner user cannot read -- so actions/cache/save would tar nothing. Chown
+      ## them to the runner first. 'always()' so a failed build still seeds the
+      ## cache with whatever it produced, speeding the retry.
+      - name: Make caches readable for save
+        if: always()
+        run: ./ci/cache-make-readable
+
+      - name: Save derivative-package repo cache
+        if: always()
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            ~/binary_mnt/aptrepo_local
+            ~/binary_mnt/packages-build-status
+            ~/binary_mnt/genmkfile-packages-result
+          key: ${{ runner.os }}-boot-pkgrepo-${{ matrix.flavor }}-${{ matrix.image_kind }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
+
+      - name: Save apt-download cache (temporary speed-up)
+        if: always() && env.BASE_CACHE == 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/approx_cache_mnt
+          key: ${{ runner.os }}-boot-aptdl-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ github.run_id }}
+
+      - name: Save cowbuilder base cache (temporary speed-up)
+        if: always() && env.BASE_CACHE == 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/cowbuilder-base-cache
+          key: ${{ runner.os }}-boot-cowbase-${{ matrix.flavor }}-${{ env.BOOT_ARCH }}-${{ hashFiles('build-steps.d/1300_cowbuilder-setup', 'build_sources/**') }}-${{ github.run_id }}
+
+      - name: Upload built ${{ matrix.image_kind }} image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: boot-image-${{ matrix.image_kind }}
+          path: /home/runner/binary_mnt/**/${{ matrix.upload_glob }}
+          if-no-files-found: error
+          retention-days: 2
+
+      - name: Upload built .ova (virtualbox)
+        ## vbox temporarily disabled (re-enable once stable): the non-iso job no
+        ## longer builds the .ova (MULTI_TARGET_LIST above). Re-enable by setting
+        ## 'if:' back to: matrix.image_kind == 'qcow2' (and restore 'virtualbox
+        ## qcow2' in MULTI_TARGET_LIST + the 'vbox' image_kind in the boot matrix).
+        if: false
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: boot-image-vbox
+          path: /home/runner/binary_mnt/**/Kicksecure-*.ova
+          if-no-files-found: error
+          retention-days: 2
+
+  boot-test:
+    needs: build
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      ## Keep every leg running even if one fails, so a single firmware/session
+      ## regression does not mask the others.
+      fail-fast: false
+      matrix:
+        image_kind:
+          - qcow2
+          - iso
+          ## vbox temporarily disabled (re-enable once stable): the build no longer
+          ## emits/uploads the .ova, so a vbox leg would have no artifact. Restore
+          ## '- vbox' here together with the build-side MULTI_TARGET_LIST + .ova
+          ## upload to bring it back.
+          # - vbox
+        firmware:
+          - bios
+          - efi
+          - efi-secureboot
+        session:
+          - user
+          - sysmaint
+        ## No exclusions: kicksecure-debug ships user-sysmaint-split, so every built
+        ## image kind (qcow2 / iso) has a real sysmaint session, selected uniformly
+        ## via dm-qemu's SMBIOS cmdline injection. Both sessions run on all kinds.
+    steps:
+      - name: Checkout repository (no submodules yet)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: false
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Mirror Kicksecure/ and Whonix/ to ${{ github.repository_owner }}
+        env:
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
+
+      - name: Check out dist-ai (boot harness)
+        ## The boot harness + CI front-end (dm-boot-test -> dm-image-boot-tests ->
+        ## dm-qemu + dm-image-test) lives in dist-ai (public). Checked out into the
+        ## workspace so the boot step can call dist-ai/usr/bin/dm-boot-test (works
+        ## inside the build container too, since the whole workspace is mounted).
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.repository_owner }}/dist-ai
+          path: dist-ai
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out matching fork branch in cross-org submodules (if present)
+        if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'
+        env:
+          FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
+
+      - name: Download built ${{ matrix.image_kind }} image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: boot-image-${{ matrix.image_kind }}
+          path: boot-image
+
+      - name: Locate the ${{ matrix.image_kind }} image
+        id: image
+        env:
+          IMAGE_KIND: ${{ matrix.image_kind }}
+        run: ./ci/locate-boot-image
+
+      - name: Boot-test (${{ matrix.image_kind }}, ${{ matrix.firmware }}, ${{ matrix.session }})
+        ## Every kind carries user-sysmaint-split, so both sessions run on all of
+        ## them -- no skip (a skipped leg would report a vacuous 'success').
+        ## rule 4: values via env, not interpolated into run:.
+        env:
+          IMAGE: ${{ steps.image.outputs.path }}
+          ARCH: ${{ env.BOOT_ARCH }}
+          FIRMWARE: ${{ matrix.firmware }}
+          SESSION: ${{ matrix.session }}
+          KIND: ${{ matrix.image_kind }}
+        ## dm-boot-test (in dist-ai) dispatches --iso vs --disk by the image
+        ## extension. dist-ai is mounted at ./dist-ai inside the workspace/container.
+        run: ./docker/derivative-maker-docker-run -- dist-ai/usr/bin/dm-boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${KIND}-${FIRMWARE}-${SESSION}.serial.log"
+
+      - name: Upload serial log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serial-log-${{ matrix.image_kind }}-${{ matrix.firmware }}-${{ matrix.session }}
+          path: boot-*.serial.log
+          if-no-files-found: warn
+          retention-days: 7

@@ -133,7 +133,7 @@ export HOMEVAR
 ## concurrently on a resourceful host without colliding. UNSET by default: without a slot the layout
 ## is the historical 'derivative-binary/<version>' -- defaulting the slot to "main" was reverted
 ## because the extra '/main/' path level broke code hardcoding 'derivative-binary/<version>' (e.g.
-## ci/github-build's live-build / cowbuilder scratch cleanup). An explicit 'binary_build_folder_dist'
+## ci/build's live-build / cowbuilder scratch cleanup). An explicit 'binary_build_folder_dist'
 ## override still wins.
 export dist_build_slot="${dist_build_slot:-}"
 if [ -n "${binary_build_folder_dist:-}" ]; then
@@ -598,6 +598,27 @@ if [ "${dist_build_flavor:-}" = "kicksecure-lxqt" ]; then
       [ -n "${flavor_meta_packages_to_install:-}" ] || flavor_meta_packages_to_install=" kicksecure-baremetal-gui-lxqt "
    fi
 fi
+## Minimal CLI-only image for fast boot/grub/systemcheck iteration: the same base
+## as kicksecure-cli, but the 'kicksecure-debug' meta pulls only the boot chain +
+## hardening core + systemcheck (no GUI/browser/anonymity layer). Debug/test only.
+if [ "${dist_build_flavor:-}" = "kicksecure-debug" ]; then
+   [ -n "${SHORT_VMNAME:-}" ] || SHORT_VMNAME="Kicksecure"
+   [ -n "${VMNAME:-}" ] || VMNAME="Kicksecure-Debug"
+   [ -n "${VMRAM:-}" ] || VMRAM="768"
+   [ -n "${VRAM:-}" ] || VRAM="16"
+   [ -n "${dist_build_type_short:-}" ] || dist_build_type_short="kicksecure"
+   [ -n "${dist_build_desktop:-}" ] || dist_build_desktop="CLI"
+   [ -n "${dist_build_gui:-}" ] || dist_build_gui="false"
+   if [ "${dist_build_type:-}" = "vm" ]; then
+      [ -n "${dist_build_host_operating_system:-}" ] || dist_build_host_operating_system="false"
+      [ -n "${dist_build_type_long:-}" ] || dist_build_type_long="kicksecure"
+      [ -n "${flavor_meta_packages_to_install:-}" ] || flavor_meta_packages_to_install=" kicksecure-debug "
+   elif [ "${dist_build_type:-}" = "host" ]; then
+      [ -n "${dist_build_host_operating_system:-}" ] || dist_build_host_operating_system="true"
+      [ -n "${dist_build_type_long:-}" ] || dist_build_type_long="kicksecure-host"
+      [ -n "${flavor_meta_packages_to_install:-}" ] || flavor_meta_packages_to_install=" kicksecure-debug "
+   fi
+fi
 
 ## derivative_name_list is used by:
 ## - help-steps/variables to identify valid derivative names.
@@ -946,6 +967,19 @@ if [ "${APPROX_PROXY_ENABLE}" = "yes" ]; then
    #LIVEBUILD_PREFIX+=" env http_proxy=${REPO_PROXY} https_proxy=${REPO_PROXY} ALL_PROXY=${REPO_PROXY}"
 fi
 
+## '--freshness frozen' pins snapshot.debian.org timestamps whose Release
+## 'Valid-Until' is intentionally in the past; tell apt to accept them rather than
+## abort ("Release file ... is expired"). Added to DIST_APTGETOPT so it reaches EVERY
+## apt path the build drives -- cowbuilder/pbuilder (via the APTGETOPT array in the
+## generated pbuilder config) and grml-debootstrap's in-chroot apt during raw-image
+## creation (via DPKG_OPTIONS, set from DIST_APTGETOPT in 3200_create-raw-image) --
+## instead of per-source 'Check-Valid-Until: no' edits. Archive-key signature
+## verification (Signed-By) is unaffected; 'current' builds keep the check.
+if [ "${dist_build_apt_freshness:-}" = "frozen" ]; then
+   aptgetopt_add "Acquire::Check-Valid-Until=false"
+   aptgetopt_conf_add "Acquire::Check-Valid-Until \"false\";"
+fi
+
 ## Help update-torbrowser and other software find the Tor server if using
 ## '--connection tor'.
 if [ "${dist_build_sources_clearnet_or_onion:-}" = 'onion' ]; then
@@ -1168,6 +1202,19 @@ set_default_variable dist_binary_build_folder "${binary_build_folder_dist}/${dis
 set_default_variable binary_image_raw_file "${dist_binary_build_folder}/${SHORT_VMNAME}-${dist_build_desktop}-${dist_build_version}.${target_architecture_pretty_name}.raw"
 set_default_variable binary_image_qcow2_file "${dist_binary_build_folder}/${SHORT_VMNAME}-${dist_build_desktop}-${dist_build_version}.${target_architecture_pretty_name}.qcow2"
 
+## Shared post-debootstrap base image, selected via --base-image-role (set only on
+## the dm-build-official-one shared-base invocations). Path defined once here.
+## 'create' redirects the raw OUTPUT to the shared base-image.raw so
+## grml-debootstrap writes the reusable, pre-package-install base; 'consume' points
+## the cached INPUT at it so create-raw-image copies the base instead of re-running
+## grml-debootstrap. Neither set -> normal per-flavor raw (unchanged default).
+set_default_variable base_image_raw_file "${dist_binary_build_folder}/base-image.raw"
+if [ "${dist_build_base_image_role:-}" = "create" ]; then
+   binary_image_raw_file="$base_image_raw_file"
+elif [ "${dist_build_base_image_role:-}" = "consume" ]; then
+   cached_binary_image_raw_file="$base_image_raw_file"
+fi
+
 ## Working folder for the intermediate VirtualBox '.vdi' created by
 ## 'build-steps.d/*_create-vbox-vm'. Deliberately on a sibling of
 ## '$binary_build_folder_dist' under '$HOMEVAR' rather than the chroot's
@@ -1270,11 +1317,21 @@ mkdir --parents -- "${dist_binary_build_folder}"
 unset dist_build_files_to_upload
 declare -a dist_build_files_to_upload
 
+## Parallel to dist_build_files_to_upload: the upload destination for the file at
+## the same index. A multi-target build (e.g. '--target virtualbox --target qcow2')
+## must send each image to ITS OWN location, so a single scalar destination shared
+## across all files cannot express it (it would send every image to one target's
+## directory, e.g. a qcow2 into .../ova). installer-dist maps one file to two
+## servers by pushing the file twice, once per destination.
+unset dist_build_upload_locations
+declare -a dist_build_upload_locations
+
 if [ "${dist_build_virtualbox:-}" = "true" ]; then
    [ -n "${ssh_uploader_account:-}" ] || ssh_uploader_account="root"
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/ova"
 
    dist_build_files_to_upload+=("$binary_image_ova_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/ova")
 fi
 
 if [ "${dist_build_iso:-}" = "true" ]; then
@@ -1282,6 +1339,7 @@ if [ "${dist_build_iso:-}" = "true" ]; then
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/iso"
 
    dist_build_files_to_upload+=("$binary_image_iso_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/iso")
 fi
 
 if [ "${dist_build_qcow2:-}" = "true" ]; then
@@ -1290,6 +1348,7 @@ if [ "${dist_build_qcow2:-}" = "true" ]; then
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/libvirt"
 
    dist_build_files_to_upload+=("$libvirt_target_qcow2_xz_archive_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/libvirt")
 fi
 
 ## Default this target flag at its source so consumers (notably
@@ -1311,7 +1370,12 @@ ${ssh_uploader_account}@kicksecure.com:/var/rsync/dist-installer-cli
 ${ssh_uploader_account}@whonix.org:/var/rsync/dist-installer-cli
 "
 
+   ## One image, two destination servers: push the file once per destination so
+   ## the per-index pairing uploads it to both.
    dist_build_files_to_upload+=("$binary_image_installer_dist_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@kicksecure.com:/var/rsync/dist-installer-cli")
+   dist_build_files_to_upload+=("$binary_image_installer_dist_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@whonix.org:/var/rsync/dist-installer-cli")
 fi
 
 if [ "${dist_build_windows_installer:-}" = "true" ]; then
@@ -1319,6 +1383,7 @@ if [ "${dist_build_windows_installer:-}" = "true" ]; then
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/windows"
 
    dist_build_files_to_upload+=("$binary_image_windows_installer_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/windows")
 fi
 
 if [ "${dist_build_source_archive:-}" = "true" ]; then
@@ -1326,6 +1391,7 @@ if [ "${dist_build_source_archive:-}" = "true" ]; then
    [ -n "${dist_server_with_upload_location_list:-}" ] || dist_server_with_upload_location_list="${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/source"
 
    dist_build_files_to_upload+=("$source_archive_xz_file")
+   dist_build_upload_locations+=("${ssh_uploader_account}@${dist_server_with_upload_location_list_list}:/var/rsync/source")
 fi
 
 ## }}}
@@ -1620,6 +1686,16 @@ export make_cross_build_platform_list
 ## override still wins (e.g. relocate onto persistent '/rw' storage on Qubes).
 if [ -n "${cowbuilder_cache_dir:-}" ]; then
    true "INFO: using explicitly set cowbuilder_cache_dir='$cowbuilder_cache_dir'"
+elif [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ]; then
+   ## '--reuse-cowbuilder-base': place the base in the bind-mounted output tree so
+   ## a caller (CI) can pack/cache and restore it across runs -- the default
+   ## '/var/cache/pbuilder' is container-internal and not visible to the runner.
+   ## binary_build_folder_dist already carries any '--build-slot', so this stays
+   ## slot-isolated. The base is a 0700 root-owned chroot; 'ci/cowbuilder-base-cache
+   ## free' removes it (after the pack) before the artifact upload so upload-artifact
+   ## does not EACCES walking into it (the very reason the non-reuse default stays out
+   ## of this tree).
+   cowbuilder_cache_dir="$binary_build_folder_dist/pbuilder"
 elif [ -n "${dist_build_slot:-}" ]; then
    cowbuilder_cache_dir="/var/cache/pbuilder/$dist_build_slot"
 else
