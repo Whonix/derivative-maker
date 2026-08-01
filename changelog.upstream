@@ -1,3 +1,90 @@
+commit 0322e099a130db2bf7266ef879e230348cf8bbc2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Aug 1 04:49:00 2026 -0400
+
+    .
+
+commit fc5de0e60bb2ddbb37680530f741ff21423e2cc6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 31 13:22:49 2026 -0400
+
+    .
+
+commit d3dd946307bda6bebec611263d5f72bb15c0ec9b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 31 13:22:45 2026 -0400
+
+    .
+
+commit 396589ccd4677c90be52e3ff6b75f221a4e01bba
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 31 07:12:19 2026 -0400
+
+    .
+
+commit a57ca73f62232fa308622052d5a2b34eae6d72d7
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Jul 31 07:08:58 2026 -0400
+
+    .
+
+commit 940e83f528118824cc332c64f1c8265ea5fcec2c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Thu Jul 30 05:20:41 2026 -0400
+
+    .
+
+commit ec57abfa2f6698c31f0fb2724036961a41f9f29e
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 29 08:22:37 2026 -0400
+
+    .
+
+commit 0618378357849988e4bac27b98dc561f7b817108
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 29 08:13:24 2026 -0400
+
+    .
+
+commit 7ab56b5828b212521fa4ded2bda1c09843637717
+Merge: 75908f588 fb8a987cd
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Jul 29 08:13:11 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/master'
+
+commit fb8a987cd272df6f421b5d61d1ecf4e0a7016ce0
+Author: claude (dev113 6465e658-44ed-4e80-93cf-c9586d8683d6) <noreply@anthropic.com>
+Date:   Tue Jul 28 12:36:42 2026 -0400
+
+    ci/reproducible-build-twice: diffoscope is best-effort, not localization
+
+    The comment promised diffoscope would "localize a mismatch to the specific
+    in-image file". The comparator itself does not claim that: it prints
+    "diffoscope explanation follows (best-effort; may be truncated or skipped)" and
+    documents that the run is capped and can be skipped on large images. The verdict
+    is the whole-file sha256; diffoscope is a diagnosis aid.
+
+    Generated with assistance from Claude Code.
+
+commit bfc9d9583cce327b4c5bec746a79ec5d9adabc27
+Author: claude (dev113 6465e658-44ed-4e80-93cf-c9586d8683d6) <noreply@anthropic.com>
+Date:   Tue Jul 28 08:28:16 2026 -0400
+
+    ci/build: correct the caller comment
+
+    local-build.yml drives help-steps/dm-build-official, not this script. Name the
+    real callers (ci/reproducible-build-twice and manual local builds) so the header
+    stops pointing at a workflow that no longer uses it.
+
+    Generated with assistance from Claude Code.
+
+commit 75908f5880fa63435b986e681b31fe337c4e3340
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Jul 28 13:29:31 2026 +0000
+
+    bumped changelog version
+
 commit ce50a73add3c1857a31c012eb452b77e2c66f698
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Tue Jul 28 09:26:00 2026 -0400
