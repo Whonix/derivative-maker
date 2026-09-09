@@ -1970,7 +1970,6 @@ if [ ! "${variables_sudo_to_root_finalized:-}" = "true" ]; then
    SUDO_TO_ROOT+="--preserve-env=${sudo_preserve_env_list}"
 
    variables_sudo_to_root_finalized="true"
-   export variables_sudo_to_root_finalized
 fi
 
 ## XXX: Not possible because some scripts use extra sudo arguments such as "--preserve-env".
