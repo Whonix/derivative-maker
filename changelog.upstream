@@ -1,3 +1,147 @@
+commit 908baa0c90fe6a17705729bb243ab1c825a0b4f8
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 11:55:01 2026 -0400
+
+    .
+
+commit e00f5d7b5c52f9cb876372c396af04e101ecb4bd
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 11:51:47 2026 -0400
+
+    .
+
+commit 0c6616b3ff0d3bb15543b9b8c7590be07307779b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 11:34:48 2026 -0400
+
+    .
+
+commit e12b5bb6a08f5e94fc4ac2f9efd61839ad96ec77
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 11:28:18 2026 -0400
+
+    update VirtualBox download links for Whonix Windows Installer
+
+commit e164106f863d4a3567c2a070a2ec9aaf75d85333
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 11:27:53 2026 -0400
+
+    update
+
+commit 493f09becd188dd7238053015745b3cf237c3fdb
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 11:27:29 2026 -0400
+
+    .
+
+commit 82979833e097acf32d9a68c525243318c4fd722d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 11:26:34 2026 -0400
+
+    .
+
+commit 5aa948c53ae0840f830ca83eb111eae74f6c8a39
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 10:55:17 2026 -0400
+
+    .
+
+commit 1256b7558a69aecfb34c9a73cde15e7ecbad83e0
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 10:50:53 2026 -0400
+
+    .
+
+commit 6c78f294f950c60b67720b390c34315b92f66b99
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 10:34:11 2026 -0400
+
+    .
+
+commit 7405bffac20fdcb2a21420dac55cffa9f5259712
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 10:29:21 2026 -0400
+
+    .
+
+commit 92e2a3acd58a11f736aaf268bc2cd64839ddf4ad
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 08:12:10 2026 -0400
+
+    .
+
+commit 223fbf1d824cc97e3fcda9bcbeeb4a33f9d1774e
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 15 07:45:34 2026 -0400
+
+    .
+
+commit e0fab5a7edb4c9eaecd6f3d9c007e75cf64c453f
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Sep 14 09:34:00 2026 -0400
+
+    .
+
+commit ba2d980ed76eefd0d0b37291ac6b83faf040bb07
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Sep 14 02:42:19 2026 -0400
+
+    .
+
+commit 8bad5cda91a8eef0de0935074c55cc8bf036a9cd
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Sep 13 09:06:06 2026 -0400
+
+    .
+
+commit 96d254237051d9f11b2f1571323e6f8abbb9b556
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun Sep 13 09:04:53 2026 -0400
+
+    .
+
+commit 8d9ca15170ab8cf670e43f75cc31b89ac09f206c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 9 07:44:07 2026 -0400
+
+    .
+
+commit e9a8d94bf06b7779641df89da60925769119a883
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 9 07:08:30 2026 -0400
+
+    .
+
+commit aeabf4f2bbea91a2307415bdba7751404eab56d0
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 9 07:02:48 2026 -0400
+
+    .
+
+commit e77402f0e3649ee4132841eaa66b31fb025b4bed
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 9 06:57:33 2026 -0400
+
+    fix
+
+commit 16d15f9102a2eb0323144f05f140ae2e3d6f08f6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 9 06:57:28 2026 -0400
+
+    .
+
+commit 993b9e72e7649d91694c22b6c1e859463445c0d1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 9 05:31:17 2026 -0400
+
+    .
+
+commit aba4e2530dd7bfba1cdedb6a3105c8dd4d8b16e6
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 8 15:54:17 2026 +0000
+
+    bumped changelog version
+
 commit f039c5ae95f2f6dac50c7df571c8c1d27058b624
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Tue Sep 8 11:39:48 2026 -0400
