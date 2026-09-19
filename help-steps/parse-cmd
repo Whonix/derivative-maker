@@ -629,7 +629,11 @@ dist_build_one_parse_cmd() {
                shift 2
                ;;
            --only-packages)
-               export dist_build_only_packages="${2:-}"
+               if [ -z "${2:-}" ]; then
+                  printf '%s\n' "${red}${bold}ERROR: --only-packages requires a package list.${reset}"
+                  exit 1
+               fi
+               export dist_build_only_packages="${2}"
                true "${cyan}INFO: --only-packages: rebuilding only '${dist_build_only_packages}', reusing the rest.${reset}"
                shift 2
                ;;
@@ -705,27 +709,51 @@ dist_build_one_parse_cmd() {
                shift 2
                ;;
            --file-system)
-               export dist_build_file_system="${2:-}"
+               if [ -z "${2:-}" ]; then
+                  printf '%s\n' "${red}${bold}ERROR: --file-system requires a filesystem type.${reset}"
+                  exit 1
+               fi
+               export dist_build_file_system="${2}"
                shift 2
                ;;
            --hostname)
-               export dist_build_hostname="${2:-}"
+               if [ -z "${2:-}" ]; then
+                  printf '%s\n' "${red}${bold}ERROR: --hostname requires a hostname.${reset}"
+                  exit 1
+               fi
+               export dist_build_hostname="${2}"
                shift 2
                ;;
            --retry-max)
-               export dist_build_auto_retry="${2:-}"
+               if [ -z "${2:-}" ]; then
+                  printf '%s\n' "${red}${bold}ERROR: --retry-max requires a value.${reset}"
+                  exit 1
+               fi
+               export dist_build_auto_retry="${2}"
                shift 2
                ;;
            --retry-wait)
-               export dist_build_wait_auto_retry="${2:-}"
+               if [ -z "${2:-}" ]; then
+                  printf '%s\n' "${red}${bold}ERROR: --retry-wait requires a value.${reset}"
+                  exit 1
+               fi
+               export dist_build_wait_auto_retry="${2}"
                shift 2
                ;;
            --retry-before)
-               export dist_build_dispatch_before_retry="${2:-}"
+               if [ -z "${2:-}" ]; then
+                  printf '%s\n' "${red}${bold}ERROR: --retry-before requires a command.${reset}"
+                  exit 1
+               fi
+               export dist_build_dispatch_before_retry="${2}"
                shift 2
                ;;
            --retry-after)
-               export dist_build_dispatch_after_retry="${2:-}"
+               if [ -z "${2:-}" ]; then
+                  printf '%s\n' "${red}${bold}ERROR: --retry-after requires a command.${reset}"
+                  exit 1
+               fi
+               export dist_build_dispatch_after_retry="${2}"
                shift 2
                ;;
            --allow-untagged)
