@@ -21,6 +21,7 @@ export LC_ALL=C
 HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
 export HELPER_SCRIPTS_PATH
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/check_runtime.bsh"
+source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/strings.bsh"
 
 if was_executed "${BASH_SOURCE[0]}"; then
    parse_cmd_was_sourced='false'
@@ -413,28 +414,28 @@ dist_build_one_parse_cmd() {
                shift 2
                ;;
            --vmram)
-               export VMRAM="${2:-}"
-               shift 2
-               if [ "${VMRAM:-}" = "" ]; then
+               if [ -z "${2:-}" ]; then
                   printf '%s\n' "${red}${bold}ERROR: You forgot to specify how much MB to use for --vmram.${reset}"
                   exit 1
                fi
+               export VMRAM="${2}"
+               shift 2
                ;;
            --vram)
-               export VRAM="${2:-}"
-               shift 2
-               if [ "${VRAM:-}" = "" ]; then
+               if [ -z "${2:-}" ]; then
                   printf '%s\n' "${red}${bold}ERROR: You forgot to specify how much MB to use for --vram.${reset}"
                   exit 1
                fi
+               export VRAM="${2}"
+               shift 2
                ;;
            --vmsize)
-               export VMSIZE="${2:-}"
-               shift 2
-               if [ "${VMSIZE:-}" = "" ]; then
+               if [ -z "${2:-}" ]; then
                   printf '%s\n' "${red}${bold}ERROR: You forgot to specify how much GB to use for --vmsize.${reset}"
                   exit 1
                fi
+               export VMSIZE="${2}"
+               shift 2
                ;;
            --freshness)
                if [ "${2:-}" = "frozen" ]; then
@@ -644,8 +645,8 @@ dist_build_one_parse_cmd() {
                ;;
            --package-jobs)
                export dist_build_package_jobs="${2:-}"
-               if ! [[ "${dist_build_package_jobs}" =~ ^(0|[1-9][0-9]*)$ ]]; then
-                  printf '%s\n' "${red}${bold}ERROR: --package-jobs must be passed a whole integer.${reset}"
+               if ! is_positive_integer "${dist_build_package_jobs}"; then
+                  printf '%s\n' "${red}${bold}ERROR: --package-jobs must be passed a positive integer.${reset}"
                   exit 1
                fi
                true "${cyan}INFO: --package-jobs: up to '${dist_build_package_jobs}' concurrent package build(s).${reset}"
