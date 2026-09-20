@@ -208,6 +208,12 @@ create-debian-raw-image() {
    ## '$DEBOOTSTRAP_PREFIX', '$UNSHARE_PID_NS' and '$use_vmefi_maybe' are
    ## intentionally unquoted: each holds zero or more words that must split
    ## into separate argv slots.
+   ##
+   ## '--no-reimage' and '--defaultinterfaces' are grml-debootstrap's reproducible-image
+   ## flags. We always build with SOURCE_DATE_EPOCH set (frozen snapshot), and
+   ## grml-debootstrap refuses that unless '--defaultinterfaces' is given -- a
+   ## host-derived /etc/network/interfaces would otherwise make the image
+   ## non-reproducible.
    # shellcheck disable=SC2086
    ${SUDO_TO_ROOT} \
       --preserve-env \
@@ -231,7 +237,8 @@ create-debian-raw-image() {
                   --packages "${grml_packages_file}" \
                   --mntpoint "${dist_grml_mount_point}" \
                   --target "${binary_image_raw_file}" \
-                  --no-reimage
+                  --no-reimage \
+                  --defaultinterfaces
 }
 
 create-empty-raw-image() {

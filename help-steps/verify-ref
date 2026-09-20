@@ -10,12 +10,14 @@
 ## non-zero otherwise. Caller must have sq_git_policy_file,
 ## sq_git_trust_root, and the dist_build_ignore_* booleans set in
 ## env (sourcing help-steps/variables provides defaults).
+##
+## style-ok: no-strict -- pure sourced library; a top-level strict-mode block
+## would leak errexit/nounset into the sourcing shell.
 
 verify_ref_self_dir="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
 verify_ref_git_sanity_test="${verify_ref_self_dir}/git_sanity_test"
 test -x "${verify_ref_git_sanity_test}"
 
-## TODO: rename to avoid same name as in git_sanity_test
 verify_ref() {
    local ref ref_type context
 

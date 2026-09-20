@@ -26,6 +26,17 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
+
+## This wrapper is invoked through PATH by pbuilder/grml-debootstrap with
+## help-steps stripped from PATH, so 'pre' (which defines 'error') is not
+## available. Define a minimal error handler; without it a failed sanity test
+## below would abort with a misleading 'exit_with_error: command not found'
+## instead of the intended message.
+exit_with_error() {
+   printf '%s\n' "ERROR: $*" >&2
+   exit 1
+}
 
 ## This wrapper is invoked through PATH by grml-debootstrap, so it does
 ## use plain (uncolored) log messages.
@@ -148,7 +159,10 @@ path_variable_remove_help_steps() {
 
    new_path=""
    for path_part in "${path_array[@]}"; do
-      if [[ "${path_part:-}" != *"help-steps"* ]]; then
+      ## Match a path COMPONENT named exactly 'help-steps' (trailing slash
+      ## trimmed), not the '*help-steps*' substring -- the latter would also drop
+      ## an unrelated entry like '/opt/legacy-help-steps-scripts'.
+      if [[ "${path_part%/}" != */help-steps ]]; then
          new_path+="${path_part}:"
       fi
    done
@@ -170,7 +184,7 @@ export PATH="${new_path}"
 ### }}}
 
 ## Sanity test.
-[ -n "${DIST_APTGETOPT_SERIALIZED:-}" ] || error "DIST_APTGETOPT_SERIALIZED is unset!"
+[ -n "${DIST_APTGETOPT_SERIALIZED:-}" ] || exit_with_error "DIST_APTGETOPT_SERIALIZED is unset!"
 
 ## Debugging.
 mapfile -t DIST_APTGETOPT <<< "${DIST_APTGETOPT_SERIALIZED}"
@@ -245,10 +259,10 @@ else
 fi
 
 ## Sanity tests.
-[ -n "${dist_build_apt_stable_release:-}" ] || error "dist_build_apt_stable_release is unset!"
-[ -n "${BUILDPLACE:-}" ] || error "BUILDPLACE is unset!"
-[ -n "${dist_build_sources_list_primary:-}" ] || error "dist_build_sources_list_primary is unset!"
-[ -n "${DIST_APTGETOPT:-}" ] || error "DIST_APTGETOPT is unset!"
+[ -n "${dist_build_apt_stable_release:-}" ] || exit_with_error "dist_build_apt_stable_release is unset!"
+[ -n "${BUILDPLACE:-}" ] || exit_with_error "BUILDPLACE is unset!"
+[ -n "${dist_build_sources_list_primary:-}" ] || exit_with_error "dist_build_sources_list_primary is unset!"
+[ -n "${DIST_APTGETOPT:-}" ] || exit_with_error "DIST_APTGETOPT is unset!"
 
 ## '--variant=required' is only supported by 'mmdebstrap'. It might not be supported by 'debootstrap'.
 

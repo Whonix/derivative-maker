@@ -1,0 +1,113 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sourced fragment of help-steps/variables, loaded via buildconfig.d/*.bsh.
+## Upload source/location list construction per enabled target.
+## Strict mode, locale, and the base path variables are owned by the loader
+## 'help-steps/variables' and inherited here; do not recompute them from
+## BASH_SOURCE (this file lives in buildconfig.d/, not help-steps/).
+## style-ok: no-strict
+## style-ok: no-has
+## style-ok: no-safe-rm
+## style-ok: no-tmp-hardcode
+# shellcheck disable=SC2086,SC2004
+
+## {{{
+
+## proper whitespace handling
+## https://www.whonix.org/wiki/Dev/bash
+unset dist_build_files_to_upload
+declare -a dist_build_files_to_upload
+
+unset dist_build_upload_locations
+declare -a dist_build_upload_locations
+
+append_upload_source_and_locations_to_lists() {
+  local upload_source upload_path
+
+  upload_source="${1}"
+  upload_path="${2}"
+  for dist_server_upload_location_item in "${dist_server_upload_location_list[@]}"; do
+    dist_build_files_to_upload+=( "${upload_source}" )
+    dist_build_upload_locations+=( "${ssh_uploader_account}@${dist_server_upload_location_item}:${upload_path}" )
+  done
+}
+
+if [ "${dist_build_virtualbox:-}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${binary_image_ova_file}" "/var/rsync/ova"
+fi
+
+if [ "${dist_build_iso:-}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${binary_image_iso_file}" "/var/rsync/iso"
+fi
+
+if [ "${dist_build_qcow2:-}" = "true" ]; then
+   #[ -n "${ssh_uploader_account:-}" ] || ssh_uploader_account="hulahoop"
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${libvirt_target_qcow2_xz_archive_file}" "/var/rsync/libvirt"
+fi
+
+## Default this target flag at its source so consumers (notably
+## dm-upload-images) can read it bare under 'nounset'; parse-cmd sets it
+## 'true' only for a '--target installer-dist' build.
+default_if_empty dist_build_installer_dist "false"
+export dist_build_installer_dist
+
+default_if_empty dist_build_serial_console_enable "false"
+export dist_build_serial_console_enable
+
+default_if_empty dist_build_smbios_reader "false"
+export dist_build_smbios_reader
+
+## 4x3/BIOS grub theme is the build DEFAULT (Kicksecure's primary use case is
+## BIOS VMs, whose VESA modes only provide a 4x3 canvas), so the image is
+## reproducible regardless of the build host's firmware. The base-files grub.d
+## snippets read it inside the chroot when grub-mkconfig runs. Absent on an
+## installed system, where a later update-grub probes the running firmware.
+## Must be on env_vars_keep_list below to cross into the chroot.
+default_if_empty dist_build_grub_bios_theme "true"
+export dist_build_grub_bios_theme
+
+if [ "${dist_build_installer_dist}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${binary_image_installer_dist_file}" "/var/rsync/dist-installer-cli"
+fi
+
+if [ "${dist_build_windows_installer:-}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${binary_image_windows_installer_file}" "/var/rsync/windows"
+fi
+
+if [ "${dist_build_source_archive:-}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${source_archive_xz_file}" "/var/rsync/source"
+fi
+
+## }}}
+
+## When doing a reproducible build, set SOURCE_DATE_EPOCH to the package pin
+## timestamp.
+if [ "${dist_build_apt_freshness:-current}" = "frozen" ]; then
+   dist_frozen_snapshot_pin_file="${source_code_folder_dist}/build_sources/frozen-snapshot-timestamp"
+   if [ ! -r "${dist_frozen_snapshot_pin_file}" ]; then
+      error "Frozen build, but the snapshot pin file is missing: ${dist_frozen_snapshot_pin_file}"
+   fi
+   dist_frozen_snapshot_pin="$(< "${dist_frozen_snapshot_pin_file}")"
+   dist_frozen_snapshot_pin="${dist_frozen_snapshot_pin//[[:space:]]/}"
+   if ! source_date_epoch_valid "${dist_frozen_snapshot_pin}"; then
+      error "Malformed or out-of-range snapshot pin '${dist_frozen_snapshot_pin}' in ${dist_frozen_snapshot_pin_file}"
+   fi
+   SOURCE_DATE_EPOCH="${dist_frozen_snapshot_pin}"
+   export SOURCE_DATE_EPOCH
+   true "INFO: frozen build: SOURCE_DATE_EPOCH ${SOURCE_DATE_EPOCH}."
+fi

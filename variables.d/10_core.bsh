@@ -1,0 +1,667 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sourced fragment of help-steps/variables, loaded via buildconfig.d/*.bsh.
+## Core resolution: arch list, cd into source tree, aptgetopt helpers, locale/TZ, SOURCE_DATE_EPOCH, parse-cmd, arch/redistributable/tb defaults, per-flavor blocks, type derivation, VMNAME/VMRAM, CHROOT_FOLDER.
+## Strict mode, locale, and the base path variables are owned by the loader
+## 'help-steps/variables' and inherited here; do not recompute them from
+## BASH_SOURCE (this file lives in buildconfig.d/, not help-steps/).
+## style-ok: no-strict
+## style-ok: no-has
+## style-ok: no-safe-rm
+## style-ok: no-tmp-hardcode
+# shellcheck disable=SC2086,SC2004
+
+
+## All Debian architectures plus the literal 'source'. 'source' is a
+## valid Debian "architecture" value referring to source packages (see
+## 'dpkg-architecture', 'sources.list' Architectures= field). It is not
+## a typo and it is not shadowing the bash 'source' builtin because
+## 'architecture_all_list' is an array.
+## 'i386' intentionally omitted: Debian Trixie and higher dropped support for
+## full i386 installations, so it is no longer a supported build target.
+[ -n "${architecture_all_list:-}" ] || architecture_all_list=( amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source )
+
+## NOTE: This 'cd' is by design. Sourcing 'variables' intentionally
+## changes the caller's working directory to 'source_code_folder_dist'.
+## Several subsequent commands in this file (e.g. 'dpkg-parsechangelog'
+## reading debian/changelog, 'git describe' reading the repo HEAD) and
+## downstream build-step scripts rely on being in the derivative-maker
+## source tree. Callers that source 'variables' must be aware of this
+## side effect and either accept it or save/restore their own CWD.
+## Fail closed: everything below (and the build steps) assume this cd succeeded.
+cd -- "${source_code_folder_dist}" || exit 1
+
+default_if_empty dist_aptgetopt_file "${binary_build_folder_dist}/30_derivative-maker.conf"
+export dist_aptgetopt_file
+## Accumulate the apt-option lines here; variables.d/99_effects.bsh writes the
+## file once, atomically (no per-line append, no source-time rm of a stale file).
+dist_aptgetopt_file_content=""
+
+## DIST_ prefix avoids a name collision with pbuilder/cowbuilder, which use
+## their own array variable 'APTGETOPT' (see pbuilderrc) that gets sourced
+## inside the cowbuilder chroot scripts (help-steps/pbuilder-chroot-script-*).
+## Cannot export bash array.
+## Declare it nounset-safe here: later array-length tests on DIST_APTGETOPT
+## (e.g. the pbuilder APTGETOPT block) run under 'set -o nounset' and abort with
+## "unbound variable" if the array was never created, which happens when no
+## 'aptgetopt_add' ran (relying on buildconfig.d always being sourced first is a
+## non-local invariant). '[ -v ]' does not reset a caller-pre-populated array.
+[ -v DIST_APTGETOPT ] || DIST_APTGETOPT=()
+#export DIST_APTGETOPT
+export DIST_APTGETOPT_SERIALIZED
+
+## Debugging.
+#declare -p DIST_APTGETOPT
+#printf "%s\n" "$DIST_APTGETOPT_SERIALIZED"
+
+aptgetopt_add() {
+   local opt
+   opt="$1"
+
+   DIST_APTGETOPT+=("-o")
+   DIST_APTGETOPT+=("${opt}")
+   DIST_APTGETOPT_SERIALIZED="$(printf '%s\n' "${DIST_APTGETOPT[@]}")"
+
+   if [[ "${opt:-}" =~ [Pp]roxy ]]; then
+      return 0
+   fi
+   DIST_APTGETOPT_WITHOUT_APT_CACHE+=("-o")
+   DIST_APTGETOPT_WITHOUT_APT_CACHE+=("${opt}")
+}
+
+aptgetopt_conf_add () {
+   dist_aptgetopt_file_content+="$1"$'\n'
+}
+
+## Avoiding "perl: warning: Setting locale failed." as suggested on
+## https://wiki.ubuntu.com/DebootstrapChroot and
+## https://lists.debian.org/debian-amd64/2005/08/msg00249.html.
+## The "C.UTF-8" locale was considered and rejected. It has some odd behaviors
+## (like making LC_ALL no longer override LANGUAGE as it should, causing
+## different byte sequences to be recognized as identical if invalid UTF-8 is
+## involved, and triggering Unicode parsing) that are undesirable.
+LANG="C"
+export LANG
+LC_ALL="C"
+export LC_ALL
+LANGUAGE="C"
+export LANGUAGE
+
+## Deterministic.
+TZ=UTC
+export TZ
+
+## Disable uwt while building Whonix,
+## because it is not functional while building Whonix from source code.
+default_if_empty UWT_DEV_PASSTHROUGH "1"
+export UWT_DEV_PASSTHROUGH
+
+## used by mmdebstrap
+## dpkg-parsechangelog (from package dpkg-dev) is not available before dependencies are installed.
+if command -v dpkg-parsechangelog &>/dev/null ; then
+   SOURCE_DATE_EPOCH="$(dpkg-parsechangelog --show-field=Timestamp)"
+   ## Validate the build-wide value once, at the point it is resolved, so every
+   ## consumer (debhelper, mmdebstrap, the reproducible image steps) gets a sane
+   ## epoch. Empty is tolerated (some early stages have no changelog yet).
+   if [ -n "${SOURCE_DATE_EPOCH}" ] && ! source_date_epoch_valid "${SOURCE_DATE_EPOCH}" ; then
+      error "SOURCE_DATE_EPOCH '${SOURCE_DATE_EPOCH}' (dpkg-parsechangelog Timestamp) is not a valid non-negative 64-bit integer."
+   fi
+else
+   true "INFO: SOURCE_DATE_EPOCH not available yet because dpkg-parsechangelog has not been installed yet."
+fi
+
+## TODO: do not export without thinking this through since also used by debhelper
+export SOURCE_DATE_EPOCH
+
+#[ -n "${DEBDEBUG:-}" ] || export DEBDEBUG="1"
+
+default_if_empty tpo_downloader_debug "1"
+export tpo_downloader_debug
+
+if [ ! "${dist_build_one_parsed:-}" = "true" ]; then
+   bash -n -- "${source_code_folder_dist}/help-steps/parse-cmd"
+   source "${source_code_folder_dist}/help-steps/parse-cmd"
+   dist_build_one_parse_cmd "$@"
+   dist_build_one_parsed="true"
+   export dist_build_one_parsed
+fi
+
+## Configuration precedence: built-in defaults < config files < environment <
+## command line. The list's FIRST entry is the SHIPPED in-tree buildconfig.d
+## (sourced late, in 50_config-signing-pgp.bsh, because its snippets derive from
+## already-resolved inputs); the remaining entries are USER override tiers,
+## sourced HERE -- before the code defaults below -- so a user config file can
+## override a built-in default while still yielding to an env value or a --CLI
+## flag (every config file uses the fill-if-empty default_if_empty, so an
+## already-set value from parse-cmd or the environment survives). The OpenPGP
+## policy/cert walk in 50 reads the full list.
+default_if_empty dist_build_config_dirs_list "${source_code_folder_dist}/buildconfig.d /etc/buildconfig-dist.d ${HOMEVAR}/buildconfig.d"
+## Source the USER tiers (every entry EXCEPT the first) EARLY; the first entry is
+## the shipped in-tree tier, sourced LATE by 50_config-signing-pgp.bsh. Split via
+## an array, not '${list#* }': with a single-entry override (no space) that prefix
+## strip yields the whole entry, so the in-tree tier would be sourced here AND in
+## 50 -- double-sourcing a user's accumulators (SKIP_SCRIPTS, DIST_APTGETOPT).
+read -r -a dist_build_config_dirs_array <<< "${dist_build_config_dirs_list}"
+for dist_build_config_dir_item in "${dist_build_config_dirs_array[@]:1}"; do
+   dist_build_source_config_dir "${dist_build_config_dir_item}"
+done
+unset dist_build_config_dir_item dist_build_config_dirs_array
+if [ ! "${dist_build_custom_config_dir:-}" = "" ]; then
+   dist_build_source_config_dir "${dist_build_custom_config_dir}"
+fi
+if [ ! "${dist_build_conf_file:-}" = "" ]; then
+   if [ -f "${dist_build_conf_file}" ]; then
+      bash -n -- "${dist_build_conf_file}"
+      source "${dist_build_conf_file}"
+   fi
+fi
+
+default_if_empty dist_build_target_arch "$(dpkg --print-architecture)"
+export dist_build_target_arch
+
+## Architecture-derived defaults. Kept here (not in parse-cmd) so internal
+## helper scripts that pre-set 'dist_build_one_parsed=true' to skip parse-cmd
+## (e.g. dm-tor-update-repository, dm-reprepro-wrapper) still get sensible
+## values for these variables.
+if [ "${dist_build_target_arch:-}" = "amd64" ]; then
+   ## https://forums.whonix.org/t/long-wiki-edits-thread/3477/2009
+   default_if_empty target_architecture_pretty_name "Intel_AMD64"
+fi
+default_if_empty target_architecture_pretty_name "${dist_build_target_arch:-}"
+default_if_empty BUILD_KERNEL_PKGS "linux-image-${dist_build_target_arch:-}"
+default_if_empty BUILD_HEADER_PKGS "linux-headers-${dist_build_target_arch:-}"
+export target_architecture_pretty_name
+export BUILD_KERNEL_PKGS
+export BUILD_HEADER_PKGS
+
+## Default the user-overridable verification flags to "false" so that
+## 'help-steps/git_sanity_test' can require them to be set explicitly
+## (security: caller must make an explicit decision; no implicit defaults
+## inside the verification script). 'parse-cmd' sets them to "true" when
+## --allow-untagged / --allow-uncommitted are passed.
+[ -n "${dist_build_ignore_untagged:-}" ]    || dist_build_ignore_untagged="false"
+default_if_empty dist_build_ignore_uncommitted "false"
+export dist_build_ignore_untagged
+export dist_build_ignore_uncommitted
+
+## Default to "false" so callers can use literal-string equality tests
+## (!= 'true' / = 'true') without guarding the unset case. 'parse-cmd' sets
+## this to "true"/"false" when --remote-derivative-packages is passed. "false"
+## is the normal path: build derivative packages locally and serve them from
+## the local temp apt repo instead of pulling them from a remote repository.
+default_if_empty build_remote_derivative_pkgs "false"
+export build_remote_derivative_pkgs
+
+## Default to "false" so callers can use literal-string equality
+## tests (= 'false' / = 'true') without having to second-guess the
+## unset case. dm-build-official-one sets dist_build_redistributable
+## to "true" for redistributable builds; CI is set to "true" by
+## GitHub Actions and most other CI runners.
+default_if_empty dist_build_redistributable "false"
+## Exported so child helpers (e.g. git_sanity_test, which relies on inherited
+## env in build context rather than re-sourcing this file) see it. Symmetric
+## with 'dist_build_ignore_unsigned' further below.
+export dist_build_redistributable
+[ -n "${CI:-}" ]                         || CI="false"
+export CI
+
+## Configuration precedence (lowest -> highest):
+##   1. Code defaults (this file)
+##   2. ${source_code_folder_dist}/buildconfig.d/*  (in-tree, ships with code)
+##   3. /etc/buildconfig-dist.d/*                   (system override)
+##   4. ${HOMEVAR}/buildconfig.d/*                  (user override)
+##   5. Environment variables
+##   6. Command-line options (parse-cmd)
+##
+## All defaults below MUST use '[ -n "${var:-}" ] ||' or '[[ -v var ]] ||'
+## so that anything already set by parse-cmd / env / buildconfig.d wins.
+## Validation that depends on the final value (e.g. the redistributable
+## --repo check) is performed AFTER buildconfig.d sourcing further down.
+##
+## NOTE: Variable 'dist_build_redistributable=true' is set in 'help-steps/dm-build-official'.
+if [ "${dist_build_redistributable:-}" = "true" ]; then
+   if [ "${CI:-}" = "true" ]; then
+      ## Compatible with git shallow clone.
+      ## By design. CI is untrusted. Compromised CI is out-of-scope and not
+      ## part of the threat model. Using 'HEAD' as the trust root is
+      ## acceptable because CI environments are not expected to provide
+      ## stronger guarantees than TOFU.
+      [[ -v sq_git_trust_root ]] || sq_git_trust_root="HEAD"
+   else
+      ## Use "safer" 'sq-git log' root of trust ('--trust-root').
+      ## Requires full (not shallow) git clone.
+      ## Incompatible with shallow git clone.
+      ## Using the git commit ID where derivative-maker 'openpgp-policy.toml' file
+      ## was first introduced.
+      ## See also: 'buildconfig.d/30_signing_key.conf'
+      ## Older. Broken due to lack of using "git merge" without "--no-ff".
+      #[[ -v sq_git_trust_root ]] || sq_git_trust_root="93d79d25ad28539a0fea503fcf9ea9f12b683d72"
+      ## Broken due to SSH signed git commits which are unsupported by 'sq-git'.
+      #[[ -v sq_git_trust_root ]] || sq_git_trust_root="ac5e8736d2e2d5b2d44a6e2e84eedfe578e837d7"
+      ## Also use 'HEAD' since source of issues with unknown security gain.
+      [[ -v sq_git_trust_root ]] || sq_git_trust_root="HEAD"
+   fi
+
+   ## Enable binary derivative repository by default for official builds.
+   ## Same as: '--repo true'
+   ## Defaulted (not unconditionally assigned) so that '--repo false' /
+   ## env / buildconfig.d can still take effect; an explicit 'false' is
+   ## then validated below after buildconfig.d sourcing.
+   default_if_empty build_remote_repo_enable "true"
+   export build_remote_repo_enable
+
+   if [ "${dist_build_target_arch:-}" = "amd64" ]; then
+      ## Make sure official builds for the Intel/AMD64 architecture
+      ## come with Tor Browser installed by default.
+      ## Fail closed by default in case of Tor Browser download issues.
+      ## Same as: '--tb closed'
+      default_if_empty anon_shared_inst_tb "closed"
+   else
+      ## Tor Browser is not yet available at time of writing for ARM64 and
+      ## other architecture.
+      ## TODO: reproducible builds
+      default_if_empty anon_shared_inst_tb "open"
+   fi
+else
+   ## Compatible with git shallow clone.
+   ## Non-redistributable (personal) builds always use 'HEAD' as the trust
+   ## root. This is by design: personal builds are created by the developer
+   ## on their own machine from their own checkout, so the checkout is
+   ## already trusted. Full history-based trust root verification is only
+   ## required for redistributable builds.
+   [[ -v sq_git_trust_root ]] || sq_git_trust_root="HEAD"
+
+   ## Non-redistributable builds use '--tb open' by default.
+   default_if_empty anon_shared_inst_tb "open"
+
+   default_if_empty build_remote_repo_enable "false"
+   export build_remote_repo_enable
+fi
+## Export sq_git_trust_root so 'help-steps/git_sanity_test' can read it.
+export sq_git_trust_root
+
+## Variable 'anon_shared_inst_tb' only has an effect if package 'tb-updater' is installed.
+export anon_shared_inst_tb
+
+## repository-dist-initializer
+repository_dist_initializer_setup() {
+   [ -n "${binary_build_folder_dist}" ] || error "repository_dist_initializer_setup: variable binary_build_folder_dist missing!"
+   [ -n "${CHROOT_FOLDER}" ] || error "repository_dist_initializer_setup: variable CHROOT_FOLDER missing!"
+
+   ## Enable generation of repository-dist config file
+   true "INFO: build_remote_repo_enable: ${build_remote_repo_enable}"
+   if [ "${build_remote_repo_enable}" = 'true' ]; then
+      printf "%s\n" "${DERIVATIVE_APT_REPOSITORY_OPTS}" | sponge -- "${binary_build_folder_dist}/derivative_apt_repository_opts"
+
+      ## Debugging.
+      true "INFO: sudo test"
+      ${SUDO_TO_ROOT} test -d /usr
+
+      ${SUDO_TO_ROOT} mkdir --parents -- "${CHROOT_FOLDER}/var/lib/repository-dist/"
+      ${SUDO_TO_ROOT} cp -- "${binary_build_folder_dist}/derivative_apt_repository_opts" "${CHROOT_FOLDER}/var/lib/repository-dist/derivative_apt_repository_opts"
+   else
+      rm --force -- "${binary_build_folder_dist}/derivative_apt_repository_opts"
+   fi
+}
+
+export dist_build_sources_list_primary
+
+## https://forums.whonix.org/t/kicksecure-etc-hostname-etc-hosts/10919
+default_if_empty dist_build_hostname "localhost"
+
+if [ "${dist_build_flavor:-}" = "source" ]; then
+   default_if_empty dist_build_type_long "source"
+   default_if_empty dist_build_type_short "source"
+   default_if_empty dist_build_min_free_gib 2
+fi
+
+if [ "${dist_build_flavor:-}" = "dist-installer-cli" ]; then
+   default_if_empty dist_build_type_long "dist-installer-cli"
+   default_if_empty dist_build_type_short "dist-installer-cli"
+   default_if_empty dist_build_min_free_gib 2
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-gateway-lxqt" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Gateway"
+   default_if_empty VMNAME "Whonix-Gateway-LXQt"
+   default_if_empty VMRAM "1280"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_long "gateway"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "LXQt"
+   default_if_empty dist_build_gui "true"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="host"
+   default_if_empty flavor_meta_packages_to_install " whonix-gateway-vm-gui-lxqt "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-gateway-rpi" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Gateway"
+   default_if_empty VMNAME "Whonix-Gateway-RPi"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_long "gateway"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "RPi"
+   ## TODO
+   default_if_empty dist_build_gui "true"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="host"
+   #[ -n "${flavor_meta_packages_to_install:-}" ] || flavor_meta_packages_to_install=" whonix-gateway-rpi "
+   default_if_empty dist_build_min_free_gib 20
+   error "${red}${bold}dist_build_flavor ${dist_build_flavor} is not implemented.${reset}"
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-gateway-cli" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Gateway"
+   default_if_empty VMNAME "Whonix-Gateway-CLI"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_long "gateway"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="host"
+   default_if_empty flavor_meta_packages_to_install " whonix-gateway-vm-server "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-workstation-lxqt" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Workstation"
+   default_if_empty VMNAME "Whonix-Workstation-LXQt"
+   default_if_empty VMRAM "2048"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_long "workstation"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "LXQt"
+   default_if_empty dist_build_gui "true"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="host"
+   default_if_empty flavor_meta_packages_to_install " whonix-workstation-vm-gui-lxqt "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-workstation-cli" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Workstation"
+   default_if_empty VMNAME "Whonix-Workstation-CLI"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_long "workstation"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="host"
+   default_if_empty flavor_meta_packages_to_install " whonix-workstation-vm-server "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-custom-workstation" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Custom-Workstation"
+   default_if_empty VMNAME "Whonix-Custom-Workstation"
+   default_if_empty VMRAM "2048"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_long "custom-workstation"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "CUSTOM"
+   default_if_empty dist_build_gui "false"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="host"
+   #[ -n "${flavor_meta_packages_to_install:-}" ] || flavor_meta_packages_to_install=" none "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-host-cli" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Host"
+   default_if_empty VMNAME "Whonix-Host-CLI"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_long "whonix-host"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   default_if_empty dist_build_host_operating_system "true"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="host"
+   default_if_empty dist_build_min_free_gib 20
+   error "${red}${bold}dist_build_flavor ${dist_build_flavor} is not implemented.${reset}"
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-host-lxqt" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Host"
+   default_if_empty VMNAME "Whonix-Host-LXQt"
+   default_if_empty VMRAM "2048"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_long "whonix-host"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "LXQt"
+   default_if_empty dist_build_gui "true"
+   default_if_empty dist_build_host_operating_system "true"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="host"
+   ## TODO: Do not hardcode to VirtualBox.
+   #[ -n "${flavor_meta_packages_to_install:-}" ] || flavor_meta_packages_to_install=" whonix-lxqt-host-virtualbox "
+   default_if_empty dist_build_min_free_gib 20
+   error "${red}${bold}dist_build_flavor ${dist_build_flavor} is not implemented.${reset}"
+fi
+
+if [ "${dist_build_flavor:-}" = "kicksecure-cli" ]; then
+   default_if_empty SHORT_VMNAME "Kicksecure"
+   default_if_empty VMNAME "Kicksecure-CLI"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_short "kicksecure"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="localhost"
+   if [ "${dist_build_type:-}" = "vm" ]; then
+      default_if_empty dist_build_host_operating_system "false"
+      default_if_empty dist_build_type_long "kicksecure"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-vm-server "
+   elif [ "${dist_build_type:-}" = "host" ]; then
+      default_if_empty dist_build_host_operating_system "true"
+      default_if_empty dist_build_type_long "kicksecure-host"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-baremetal-server "
+   fi
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "kicksecure-lxqt" ]; then
+   default_if_empty SHORT_VMNAME "Kicksecure"
+   default_if_empty VMNAME "Kicksecure-LXQt"
+   default_if_empty VMRAM "2048"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_short "kicksecure"
+   default_if_empty dist_build_desktop "LXQt"
+   default_if_empty dist_build_gui "true"
+   #[ -n "${dist_build_hostname:-}" ] || dist_build_hostname="localhost"
+   if [ "${dist_build_type:-}" = "vm" ]; then
+      default_if_empty dist_build_host_operating_system "false"
+      default_if_empty dist_build_type_long "kicksecure"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-vm-gui-lxqt "
+   elif [ "${dist_build_type:-}" = "host" ]; then
+      default_if_empty dist_build_host_operating_system "true"
+      default_if_empty dist_build_type_long "kicksecure-host"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-baremetal-gui-lxqt "
+   fi
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "kicksecure-ci-tiny-do-not-use" ]; then
+   default_if_empty SHORT_VMNAME "Kicksecure"
+   default_if_empty VMNAME "Kicksecure-CI-Tiny-Do-Not-Use"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_short "kicksecure"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   if [ "${dist_build_type:-}" = "vm" ]; then
+      default_if_empty dist_build_host_operating_system "false"
+      default_if_empty dist_build_type_long "kicksecure"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-ci-tiny-do-not-use "
+   elif [ "${dist_build_type:-}" = "host" ]; then
+      default_if_empty dist_build_host_operating_system "true"
+      default_if_empty dist_build_type_long "kicksecure-host"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-ci-tiny-do-not-use "
+   fi
+   default_if_empty dist_build_min_free_gib 5
+fi
+
+## derivative_name_list is used by:
+## - help-steps/variables to identify valid derivative names.
+## - help-steps/create-local-temp-apt-repo to create one or multiple local APT repositories.
+## - help-steps/cleanup-files to clean one or multiple folders.
+## - help-steps/unchroot-raw to unmount one or multiple local APT repositories.
+## - buildconfig.d/30_pkg_list.conf to create a list of packages to be built.
+## - buildconfig.d/25_apt_sources.conf to create a APT URIs.
+## - build-steps.d/*_create-debian-packages to iterate through one or multiple package folders.
+
+if [ "${dist_build_source_run:-}" = "true" ]; then
+   default_if_empty VMNAME "source"
+   default_if_empty SHORT_VMNAME "source"
+   default_if_empty derivative_name_list "kicksecure whonix"
+   default_if_empty dist_build_type_long "source"
+   default_if_empty dist_build_type_short "source"
+   default_if_empty dist_build_desktop "none"
+   default_if_empty dist_build_min_free_gib 2
+fi
+
+## A '--dry-run true' build ("quick blank build") writes only an EMPTY, sparse
+## raw image (build-steps.d/3200_create-raw-image 'create-empty-raw-image') and
+## SKIPS copying VM images into it (3400_copy-vms-into-raw), so its real disk
+## footprint -- the cowbuilder base, the apt cache and one built .deb -- is a
+## small fraction of a full image build. The per-flavor 20 GiB reservation above
+## is sized for a real multi-target image and needlessly gates a dry-run out of
+## small build hosts (a sandbox qube, a CI runner). Cap it for dry-runs. A real
+## '--tag' / '--ref' build keeps its full requirement. Operator-overridable.
+if [ "${build_dry_run:-}" = "true" ]; then
+   dist_build_min_free_gib="${dist_build_min_free_gib_dry_run:-5}"
+fi
+export dist_build_min_free_gib
+
+## Some flavor/target combinations do not set 'dist_build_type_long' in the
+## per-flavor blocks above -- e.g. the 'kicksecure-cli' / 'kicksecure-lxqt'
+## blocks only set it when 'dist_build_type' is 'vm' or 'host', so a
+## '--target source' build leaves it unset. Give it a useful value in all
+## cases by defaulting to 'dist_build_type_short' (always set by the flavor
+## blocks, and equal to 'dist_build_type_long' for kicksecure builds), so
+## every consumer can rely on it being set.
+default_if_empty dist_build_type_long "${dist_build_type_short:-}"
+
+export dist_build_type_long
+
+export VMNAME VMRAM VRAM
+
+## Used by: developer-meta-files /usr/bin/dm-prepare-release
+vm_multiple=false
+if [ "${dist_build_type_long:-}" = "workstation" ]; then
+   vm_multiple=true
+   ## dist_build_desktop could be KDE, CLI, Xfce, LXQt, RPi or CUSTOM
+   default_if_empty vm_names_to_be_exported "Whonix-Gateway-${dist_build_desktop:-} Whonix-Workstation-${dist_build_desktop:-}"
+fi
+if [ "${dist_build_type_long:-}" = "custom-workstation" ]; then
+   default_if_empty vm_names_to_be_exported "${VMNAME:-}"
+fi
+if [ "${dist_build_type_short:-}" = "kicksecure" ]; then
+   default_if_empty vm_names_to_be_exported "${VMNAME:-}"
+fi
+## --flavor source fallback
+default_if_empty vm_names_to_be_exported "none"
+
+maybe_disable_dist_build_windows_installer() {
+   if [ "${dist_build_source_run:-}" = "true" ]; then
+      true "${BASH_SOURCE[0]} INFO: dist_build_source_run set to true, skipping ${FUNCNAME[0]}, ok."
+   else
+      true "${BASH_SOURCE[0]} INFO: dist_build_source_run is not set to true, therefore: dist_build_windows_installer=false"
+      dist_build_windows_installer=false
+   fi
+}
+
+if [ "${dist_build_type_short:-}" = "kicksecure" ]; then
+   default_if_empty derivative_name_list "kicksecure"
+   default_if_empty dist_build_type_short_pretty "Kicksecure"
+   [ -n "${dist_server_upload_location_list:-}" ] || dist_server_upload_location_list=( "kicksecure.com" )
+   default_if_empty project_clearnet "kicksecure.com"
+   true "${BASH_SOURCE[0]} INFO: dist_build_type_short is 'kicksecure'. Build Whonix Windows Installer only for Whonix LXQt for VirtualBox. Therefore: maybe_disable_dist_build_windows_installer"
+   maybe_disable_dist_build_windows_installer
+elif [ "${dist_build_type_short:-}" = "whonix" ]; then
+   default_if_empty derivative_name_list "kicksecure whonix"
+   default_if_empty dist_build_type_short_pretty "Whonix"
+   [ -n "${dist_server_upload_location_list:-}" ] || dist_server_upload_location_list=( "whonix.org" )
+   default_if_empty project_clearnet "whonix.org"
+elif [ "${dist_build_type_short:-}" = "dist-installer-cli" ]; then
+   default_if_empty derivative_name_list "kicksecure whonix"
+   default_if_empty dist_build_type_short_pretty "dist-installer-cli"
+   [ -n "${dist_server_upload_location_list:-}" ] || dist_server_upload_location_list=( "kicksecure.com" "whonix.org" )
+   default_if_empty project_clearnet "kicksecure.com"
+   true "${BASH_SOURCE[0]} INFO: dist_build_type_short is 'dist-installer-cli'. Build Whonix Windows Installer only for Whonix LXQt for VirtualBox. Therefore: maybe_disable_dist_build_windows_installer"
+   maybe_disable_dist_build_windows_installer
+   ## Hardcoded. SHORT_VMNAME + dist_build_desktop too: 30_version-paths derives the
+   ## image-path names from them under nounset, so an unset value aborts resolution
+   ## for this flavor. Like 'source' (a non-image, multi-derivative build), it has no
+   ## real VM image, so mirror source's defaults ('none' desktop) rather than leave
+   ## them unset. The flavor block does not set them, unlike whonix/kicksecure.
+   VMNAME=dist-installer-cli
+   default_if_empty SHORT_VMNAME "dist-installer-cli"
+   default_if_empty dist_build_desktop "none"
+elif [ "${dist_build_type_short:-}" = "source" ]; then
+   ## --flavor source / --target source path. Set the same defaults the
+   ## kicksecure / whonix / dist-installer-cli branches set, so later
+   ## consumers (e.g. derivative_name_list usage) don't trip on unset
+   ## variables. The values match dist-installer-cli, which is also a
+   ## non-flavor-specific multi-derivative build.
+   [ -n "${derivative_name_list:-}" ]         || derivative_name_list="kicksecure whonix"
+   default_if_empty dist_build_type_short_pretty "source"
+   [ -n "${dist_server_upload_location_list:-}" ] || dist_server_upload_location_list=( "kicksecure.com" "whonix.org" )
+   [ -n "${project_clearnet:-}" ]             || project_clearnet="kicksecure.com"
+else
+   error "unknown dist_build_type_short!"
+fi
+
+## dm-reproducible-buildinfo needs these.
+export project_clearnet
+export dist_build_type
+
+## Validate the branding/identity vars once, where they are resolved, so every
+## consumer can trust them -- notably help-steps/dm-raw-to-iso, which splices
+## them UNQUOTED into the ISO GRUB menu, the live kernel cmdline
+## (live-config.hostname=) and the boot splash: a space or newline would split
+## the cmdline or inject GRUB commands. dist_build_type_short is ALSO the ISO9660
+## volume id and the root=live:CDLABEL= value (<=32, no spaces).
+value_charset_ok "${dist_build_hostname}" 'A-Za-z0-9.-' || error "dist_build_hostname must be non-empty and [A-Za-z0-9.-] with no spaces."
+value_charset_ok "${dist_build_type_short}" 'A-Za-z0-9._-' || error "dist_build_type_short must be non-empty and [A-Za-z0-9._-] with no spaces."
+[ "${#dist_build_type_short}" -le 32 ] || error "dist_build_type_short too long (max 32 characters; it is the ISO9660 volume id)."
+value_charset_ok "${dist_build_type_short_pretty}" 'A-Za-z0-9 ._-' || error "dist_build_type_short_pretty must be non-empty and [A-Za-z0-9 ._-] (spaces allowed)."
+
+## example dist_build_desktop_lowercase:
+## lxqt
+## Bash's lowercase expansion ',,' refuses an unset var under
+## nounset. Take the value through a defaulted intermediate.
+dist_build_desktop_safe="${dist_build_desktop:-}"
+default_if_empty dist_build_desktop_lowercase "${dist_build_desktop_safe,,}"
+unset dist_build_desktop_safe
+
+if [ ! "${dist_build_desktop_lowercase:-}" = "lxqt" ] ; then
+   true "${BASH_SOURCE[0]} INFO: dist_build_desktop_lowercase is '${dist_build_desktop_lowercase}'. Not 'lxqt'. Build Whonix Windows Installer only for Whonix LXQt for VirtualBox. Therefore: maybe_disable_dist_build_windows_installer"
+   maybe_disable_dist_build_windows_installer
+fi
+
+## vmsize 100 GB does not matter because grml-debootstrap creates sparse files,
+## i.e. only space, which gets actually filled up, will take disk space.
+
+if [ "${build_dry_run:-}" = "true" ]; then
+   default_if_empty VMSIZE "1M"
+fi
+default_if_empty VMSIZE "100G"
+export VMSIZE
+
+## Disk identifier for grml-debootstrap.
+## https://github.com/grml/grml-debootstrap/pull/28
+default_if_empty DISK_IDENTIFIER '26ada0c0-1165-4098-884d-aafd2220c2c6'
+export DISK_IDENTIFIER
+
+if [ "${dist_build_install_to_root:-}" = "true" ]; then
+   default_if_empty CHROOT_FOLDER ""
+else
+   default_if_empty CHROOT_FOLDER "${binary_build_folder_dist:-}/${VMNAME:-}_image"
+fi
+export CHROOT_FOLDER
+
+true "${BASH_SOURCE[0]} INFO: CHROOT_FOLDER: ${CHROOT_FOLDER}"

@@ -21,7 +21,7 @@
 ## carries a hashFiles('docker/**') so a Dockerfile/setup change rebuilds. No
 ## restore-keys (G-A-007).
 ##
-## Usage (from .github/workflows/local-build.yml):
+## Usage (from .github/workflows/local-reproducible-build-test.yml):
 ##   ./ci/dm-docker-image-cache load    # if cache-hit, before the build
 ##   ./ci/dm-docker-image-cache save    # if cache-miss, after the build
 
@@ -31,6 +31,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 ## No sensible developer-machine invocation (it sudo-manages the docker image
 ## store); mirrors ci/approx-cache-sidecar's guard.

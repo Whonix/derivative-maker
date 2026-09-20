@@ -1,0 +1,112 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Pure, side-effect-free helpers factored out of the build-steps.d scripts so
+## the build steps AND the dist-ai dm-help-steps-tests can source this one file
+## and call the real functions -- a single definition (no duplication) exercised
+## directly (no dm-build-step-fn extraction). Sourced by build-steps.d/
+## {1200_prepare-build-machine,3500_install-packages,4350_reimage-raw-reproducible}.
+##
+## Every function here stays PURE: strict-mode free (so sourcing never leaks a
+## 'set -o errexit' into the caller), no build variables, 'return' not 'exit'.
+##
+## style-ok: no-strict -- sourced-only fragment; a top-level 'set -o errexit' /
+## 'nounset' / 'pipefail' would leak into (and could kill) the sourcing shell.
+
+resolve-partition-uuid() {
+   ## Print the UUID of the partition whose NAME column exactly equals the given
+   ## name, compared as a LITERAL whole string (never a regex, glob or escape):
+   ## the name comes from grub-probe output, so any interpretation could pick the
+   ## wrong partition ('loop0p1' vs 'loop0p10', a metacharacter, an escape).
+   ## Capture lsblk into a variable FIRST so errexit aborts if it fails, then loop
+   ## over a here-string (no subshell, so 'return' works). '[ x = y ]' is plain
+   ## string equality and 'read -r' keeps backslashes literal. Prints nothing when
+   ## there is no exact match.
+   local partition_name lsblk_output name uuid
+   partition_name="$1"
+   lsblk_output="$(lsblk --raw --noheadings --output NAME,UUID)"
+   while read -r name uuid; do
+      if [ "${name}" = "${partition_name}" ]; then
+         printf '%s\n' "${uuid}"
+         return 0
+      fi
+   done <<< "${lsblk_output}"
+}
+
+newest-kernel-version() {
+   ## Print the version of the NEWEST kernel from a newline-separated /boot
+   ## listing (the argument), i.e. the vmlinuz-<version> with the greatest
+   ## VERSION order. Not byte order: under LC_ALL=C 'vmlinuz-6.1.0-9' sorts
+   ## before 'vmlinuz-6.12.0-1' ('.' < digit), so a post-upgrade /boot with two
+   ## kernels would otherwise pick the OLD one and build dracut for the wrong
+   ## kernel. Prints nothing when the listing has no vmlinuz.
+   local listing newest
+   listing="$1"
+   newest="$(printf '%s\n' "${listing}" | grep '^vmlinuz-' | sort --version-sort | tail --lines=1)" || true
+   printf '%s\n' "${newest#vmlinuz-}"
+}
+
+select-grub-probe-device() {
+   ## Choose the device for the root= fixup from the '/' (main) and '/boot' probe
+   ## results. They share the partition in this build, so they normally match;
+   ## when they differ prefer the /boot probe, but ONLY if it is non-empty -- a
+   ## transient probe failure ('|| true' -> "") must not be chosen over a valid
+   ## root probe, or the caller spuriously aborts a good build. Args: MAIN BOOT.
+   local main_device boot_device
+   main_device="$1"
+   boot_device="$2"
+   if [ "${main_device}" = "${boot_device}" ]; then
+      printf '%s\n' "${main_device}"
+   elif [ -n "${boot_device}" ]; then
+      printf '%s\n' "${boot_device}"
+   else
+      printf '%s\n' "${main_device}"
+   fi
+}
+
+require-ext-type() {
+   ## Return 0 iff TYPE names an ext2/3/4 filesystem; otherwise print an error and
+   ## return 1. The reimage rebuilds the partition as ext4, so any other type --
+   ## or an empty/unidentifiable one (blkid could not read it) -- must fail closed
+   ## rather than be silently reformatted. Args: TYPE [DEVICE-for-the-message].
+   local fs_type device_desc
+   fs_type="$1"
+   device_desc="${2:-the root device}"
+   case "${fs_type}" in
+      ext2|ext3|ext4)
+         return 0
+         ;;
+      *)
+         printf '%s\n' "ERROR: ${device_desc} filesystem is '${fs_type:-unknown}', not ext2/ext3/ext4; the reproducible reimage only rebuilds ext filesystems. Refusing to reformat." >&2
+         return 1
+         ;;
+   esac
+}
+
+username-plain-for-sudoers() {
+   ## True when NAME is safe to interpolate verbatim into a sudoers rule. The
+   ## adduser.conf NAME_REGEX check is the canonical check_valid_linux_user_account_name
+   ## from helper-scripts strings.bsh (sourced by help-steps/variables, so it is
+   ## defined before any build step calls this; the dist-ai test sources it too) --
+   ## do NOT reimplement it here. It accepts [A-Za-z_][A-Za-z0-9_-]* with an
+   ## optional single trailing '$' (Samba machine account) and rejects a leading
+   ## digit/dash and every sudoers metacharacter.
+   ##
+   ## On top of NAME_REGEX, reject a sudoers UPPERCASE ALIAS token
+   ## ([A-Z][A-Z0-9_]*): sudoers parses a bare all-uppercase word in a user field
+   ## as an alias REFERENCE, not a literal user. 'ALL' then grants EVERY user
+   ## ('ALL ALL=(ALL:ALL) NOPASSWD:ALL' is valid sudoers), and 'BUILD'/'ROOT'/...
+   ## become undefined-alias references that make visudo --strict abort the build
+   ## with a confusing error instead of this gate's clear rejection. A name with
+   ## any lowercase letter, '-', or trailing '$' is a real user, left to NAME_REGEX.
+   local candidate LC_ALL=C
+   candidate="$1"
+   if [[ "${candidate}" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+      return 1
+   fi
+   check_valid_linux_user_account_name "${candidate}"
+}

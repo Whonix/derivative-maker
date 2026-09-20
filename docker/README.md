@@ -88,7 +88,7 @@ The command to run in the container is explicit, after `--`.
    ```
 2. Execute a specific build-step
    ```sh
-   ./derivative-maker-docker-run -- build-steps.d/3600_convert-raw-to-iso <build arguments>
+   ./derivative-maker-docker-run -- build-steps.d/4310_convert-raw-to-iso <build arguments>
    ```
 3. Run a custom command (e.g. an interactive shell)
    ```sh

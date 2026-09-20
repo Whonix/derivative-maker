@@ -1,0 +1,9 @@
+## Live-boot extras. Same rule as package-list-kicksecure: no package already
+## installed by the flavor metapackage graph or 3500_install-packages. So no
+## dracut (BUILD_INITRAMFS_PKGS + dist-nonqubes-cli), sudo (dist-general-cli) or
+## efibootmgr (3500 efi_weak_recommended list) here.
+dracut-live
+live-config
+live-config-systemd
+systemd-sysv
+isomd5sum

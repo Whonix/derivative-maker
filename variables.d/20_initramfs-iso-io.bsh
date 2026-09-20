@@ -1,0 +1,353 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sourced fragment of help-steps/variables, loaded via buildconfig.d/*.bsh.
+## initramfs + ISO extra packages, VMNAME checks, unsafe-io/eatmydata, approx/apt options, curl, chroot_run, tool + rsync defaults.
+## Strict mode, locale, and the base path variables are owned by the loader
+## 'help-steps/variables' and inherited here; do not recompute them from
+## BASH_SOURCE (this file lives in buildconfig.d/, not help-steps/).
+## style-ok: no-strict
+## style-ok: no-has
+## style-ok: no-safe-rm
+## style-ok: no-tmp-hardcode
+# shellcheck disable=SC2086,SC2004
+
+## {{{ initramfs
+
+## binutils dmsetup:
+##     https://packages.debian.org/bullseye/dmsetup lists 'Recommends:' which
+##     are actually required for a functional boot process.
+## pigz:
+##     maybe not required but useful.
+## dracut-config-rescue:
+##     Not actually doing anything.
+##     https://www.kicksecure.com/wiki/Dev/todo#investigate_dracut-config-rescue
+## dracut-config-generic:
+##     Actively detrimental. Introduces a file at
+##     /usr/lib/dracut/dracut.conf.d/50-generic.conf which sets 'hostonly="no",
+##     overriding /etc/dracut.conf.d/30-dist-base-files.conf.
+default_if_empty BUILD_INITRAMFS_DRACUT "dracut dracut-live binutils dmsetup pigz"
+
+default_if_empty BUILD_INITRAMFS_PKGS "${BUILD_INITRAMFS_DRACUT}"
+
+if printf "%s\n" "${BUILD_INITRAMFS_PKGS}" | grep -- "dracut" >/dev/null 2>&1; then
+   ## INITRD_GENERATOR_OPTS gets read by grml-debootstrap and passed to dracut and is also
+   ## read by build-steps.d/*_install-packages
+   ##
+   ## Worked but issue:
+   ## https://forums.kicksecure.com/t/iso-error-message-during-boot-mount-sysroot-special-device-liveos-rootfs-does-not-exist/418
+   default_if_empty INITRD_GENERATOR_OPTS '--add dmsquash-live --add overlayfs --add bash'
+   export INITRD_GENERATOR_OPTS
+fi
+
+source_dracut_disable_config_snippet="${source_code_folder_dist}/packages/kicksecure/initializer-dist/usr/share/initializer-dist/dracut/90-derivative-maker-build.conf"
+target_dracut_disable_config_snippet="${CHROOT_FOLDER}/etc/dracut.conf.d/90-derivative-maker-build.conf"
+
+source_dkms_suppress_mok_snippet="${source_code_folder_dist}/packages/kicksecure/initializer-dist/usr/share/initializer-dist/dkms/90-derivative-maker-build.conf"
+target_dkms_suppress_mok_snippet="${CHROOT_FOLDER}/etc/dkms/framework.conf.d/90-derivative-maker-build.conf"
+
+true "${cyan}${BASH_SOURCE[0]} INFO: BUILD_INITRAMFS_PKGS (--initramfs): ${BUILD_INITRAMFS_PKGS}${reset}"
+
+## }}}
+
+## {{{ ISO extra packages
+
+if [ "${dist_build_iso:-}" = "true" ]; then
+   dist_iso_grub_pc=""
+   dist_iso_shim_signed=""
+   dist_iso_grub_efi_signed=""
+   dist_iso_fwupd_signed=""
+   case "${dist_build_target_arch:-}" in
+      armhf)
+         dist_iso_fwupd_signed="fwupd-signed"
+         ;;
+      arm64)
+         dist_iso_shim_signed="shim-signed"
+         dist_iso_grub_efi_signed="grub-efi-arm64-signed"
+         dist_iso_fwupd_signed="fwupd-signed"
+         ;;
+      amd64)
+         dist_iso_grub_pc="grub-pc-bin"
+         dist_iso_shim_signed="shim-signed"
+         dist_iso_grub_efi_signed="grub-efi-amd64-signed"
+         dist_iso_fwupd_signed="fwupd-signed"
+         ;;
+   esac
+   dist_iso_firmware_nonfreedom=""
+   if [ "${build_freedom_only:-}" = "false" ]; then
+      dist_iso_firmware_nonfreedom="firmware-nonfreedom firmware-nonfreedom-noarch"
+   fi
+
+   dist_build_iso_extra_packages=""
+   dist_iso_list_file=""
+   dist_iso_pkg_line=""
+   for dist_iso_list_file in \
+      "${source_code_folder_dist}/iso-build-data/package-list-live" \
+      "${source_code_folder_dist}/iso-build-data/package-list-kicksecure" ; do
+      while IFS="" read -r dist_iso_pkg_line || [ -n "${dist_iso_pkg_line}" ]; do
+         ## Strip a trailing comment and surrounding whitespace.
+         dist_iso_pkg_line="${dist_iso_pkg_line%%#*}"
+         dist_iso_pkg_line="${dist_iso_pkg_line#"${dist_iso_pkg_line%%[![:space:]]*}"}"
+         dist_iso_pkg_line="${dist_iso_pkg_line%"${dist_iso_pkg_line##*[![:space:]]}"}"
+         [ -n "${dist_iso_pkg_line}" ] || continue
+
+         ## Per-architecture / freedom substitutions.
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_ARCHITECTURE_XXX/${dist_build_target_arch:-}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_GRUB_PC_XXX/${dist_iso_grub_pc}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_SHIM_SIGNED_XXX/${dist_iso_shim_signed}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_GRUB_EFI_SIGNED_XXX/${dist_iso_grub_efi_signed}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_FWUPD_SIGNED_XXX/${dist_iso_fwupd_signed}}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_FIRMWARE_NONFREEDOM_XXX/${dist_iso_firmware_nonfreedom}}"
+
+         ## Installed by '*_install-packages' itself; drop from the extras.
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_HOST_XXX/}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_NETWORK_CONF_XXX/}"
+         dist_iso_pkg_line="${dist_iso_pkg_line//XXX_KICKSECURE_NETWORK_CONF_GUI_XXX/}"
+
+         ## A substituted-to-empty placeholder line is skipped.
+         [ -n "${dist_iso_pkg_line}" ] || continue
+         dist_build_iso_extra_packages="${dist_build_iso_extra_packages:+${dist_build_iso_extra_packages} }${dist_iso_pkg_line}"
+      done < "${dist_iso_list_file}"
+   done
+
+   export dist_build_iso_extra_packages
+   true "${cyan}${BASH_SOURCE[0]} INFO: dist_build_iso_extra_packages: ${dist_build_iso_extra_packages}${reset}"
+fi
+
+## }}}
+
+if [ "${VMNAME:-}" = "unknown" ]; then
+   true "variables ERROR: VMNAME is unknown. Please report this bug!"
+   exit 1
+fi
+
+if [ "${dist_build_source_run:-}" = "true" ]; then
+   true "${BASH_SOURCE[0]} INFO: Internal run."
+else
+   true "${BASH_SOURCE[0]} INFO: VMNAME is ${VMNAME:-}"
+fi
+
+if [ "${VMNAME:-}" = "" ]; then
+   MSG="${red}${bold}variables ERROR: VMNAME is empty! Please report this bug!${reset}"
+   error "${MSG}"
+fi
+
+default_if_empty XZ_OPT "--threads=8"
+export XZ_OPT
+
+if [ "${dist_build_unsafe_io:-}" = "true" ]; then
+   eatmydata_install="true"
+   aptgetopt_add "Dpkg::Options::=--force-unsafe-io"
+   aptgetopt_conf_add "Dpkg::Options:: \"--force-unsafe-io\";"
+   ## Resolve the host multiarch triplet deterministically rather than
+   ## globbing '/usr/lib/*-linux-gnu/libeatmydata.so'. On a multiarch host
+   ## (e.g. amd64 with a foreign architecture enabled), the glob returns both
+   ## paths; the first is chosen by alphabetic order which can be the wrong ABI,
+   ## causing ld.so to reject the preload or silently skip it.
+   libeatmydata_multiarch=""
+   if command -v dpkg-architecture >/dev/null 2>&1 ; then
+      libeatmydata_multiarch="$(dpkg-architecture --query=DEB_HOST_MULTIARCH 2>/dev/null)"
+   fi
+   if [ -z "${libeatmydata_multiarch:-}" ] && command -v gcc >/dev/null 2>&1 ; then
+      libeatmydata_multiarch="$(gcc -print-multiarch 2>/dev/null)"
+   fi
+   libeatmydata_file=""
+   if [ -n "${libeatmydata_multiarch:-}" ] && test -f "/usr/lib/${libeatmydata_multiarch}/libeatmydata.so" ; then
+      libeatmydata_file="/usr/lib/${libeatmydata_multiarch}/libeatmydata.so"
+   fi
+   if [ -n "${libeatmydata_file:-}" ] && test -f "${libeatmydata_file}" ; then
+      true "INFO: eatmydata installed, preloading."
+      if [ -z "${LD_PRELOAD:-}" ]; then
+         LD_PRELOAD="${libeatmydata_file}"
+      else
+         LD_PRELOAD="${LD_PRELOAD}:${libeatmydata_file}"
+      fi
+      export LD_PRELOAD
+      ## Inject LD_PRELOAD as a sudo command-line environment assignment
+      ## (not just via --preserve-env) so that sudo actually passes it
+      ## into the child process. 'export LD_PRELOAD' on the parent is
+      ## not enough: by default sudo strips LD_* variables from the
+      ## environment for security reasons. 'sudo FOO=bar cmd' runs 'cmd'
+      ## with FOO=bar set directly, bypassing the strip. LD_PRELOAD is
+      ## additionally listed in 'env_vars_keep_list' so that
+      ## '--preserve-env=...' (appended to SUDO_TO_ROOT further below)
+      ## keeps it alive for any nested sudo invocations.
+      SUDO_TO_ROOT="${SUDO_TO_ROOT} LD_PRELOAD=${LD_PRELOAD}"
+   else
+      true "INFO: eatmydata not yet installed, not yet preloading."
+   fi
+   ## Shadow the 'sync' command with a no-op function. Bash resolves
+   ## function names before external commands, so in this shell and all
+   ## its subshells 'sync' becomes a no-op. The goal of '--unsafe-io' is
+   ## to speed up the build by letting the kernel defer writes; calling
+   ## '/bin/sync' would defeat that. This only affects processes that
+   ## inherit this shell's function table (i.e. subshells of 'bash'),
+   ## not spawned binaries that directly exec '/bin/sync' themselves.
+   sync() {
+      true "${FUNCNAME[0]}: Not running ${FUNCNAME[0]}, because using '--unsafe-io true'."
+   }
+fi
+
+## use approx by default
+## required for --connection clearnet
+## Port 9977 defined by approx/approx.conf
+## REPO_PROXY is no longer used now that we're using approx.
+#[ -n "${REPO_PROXY:-}" ] || REPO_PROXY="http://127.0.0.1:9977"
+default_if_empty APPROX_PROXY_ENABLE 'yes'
+
+[ -v DEBOOTSTRAP_PREFIX ] || DEBOOTSTRAP_PREFIX=""
+[ -v COWBUILDER_PREFIX ] || COWBUILDER_PREFIX=""
+[ -v LIVEBUILD_PREFIX ] || LIVEBUILD_PREFIX=""
+
+if [ "${APPROX_PROXY_ENABLE}" = "yes" ]; then
+   ## apt parameters must be without quotes
+   ## apt parameters must be without equals sign
+   ## apt parameters must be without colon sign
+   ## apt config file must be with quotes
+   ## apt config file must be without equals sign
+   ## apt config file must be trailing colon sign
+
+   ## https://forums.whonix.org/t/derivative-maker-fails-with-onion-sources/20200/8
+   #aptgetopt_add "Acquire::tor::Proxy=${REPO_PROXY}"
+   #aptgetopt_conf_add "Acquire::tor::Proxy \"${REPO_PROXY}\";"
+
+   aptgetopt_add "Acquire::BlockDotOnion=false"
+   aptgetopt_conf_add "Acquire::BlockDotOnion \"false\";"
+
+   #DEBOOTSTRAP_PREFIX+=" env http_proxy=${REPO_PROXY} https_proxy=${REPO_PROXY} ALL_PROXY=${REPO_PROXY}"
+   #COWBUILDER_PREFIX+=" env http_proxy=${REPO_PROXY} https_proxy=${REPO_PROXY} ALL_PROXY=${REPO_PROXY}"
+   #LIVEBUILD_PREFIX+=" env http_proxy=${REPO_PROXY} https_proxy=${REPO_PROXY} ALL_PROXY=${REPO_PROXY}"
+fi
+
+## '--freshness frozen' pins snapshot.debian.org timestamps whose Release
+## 'Valid-Until' is intentionally in the past; tell apt to accept them rather than
+## abort.
+if [ "${dist_build_apt_freshness:-}" = "frozen" ]; then
+   aptgetopt_add "Acquire::Check-Valid-Until=false"
+   aptgetopt_conf_add "Acquire::Check-Valid-Until \"false\";"
+fi
+
+## Help update-torbrowser and other software find the Tor server if using
+## '--connection tor'.
+if [ "${dist_build_sources_clearnet_or_onion:-}" = 'onion' ]; then
+   if [ -z "${CURL_PROXY:-}" ]; then
+      ## TODO: Possibly allow customizing the server and port for this?
+      ## HARDCODED.
+      CURL_PROXY='--proxy socks5h://127.0.0.1:9050'
+      export CURL_PROXY
+   fi
+fi
+
+## CURL_RESUME resumes a partially-downloaded file (curl '--continue-at -',
+## the same value tb-updater uses for '--resume'). Default it and export so
+## build steps that reference ${CURL_RESUME:-} resume large downloads; an
+## inherited value still wins.
+default_if_empty CURL_RESUME "--continue-at -"
+export CURL_RESUME
+
+## Export COWBUILDER_PREFIX so it is available in make-helper.bsh.
+export COWBUILDER_PREFIX
+
+## Variables removed from the environment before entering a target chroot
+## (chroot_run). These name host-only state that must not leak into the built
+## image: TEMP/TMPDIR are host temp dirs, and HELPER_SCRIPTS_PATH points at the
+## host build tree -- inside the chroot the INSTALLED helper-scripts must be
+## used, and package postinsts source "${HELPER_SCRIPTS_PATH:-}/..." expecting
+## it empty so the installed '/usr/libexec/helper-scripts' path is used.
+chroot_env_vars_var_remove_list="
+   TEMP
+   TEMPDIR
+   TMP
+   TMPDIR
+   HELPER_SCRIPTS_PATH
+"
+
+chroot_remove_env_list=""
+for chroot_env_vars_var_remove_item in ${chroot_env_vars_var_remove_list} ; do
+   if [ "${chroot_remove_env_list:-}" = "" ]; then
+      chroot_remove_env_list="--unset ${chroot_env_vars_var_remove_item}"
+   else
+      chroot_remove_env_list+=" --unset ${chroot_env_vars_var_remove_item}"
+   fi
+done
+unset chroot_env_vars_var_remove_item
+
+if [ "${dist_build_install_to_root:-}" = "true" ]; then
+   chroot_run() {
+      ${SUDO_TO_ROOT} "$@"
+   }
+else
+   chroot_run() {
+      ${SUDO_TO_ROOT} env ${chroot_remove_env_list} -- chroot -- "${CHROOT_FOLDER}" "$@"
+
+      #$SUDO_TO_ROOT env $chroot_remove_env_list systemd-nspawn --directory="$CHROOT_FOLDER"
+   }
+fi
+
+if [ "${no_git:-}" = "1" ]; then
+   default_if_empty git_bin "true"
+else
+   default_if_empty git_bin "git"
+fi
+
+## Otherwise errors out because there is a folder grml-debootstarp in the root source folder.
+## Cannot use `which grml-debootstrap` because that would fail before grml-debootstrap gets installed.
+#[ -n "${dist_build_grml_bin:-}" ] || dist_build_grml_bin="$(which grml-debootstrap)"
+default_if_empty dist_build_grml_bin "/usr/sbin/grml-debootstrap"
+
+if [ -z "${rsync_cmd:-}" ]; then
+   if [ "${build_dry_run:-}" = "true" ]; then
+      ## '--dry-run true' is documented as "useful for debugging
+      ## dm-prepare-release"; the artifacts being uploaded are
+      ## placeholders, so mock rsync. This is the same mock
+      ## 'help-steps/pre' applies for '$CI=true' but here it also
+      ## fires for 'build_dry_run=true' (parse-cmd sets that flag
+      ## above this line, so we can read it now).
+      rsync_cmd="echo simulate-only rsync"
+   else
+      rsync_cmd="rsync"
+   fi
+fi
+
+## TODO: hardlinks: rsync error Internal hashtable error: illegal key supplied
+## --hard-links \
+if [ "${rsync_opts:-}" = "" ]; then
+   rsync_opts="\
+   --links \
+   --safe-links \
+   --owner \
+   --group \
+   --chown=root:www-data \
+   --chmod=uog+r \
+   --times \
+   --sparse \
+   --partial \
+   --progress \
+   --verbose"
+fi
+
+if [ "${build_dry_run:-}" = "true" ]; then
+   rsync_opts="${rsync_opts} --dry-run"
+fi
+
+## TODO: auto retry function error handler trap lacks variables
+## such as variable DIST_APTGETOPT.
+## Would miss out on security related APT configuration options:
+## apt-get --error-on=any / -o APT::Update::Error-Mode=any
+default_if_empty dist_build_auto_retry "0"
+
+default_if_empty dist_build_wait_auto_retry "5"
+
+## Sanity Test.
+command -v "${git_bin}" >/dev/null
+
+default_if_empty DEB_INSTALL_FOLDER "mnt/initialdeb"
+export DEB_INSTALL_FOLDER
+
+default_if_empty EMPTY_DIR "/tmp/empty"
+export EMPTY_DIR
+
+default_if_empty derivative_maker true
+export derivative_maker

@@ -1,0 +1,169 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sourced fragment of help-steps/variables, loaded via buildconfig.d/*.bsh.
+## Preamble: umask, xtrace, host-dependency sanity test, PATH sbin fix, the
+## invoking-user / HOMEVAR / SUDO_TO_ROOT / build-folder resolution, the
+## no-whitespace bind-mount check, and the derived source-tree folders. Strict
+## mode and the base paths (source_code_folder_dist, HELPER_SCRIPTS_PATH) are
+## resolved by the loader before this file is sourced.
+## style-ok: no-strict
+## style-ok: no-has
+# shellcheck disable=SC2086
+
+## Deterministic umask for the whole build. security-misc sets the same umask
+## for commands run with sudo.
+umask 0022
+
+true "${BASH_SOURCE[0]} INFO: begin"
+
+## Silence xtrace while sourcing parse-cmd and running the parser, to
+## avoid flooding output with irrelevant parser trace lines. Restore
+## the previous xtrace state afterwards.
+xtrace_off
+
+#printf "%s\n" "INFO: Currently running script: ${BASH_SOURCE[0]}"
+
+## {{ Sanity Tests.
+
+dist_build_missing_dependency() {
+   error "dist_build_missing_dependency
+programs_to_check_installed_item: $1
+
+Did you install dependencies as mentioned in build documentation chapter
+Host Preparation
+?"
+   true
+}
+
+variables_script_sanity_test() {
+   local dist_build_programs_to_check_installed_list programs_to_check_installed_item
+   dist_build_programs_to_check_installed_list="logname whoami dirname basename awk grep"
+
+   ## None of the programs below need root, so do not invoke them via sudo.
+   ## Using '$SUDO_TO_ROOT' here would also be wrong because SUDO_TO_ROOT
+   ## is only initialized further down in this file.
+   for programs_to_check_installed_item in ${dist_build_programs_to_check_installed_list} ; do
+      command -v "${programs_to_check_installed_item}" >/dev/null || dist_build_missing_dependency "${programs_to_check_installed_item}"
+   done
+}
+
+variables_script_sanity_test
+
+## }}
+
+path_variable_adjustments() {
+   local path_part path_array local_sbin_found standard_sbin_found old_path new_path
+
+   ## Manual testing.
+   ## CI has the following and lacks any mention of 'sbin' in the PATH variable.
+   #PATH="/usr/local/bin:/usr/bin:/bin:/usr/games"
+
+   old_path="${PATH}"
+   true "INFO: old_path: ${old_path}"
+   ## Example PATH:
+   ## /home/user/derivative-maker/help-steps:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+   ## Example PATH on CI:
+   #PATH="/usr/local/bin:/usr/bin:/bin:/usr/games"
+
+   IFS=':' read -ra path_array <<< "${PATH}"
+
+   new_path="${PATH}"
+   for path_part in "${path_array[@]}"; do
+      if [ "${path_part:-}" = "/usr/local/sbin" ]; then
+         local_sbin_found=yes
+      fi
+      if [ "${path_part:-}" = "/usr/sbin" ]; then
+         standard_sbin_found=yes
+      fi
+   done
+
+   if [ ! "${local_sbin_found:-}" = "yes" ]; then
+      new_path="/usr/local/sbin:${new_path}"
+   fi
+
+   if [ ! "${standard_sbin_found:-}" = "yes" ]; then
+      new_path="${new_path}:/usr/sbin"
+   fi
+
+   export PATH="${new_path}"
+   true "INFO: new_path: ${PATH}"
+}
+
+path_variable_adjustments
+## Example PATH:
+## /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+## Determine the invoking (non-root) user. Order of precedence matters:
+## 1. Honor a caller-provided 'user_name'.
+## 2. '$SUDO_USER' - correct when the script is run via 'sudo'.
+## 3. 'logname' - reads the controlling tty's owner; correct on an
+##    interactive terminal but fails without a tty (e.g. some CI jobs).
+## 4. 'whoami' / '$USER' - only trusted if we're not currently root,
+##    because otherwise they would yield 'root' and 'HOMEVAR=/home/root'
+##    would silently point at a nonexistent home directory.
+default_if_empty user_name "${SUDO_USER:-}"
+default_if_empty user_name "$(logname 2>/dev/null)" || true
+if [ -z "${user_name:-}" ] && [ "${EUID}" != "0" ]; then
+   user_name="$(whoami)" || true
+   default_if_empty user_name "${USER:-}"
+fi
+if [ "${user_name:-}" = "" ]; then
+   error "Variable user_name is empty."
+fi
+export user_name
+
+default_if_empty SUDO_TO_ROOT "sudo --non-interactive"
+default_if_empty HOMEVAR_VBOX_TEMP "/home/dm-vbox-temp"
+export HOMEVAR_VBOX_TEMP
+
+## Use 'sudo' with '-D $HOMEVAR_VBOX_TEMP' ('--chdir') to avoid 'VBoxManage' error.
+#> VBoxManage: error: Could not create the directory '.' (VERR_ACCESS_DENIED)
+default_if_empty SUDO_TO_VBOX_TEMP "sudo --non-interactive -D ${HOMEVAR_VBOX_TEMP} -u dm-vbox-temp"
+
+default_if_empty HOMEVAR "/home/${user_name}"
+export HOMEVAR
+export dist_build_slot="${dist_build_slot:-}"
+if [ -n "${binary_build_folder_dist:-}" ]; then
+   true "INFO: using explicitly set binary_build_folder_dist='${binary_build_folder_dist}'"
+elif [ -n "${dist_build_slot:-}" ]; then
+   binary_build_folder_dist="${HOMEVAR}/derivative-binary/${dist_build_slot}"
+else
+   binary_build_folder_dist="${HOMEVAR}/derivative-binary"
+fi
+export binary_build_folder_dist
+
+## '$binary_build_folder_dist' and '$source_code_folder_dist' are bind-mounted
+## into the cowbuilder chroot for the VirtualBox VM steps -- see
+## 'build-steps.d/4600_create-vbox-vm' and 'dm-prepare-release' (in
+## developer-meta-files), which pass them via 'cowbuilder --bindmounts'.
+## pbuilder word-splits BINDMOUNTS on whitespace internally
+## ('for i in $BINDMOUNTS'), so a path containing whitespace silently breaks the
+## bind-mount. Fail early here, with a clear message, instead of late with a
+## cryptic pbuilder error.
+## HOMEVAR too: binary_build_folder_dist defaults to "${HOMEVAR}/derivative-binary"
+## and the ~/buildconfig.d config tier derives from it, so a space in HOMEVAR
+## breaks the same bind-mount / config-dir sourcing -- catch it at the source with
+## a clear message rather than only via the derived path.
+for space_check_var in HOMEVAR binary_build_folder_dist source_code_folder_dist ; do
+   case "${!space_check_var}" in
+      *[[:space:]]*)
+         error "${space_check_var} must not contain whitespace (it is bind-mounted into the cowbuilder chroot and pbuilder word-splits BINDMOUNTS): '${!space_check_var}'"
+         ;;
+   esac
+done
+unset space_check_var
+
+default_if_empty dist_parent_folder "$(dirname -- "${source_code_folder_dist}")"
+default_if_empty dist_developer_meta_files_folder "${source_code_folder_dist}/packages/kicksecure/developer-meta-files"
+
+default_if_empty dist_source_parentdir "$(dirname -- "${source_code_folder_dist}")"
+export dist_source_parentdir
+
+default_if_empty dist_source_help_steps_folder "${source_code_folder_dist}/help-steps"
+export dist_source_help_steps_folder
+
+default_if_empty str_replace_tool "${HELPER_SCRIPTS_PATH}/usr/bin/str_replace"
+default_if_empty str_replace_many_tool "${HELPER_SCRIPTS_PATH}/usr/bin/str-replace-many"

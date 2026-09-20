@@ -1,0 +1,42 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sourced fragment of help-steps/variables, loaded LAST from variables.d/.
+## The build's filesystem side effects live here -- creating the build folders
+## and writing the generated config files -- instead of being scattered through
+## the resolver modules at source time. All inputs (paths + the staged config
+## contents) are resolved by the earlier modules; this file only materializes
+## them, so sourcing the resolvers stays side-effect-free.
+##
+## Idempotent + atomic: 'mkdir --parents' is a no-op when a dir exists; each file
+## is written to a temp file in the destination dir and renamed into place, so a
+## concurrent reader never sees a half-written config (rename(2) is atomic and
+## replaces any stale file -- including a root-owned one -- in a writable dir, so
+## no source-time 'sudo rm' of the previous file is needed).
+## style-ok: no-strict
+
+## The variable snapshot (dist_build_dump_varnames / dist_build_dump_funcnames)
+## dumps and exits from the last resolver BEFORE this file loads, so a capture
+## never writes files. Guard explicitly too, so a direct source of this file (or a
+## future module-order change) still cannot turn a dump into a filesystem write.
+if [ -n "${dist_build_dump_varnames:-}${dist_build_dump_funcnames:-}" ]; then
+   return 0
+fi
+
+## Write ${2} to ${1} atomically: a temp file in the same directory, then rename.
+effects_atomic_write() {
+   local effects_dest effects_tmp
+   effects_dest="$1"
+   effects_tmp="$(mktemp -- "${effects_dest}.tmp.XXXXXX")"
+   printf '%s' "$2" > "${effects_tmp}"
+   mv -- "${effects_tmp}" "${effects_dest}"
+}
+
+mkdir --parents -- "${binary_build_folder_dist}"
+mkdir --parents -- "${dist_binary_build_folder}"
+mkdir --parents -- "${make_cowbuilder_dist_folder}"
+
+effects_atomic_write "${dist_build_pbuilder_config_file}" "${dist_build_pbuilder_config_content}"
+effects_atomic_write "${dist_aptgetopt_file}" "${dist_aptgetopt_file_content}"

@@ -1,0 +1,96 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## Copyright (C) 2016 - 2020 The Debian Live team
+## Copyright (C) 2006 - 2015 Daniel Baumann <mail@daniel-baumann.ch>
+## Derived from and inspired by Debian live-build's hybrid-ISO packaging.
+## License: GPL-3+; see the file COPYING for copying conditions.
+
+## Convert the raw disk image from 3200_create-raw-image into a bootable hybrid
+## ISO (BIOS + UEFI + Secure Boot + loopback, dracut-live) via
+## help-steps/dm-raw-to-iso.
+##
+## That helper does everything under ONE root mount + chroot of the image: it
+## harvests the rootfs (keyboard-layout submenu, package manifest, kernel-
+## hardening command line), builds the live squashfs + dracut-live initramfs,
+## assembles dm's GRUB menu/theme from iso-build-data/grub-config (the three live
+## boot roles, the Utilities and keyboard-layout submenus, memtest), and packs the
+## hybrid ISO. This build step only selects options from the build variables and
+## runs it as root.
+
+set -x
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+export LC_ALL=C
+
+true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
+
+MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
+
+cd -- "${MYDIR}"
+cd ..
+cd help-steps
+
+source pre
+source variables
+
+convert_raw_to_iso() {
+   ## Dry-run (reproducibility / ci-tiny lane stops here): write a non-empty
+   ## placeholder ISO so later prepare-release steps do not fail on an empty file.
+   if [ "${build_dry_run:-}" = "true" ]; then
+      true "${bold}${cyan}INFO: Dry-run, writing placeholder ISO and skipping ${BASH_SOURCE[0]}.${reset}"
+      printf '%s\n' "dummy" | sponge -- "${binary_image_iso_file}"
+      return 0
+   fi
+
+   local dm_raw_to_iso_args
+   dm_raw_to_iso_args=(
+      --raw "${binary_image_raw_file}"
+      --output "${binary_image_iso_file}"
+      --arch "${dist_build_target_arch}"
+      --label "${dist_build_type_short}"
+      --source-date-epoch "${SOURCE_DATE_EPOCH}"
+      --grub-config-dir "${source_code_folder_dist}/iso-build-data/grub-config"
+      --hostname "${dist_build_hostname}"
+      --dist-pretty "${dist_build_type_short_pretty}"
+      --dist-version "${dist_build_version}"
+   )
+   ## '--serial-console-enable true': route GRUB + kernel to the serial line and
+   ## boot the default entry immediately (headless boot testing).
+   if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
+      dm_raw_to_iso_args+=( --serial-console )
+   fi
+   ## '--smbios-reader true' (default false, so a released ISO carries no reader):
+   ## inline the SMBIOS cmdline reader into the GRUB menu.
+   if [ "${dist_build_smbios_reader:-}" = "true" ]; then
+      dm_raw_to_iso_args+=( --smbios-reader )
+   fi
+
+   ## dm-raw-to-iso needs sustained root (loop devices, kpartx, chroot, mksquashfs,
+   ## xorriso); run the whole helper as root, then hand the ISO back to the build
+   ## user so the remaining build steps can operate on it.
+   # shellcheck disable=SC2086
+   ${SUDO_TO_ROOT} "${dist_source_help_steps_folder}/dm-raw-to-iso" "${dm_raw_to_iso_args[@]}"
+
+   ${SUDO_TO_ROOT} chown -- "${user_name}:${user_name}" "${binary_image_iso_file}"
+}
+
+main() {
+   if [ "${dist_build_install_to_root:-}" = "true" ]; then
+      true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_install_to_root is set to true.${reset}"
+      return 0
+   fi
+
+   if [ "${dist_build_iso:-}" != "true" ]; then
+      true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_iso is not set to true.${reset}"
+      return 0
+   fi
+
+   convert_raw_to_iso
+}
+
+main "$@"

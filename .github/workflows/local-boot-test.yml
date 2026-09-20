@@ -151,7 +151,7 @@ jobs:
       ## package builds, and the post-job save seeds the cache for next time.
       ## Unique primary key (run_id) -> always a miss -> always saves a fresh
       ## entry; the restore-keys prefix warms from the most recent prior run.
-      ## Boot-test lane only -- NOT the repro lane (local-build.yml): that lane's
+      ## Boot-test lane only -- NOT the repro lane (local-reproducible-build-test.yml): that lane's
       ## signal is bit-for-bit equality of two independent builds, and a package
       ## cache would either make copy-a/copy-b start from different warm caches
       ## (spurious diff) or let neither rebuild the packages (false green, masking
@@ -201,7 +201,7 @@ jobs:
       - name: Build ${{ matrix.flavor }} via dm-build-official (${{ env.BOOT_ARCH }})
         id: dm-build
         ## Build through the official orchestration -- the SAME single build path as
-        ## local-build.yml, no duplication. dm-build-official does NOT sign, and the
+        ## local-reproducible-build-test.yml, no duplication. dm-build-official does NOT sign, and the
         ## build's sq-git check rejects an unsigned HEAD, so mint an ephemeral CI key
         ## and sign+tag HEAD FIRST. All three run in ONE
         ## docker-run so the home-directory state signing-key-create creates persists
@@ -382,6 +382,12 @@ jobs:
           path: dist-ai
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Init helper-scripts submodule (dm-boot-test sources it)
+        ## This job checks out with submodules:false, but dm-boot-test sources
+        ## helper-scripts' package_installed_check.sh. Init just that one submodule
+        ## (the next step switches it to the matching fork branch if present).
+        run: git submodule update --init -- packages/kicksecure/helper-scripts
 
       - name: Check out matching fork branch in cross-org submodules (if present)
         if: github.repository_owner != 'Whonix' && github.repository_owner != 'Kicksecure'

@@ -10,6 +10,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -128,8 +129,22 @@ update_repo() {
     fi
   fi
 
-  ## Fetch new code from remote.
-  git fetch --recurse-submodules --jobs=100 || error 'Failed to fetch from remote!'
+  ## Fetch from the remote only when moving the PARENT to a target (--tag/--ref).
+  ## --update-only does NOT move the parent -- the tag checkout below is skipped;
+  ## it only updates SUBMODULES to the parent's recorded pins. Its single
+  ## remote-capable step is the 'git submodule update' below, which FETCHES on
+  ## its own any recorded pin it does not already have (verified: it fetches and
+  ## merges an absent pin with no prior 'git fetch'). So this bulk fetch is
+  ## redundant in --update-only: the parent-side fetch is unused, and submodules
+  ## are fetched on demand by the update. Skipping it lets a consistent checkout
+  ## (CI, a developer tree -- pins already present) update submodules with NO
+  ## network at all, the offline / air-gapped / ssh-remote win; an absent pin is
+  ## still fetched by the submodule update, exactly as reachable as this was.
+  if [ "${update_only:-}" = "true" ]; then
+    true "INFO: --update-only: skipping the bulk remote fetch; 'git submodule update' below fetches any absent pin on demand."
+  else
+    git fetch --recurse-submodules --jobs=100 || error 'Failed to fetch from remote!'
+  fi
 
   ## If we were asked to check out the 'latest' tag, find the latest tag.
   if [ "${target_tag}" = 'latest' ]; then

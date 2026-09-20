@@ -27,7 +27,7 @@
 ## run-as-user; the real lane gets the same value from the container environment.
 ##
 ## 'dist_build_target_arch=amd64' comes with it: under CI, dm-build-official-one
-## selects arm64 by default, and the runners are amd64. local-build.yml pins the
+## selects arm64 by default, and the runners are amd64. local-reproducible-build-test.yml pins the
 ## same value for the same reason.
 ##
 ## The flavor and targets are passed as 'flavors_list' / 'dist_build_multi_target_list',
@@ -68,6 +68,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 target_user=builder
 

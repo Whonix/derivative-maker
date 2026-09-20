@@ -15,9 +15,11 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 export LC_ALL=C
 
-true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
+## Overridable so a mount-namespace test can neutralize privilege escalation
+## (e.g. SUDO_TO_ROOT=env).
+[ -n "${SUDO_TO_ROOT:-}" ] || SUDO_TO_ROOT="sudo --non-interactive"
 
-MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
+true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
 unmount_tree_die() {
    printf '%s\n' "$0: ERROR: $1" >&2
@@ -110,7 +112,7 @@ main() {
       ## might not be visible until the more recent mounts have been unmounted.
       ## A mount might also just take more than one try before it unmounts.
       for mount_point in "${mounts_under_tree[@]}"; do
-         "${MYDIR}/unmount-helper" -- "${mount_point}" \
+         ${SUDO_TO_ROOT} umount --verbose -- "${mount_point}" \
             || printf '%s\n' "$0: WARNING: unmount of '${mount_point}' failed, attempt ${attempt_number}." >&2
       done
 

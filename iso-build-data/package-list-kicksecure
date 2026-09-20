@@ -1,0 +1,60 @@
+## ISO installer extras (Kicksecure): ONLY packages the ISO/installer/live path
+## needs that are NOT already installed by the flavor metapackage graph
+## (dist-general-cli / dist-nonqubes-cli, pulled by every kicksecure host flavor)
+## or by build-steps.d/3500_install-packages (its availability-checked
+## efi_weak_recommended list + its explicit pkg-install / pkg-add calls).
+## Duplicating those here only risks drift -- and a hard-listed EFI package would
+## break a build on an arch that lacks it, which 3500's checked list avoids.
+
+## Shells
+## NOTE: zsh **must** be installed before dist-base-files is installed,
+## or dist-base-files will be unable to set the shell appropriately for the
+## `user` account. kicksecure-packages-dependencies-pre depends on
+## dist-base-files.
+zsh
+
+## Installer
+calamares
+calamares-settings-debian
+live-config-dist
+
+## Dracut
+## dracut itself is installed early (BUILD_INITRAMFS_PKGS) and via dist-nonqubes-cli.
+## dracut-config-rescue not doing anything.
+## https://www.kicksecure.com/wiki/Dev/todo#investigate_dracut-config-rescue
+#dracut-config-rescue
+cryptsetup-initramfs
+
+## Misc utilities
+pigz
+squashfs-tools
+gpgsm
+wget
+zstd
+eatmydata
+
+## VM integration
+## NOTE: VirtualBox Guest Additions are not installed via
+## 'virtualbox-guest-utils' / 'virtualbox-guest-x11' anymore.
+spice-vdagent
+
+## Kernel
+linux-image-XXX_ARCHITECTURE_XXX
+linux-headers-XXX_ARCHITECTURE_XXX
+
+## Bootloaders
+grub-efi
+XXX_GRUB_PC_XXX
+XXX_SHIM_SIGNED_XXX
+XXX_GRUB_EFI_SIGNED_XXX
+
+## Kicksecure components, kicksecure-xfce-host MUST be installed last
+firmware-freedom
+XXX_FIRMWARE_NONFREEDOM_XXX
+grub-live
+XXX_KICKSECURE_NETWORK_CONF_XXX
+XXX_KICKSECURE_NETWORK_CONF_GUI_XXX
+XXX_KICKSECURE_HOST_XXX
+
+sysmaint-panel
+user-sysmaint-split

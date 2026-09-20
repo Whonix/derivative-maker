@@ -15,6 +15,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -26,6 +27,7 @@ cd help-steps
 
 source pre
 source variables
+source "${MYDIR}/../help-steps/build-step-helpers.bsh"
 
 ## Debugging function.
 apt_get_parse_unmet_dependency() {
@@ -224,6 +226,17 @@ install-packages() {
 
    ${SUDO_TO_ROOT} install --mode=0755 -- "${source_code_folder_dist}/packages/kicksecure/helper-scripts/usr/bin/apt-get-noninteractive" "${CHROOT_FOLDER}/usr/bin/apt-get-noninteractive"
 
+   ## apt-get-noninteractive is staged as a bootstrap wrapper BEFORE the
+   ## helper-scripts package is installed, but it 'source's helper-scripts
+   ## libraries at runtime (strings.bsh -> wc-test.sh -> check_runtime.bsh).
+   ## Stage that transitive source-closure alongside it, or the wrapper aborts
+   ## with "strings.bsh: No such file or directory" at the first apt-get run.
+   ## dm-apt-get-wrapper-closure-test (dist-ai) guards this list against drift.
+   ${SUDO_TO_ROOT} mkdir --parents -- "${CHROOT_FOLDER}/usr/libexec/helper-scripts"
+   for dist_apt_wrapper_lib in strings.bsh wc-test.sh check_runtime.bsh; do
+      ${SUDO_TO_ROOT} install --mode=0755 -- "${source_code_folder_dist}/packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/${dist_apt_wrapper_lib}" "${CHROOT_FOLDER}/usr/libexec/helper-scripts/${dist_apt_wrapper_lib}"
+   done
+
    "${dist_source_help_steps_folder}/prevent-daemons-from-starting" "$@"
 
    sync
@@ -275,23 +288,9 @@ install-packages() {
       ${SUDO_TO_ROOT} -- cp --verbose -- "${source_dracut_disable_config_snippet}" "${target_dracut_disable_config_snippet}"
    fi
 
-   if [ "${dist_build_iso:-}" = "true" ]; then
-      ## Mark this as a live-build BEFORE any package is installed, so
-      ## package postinsts take the live path rather than the VM/disk path.
-      ##
-      ## FIXME: The ISO live build path and the VM/disk path should be
-      ## identical. The only reason they historically weren't is because
-      ## live-build didn't allow the build scripts to inherit the caller's
-      ## environment, and that issue no longer exists here. Therefore, these
-      ## files should not be created, and code paths in package postinsts that
-      ## reference flag files should be removed or converted to environment
-      ## variable checks. (If any conversion is needed, the appropriate
-      ## environment variables should be exported here.)
-      ${SUDO_TO_ROOT} -- mkdir --parents -- "${CHROOT_FOLDER}/var/lib/dist-base-files"
-      ${SUDO_TO_ROOT} -- touch -- "${CHROOT_FOLDER}/var/lib/dist-base-files/live_build"
-      ${SUDO_TO_ROOT} -- mkdir --parents -- "${CHROOT_FOLDER}/var/lib/security-misc"
-      ${SUDO_TO_ROOT} -- touch -- "${CHROOT_FOLDER}/var/lib/security-misc/skip_install_check"
-   fi
+   ## The live-image vs VM/disk path is selected in package maintainer scripts
+   ## by the 'dist_build_iso' environment variable, which chroot_run preserves
+   ## into the chroot (env_vars_keep_list). No on-disk marker file is written.
 
    ## Install legacy-dist earlier so debconf questions are answered before
    ## meta package installation.
@@ -543,7 +542,7 @@ ${dist_build_script_skip_package_install}${reset}"
    ## Generate GRUB keyboard layouts.
    ## 'set-grub-keymap' is provided by package 'helper-scripts'.
    ## Use '--no-live-changes' because GRUB is handled by 'build-steps.d/*_install-packages'.
-   ## NOTE: 'build-steps.d/*_create-lb-iso' also uses 'set-grub-keymap'. Should use the same/similar options.
+   ## NOTE: 'build-steps.d/4310_convert-raw-to-iso' also uses 'set-grub-keymap'. Should use the same/similar options.
    chroot_run set-grub-keymap --build-all --no-live-changes
 
    if printf "%s\n" "${BUILD_INITRAMFS_PKGS}" | grep dracut >/dev/null 2>&1 ; then
@@ -560,13 +559,7 @@ ${dist_build_script_skip_package_install}${reset}"
       ## For documentation on how to install dracut in a chroot, see:
       ## https://github.com/dracutdevs/dracut/issues/1596
 
-      KERNELIMG="$(chroot_run ls -1 -- "/boot/")"
-      KERNELIMG="$(printf "%s\n" "${KERNELIMG}" | grep "vmlinuz")"
-      KERNELIMG="$(printf "%s\n" "${KERNELIMG}" | sed -n '1p')"
-      ## example KERNELIMG:
-      ## vmlinuz-6.1.0-9-amd64
-
-      KERNELVER="${KERNELIMG#vmlinuz-}"
+      KERNELVER="$(newest-kernel-version "$(chroot_run ls -1 -- "/boot/")")"
       ## example KERNELVER:
       ## 6.1.0-9-amd64
 
@@ -629,24 +622,18 @@ ${dist_build_script_skip_package_install}${reset}"
    chroot_run cat -- /boot/grub/grub.cfg | grep --color "root=" || true
 
    ## Sanity test.
-   if chroot_run cat -- /boot/grub/grub.cfg | grep --quiet "root=/dev/mapper" ; then
+   if chroot_run grep --quiet "root=/dev/mapper" /boot/grub/grub.cfg ; then
       ## Attempt to fix /dev/mapper issue.
-      if [ "${grub_probe_main_device_output}" = "${grub_probe_boot_device_output}" ]; then
-        grub_probe_target_device="${grub_probe_main_device_output}"
-      else
-        grub_probe_target_device="${grub_probe_boot_device_output}"
-      fi
+      grub_probe_target_device="$(select-grub-probe-device "${grub_probe_main_device_output}" "${grub_probe_boot_device_output}")"
       if ! [[ "${grub_probe_target_device}" =~ /dev/mapper ]]; then
         error '/boot/grub/grub.cfg contains root=/dev/mapper and cannot find proper boot device - image most likely unbootable!'
       fi
       grub_probe_target_device="$(cut -d'/' -f4 <<< "${grub_probe_target_device}")"
-      grub_probe_target_device="$(lsblk -rno NAME,UUID | grep --fixed-strings -- "${grub_probe_target_device}")"
-      grub_probe_target_device="$(cut -d' ' -f2 <<< "${grub_probe_target_device}")"
-      grub_probe_target_device="$(head -n1 <<< "${grub_probe_target_device}")"
+      grub_probe_target_device="$(resolve-partition-uuid "${grub_probe_target_device}")"
       if [ -z "${grub_probe_target_device}" ]; then
         error '/boot/grub/grub.cfg contains root=/dev/mapper and cannot find boot device UUID - image most likely unbootable!'
       fi
-      ${SUDO_TO_ROOT} sed -i "s;root=[^ ]\\+;root=UUID=${grub_probe_target_device};" ${CHROOT_FOLDER}/boot/grub/grub.cfg
+      ${SUDO_TO_ROOT} sed -i "s;root=[^ ]\\+;root=UUID=${grub_probe_target_device};" "${CHROOT_FOLDER}/boot/grub/grub.cfg"
    fi
 
    "${dist_source_help_steps_folder}/remove-local-temp-apt-repo" "$@"

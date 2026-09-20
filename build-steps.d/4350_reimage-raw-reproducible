@@ -22,6 +22,7 @@ cd help-steps
 
 source pre
 source variables
+source "${MYDIR}/../help-steps/build-step-helpers.bsh"
 
 ## Rebuild the ext4 root filesystem deterministically.
 
@@ -43,63 +44,61 @@ reimage_raw() {
       return 1
    fi
 
-   local dev_mapper_device fs_uuid fs_hashseed fs_blocksize fs_inodes fs_isize fs_features
-   local reimage_parent sde_hex sde_cmd dd_err debugfs_err dumpe2fs_out
+   local dev_mapper_device fs_uuid fs_type mke2fs_config
+   local reimage_parent
    local loop_mapping_base esp_device esp_candidate
    export kpartx_only=true
    source "${dist_source_help_steps_folder}"/mount-raw
 
-   ## Arm the cleanup trap BEFORE mount_raw: mount_raw runs kpartx -a early and can fail afterwards,
-   ## so the mapping must be torn down even then.
+   ## Register cleanup BEFORE mount_raw: mount_raw runs kpartx -a early and can
+   ## fail afterwards, so the mapping must be torn down even then.
    ##
-   ## FIXME: This breaks the exithandler mechanism in help-steps/pre. Add a
-   ## mechanism to exithandler that can call cleanup functions that are
-   ## registered with it, then register reimage_cleanup with that mechanism.
-   ## Alternatively, if there is already a global cleanup mechanism, simply
-   ## extend that to be able to handle the cleanup reimage_cleanup does.
+   ## 'exception_handler_unmount' gives the standard unmount-raw teardown on the
+   ## ERR / INT / TERM paths WITHOUT overwriting the EXIT trap help-steps/pre
+   ## owns. The two step-specific removals reimage_cleanup does (the temp
+   ## read-only mount dir and the multi-GB copied tree) are runtime paths the
+   ## fixed cleanup step list cannot express, so register reimage_cleanup as a
+   ## callback; it is idempotent, so it is also safe to run on the normal EXIT
+   ## path.
    reimage_mnt=""
    reimage_tree=""
-   trap 'reimage_cleanup' EXIT
+   exception_handler_setup "exception_handler_unmount" ERR INT TERM
+   exception_handler_register_cleanup reimage_cleanup
 
    mount_raw
 
-   ## Preserve the pinned identifiers AND geometry of the current filesystem so the rebuilt filesystem
-   ## matches the one grml-debootstrap created.
-   dumpe2fs_out="$(${SUDO_TO_ROOT} dumpe2fs -h "${dev_mapper_device}" 2>/dev/null)"
-   fs_uuid="$(${SUDO_TO_ROOT} blkid --output value --match-tag UUID "${dev_mapper_device}")"
-   fs_hashseed="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Directory Hash Seed:[[:space:]]*//p')"
-   fs_blocksize="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Block size:[[:space:]]*//p')"
-   fs_inodes="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Inode count:[[:space:]]*//p')"
-   fs_isize="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Inode size:[[:space:]]*//p')"
-   ## FIXME: The features enabled in ext4 by default depend on the contents of
-   ## the host's /etc/mke2fs.conf and may also vary depending on host OS. We
-   ## should hardcode the features we want our images build with somewhere in
-   ## derivative-maker's configuration, and update that list as part of every
-   ## update to the next major Debian release. Then we should use that list
-   ## here instead of depending on what is recorded in the original filesystem.
-   fs_features="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Filesystem features:[[:space:]]*//p' | tr ' ' ',')"
+   ## Preserve ONLY the filesystem UUID: fstab and the grub 'root=UUID=' line in
+   ## the rootfs reference it, so the rebuilt filesystem must keep it. Every other
+   ## parameter (features, block size, inode count/size) is deliberately NOT read
+   ## back from the grml-built original -- it comes from the pinned mke2fs.conf
+   ## below, so the reimage is host-independent BY CONSTRUCTION: a different build
+   ## host's /etc/mke2fs.conf cannot change the result. (The original's own
+   ## parameters were themselves host-dependent, which is what this closes.)
+   ## '|| true': blkid exits non-zero when the tag is absent, and this standalone
+   ## assignment would otherwise trip errexit before the empty-check reports it.
+   fs_uuid="$(${SUDO_TO_ROOT} blkid --output value --match-tag UUID "${dev_mapper_device}")" || true
    if [ -z "${fs_uuid}" ]; then
       printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Filesystem UUID' of ${dev_mapper_device}." >&2
       return 1
    fi
-   if [ -z "${fs_hashseed}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Directory Hash Seed' of ${dev_mapper_device}." >&2
+
+   ## Fail closed on a non-ext root. This step unconditionally rebuilds the
+   ## partition as ext4 (mke2fs -t ext4 below), so if the build requested another
+   ## filesystem (parse-cmd '--file-system' -> grml-debootstrap '--filesystem',
+   ## e.g. xfs/btrfs) reformatting here would SILENTLY change the type and destroy
+   ## the requested filesystem. The former dumpe2fs feature probe aborted on a
+   ## non-ext filesystem as a side effect; assert it explicitly.
+   ## '|| true': blkid exits non-zero when it cannot read a TYPE, and that empty
+   ## value must reach require-ext-type (which fails closed on it), not abort via
+   ## errexit here.
+   fs_type="$(${SUDO_TO_ROOT} blkid --output value --match-tag TYPE "${dev_mapper_device}")" || true
+   if ! require-ext-type "${fs_type}" "${dev_mapper_device}"; then
       return 1
    fi
-   if [ -z "${fs_blocksize}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Block size' of ${dev_mapper_device}." >&2
-      return 1
-   fi
-   if [ -z "${fs_inodes}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Inode count' of ${dev_mapper_device}." >&2
-      return 1
-   fi
-   if [ -z "${fs_isize}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Inode size' of ${dev_mapper_device}." >&2
-      return 1
-   fi
-   if [ -z "${fs_features}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Filesystem features' of ${dev_mapper_device}." >&2
+
+   mke2fs_config="${source_code_folder_dist}/build-data/mke2fs.conf"
+   if [ ! -f "${mke2fs_config}" ]; then
+      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: pinned mke2fs.conf not found at ${mke2fs_config}." >&2
       return 1
    fi
 
@@ -179,21 +178,20 @@ reimage_raw() {
    ## there?
    ${SUDO_TO_ROOT} blkdiscard -f -- "${dev_mapper_device}"
 
-   ## Rebuild the root filesystem deterministically.
+   ## Rebuild the root filesystem deterministically AND host-independently.
    ##
-   ## TODO: Should we force the block size to always be 4096 here? That is the
-   ## largest supported block size on x86 systems, and it's the default block
-   ## size on Debian 13. Even if larger sizes work on some architectures with
-   ## some kernels, that would result in a filesystem that can't be opened on
-   ## most systems.
+   ## MKE2FS_CONFIG points mke2fs at the pinned mke2fs.conf shipped in this repo
+   ## (a verbatim copy of Debian's stock config), so the feature set, block size,
+   ## inode size and inode ratio come from THAT file, never from the build host's
+   ## /etc/mke2fs.conf. The rootfs partition size is fixed, so mke2fs derives the
+   ## same geometry on every run and every host (the same size-based selection
+   ## grml-debootstrap's own mke2fs already made).
    ##
-   ## TODO: "${fs_features}" probably needs prefixed by `none,`, otherwise the
-   ## provided feature list will be overlayed on top of the defaults, allowing
-   ## non-determinism to be introduced.
-   # shellcheck disable=SC2086
-   ${SUDO_TO_ROOT} mke2fs -F -q -t ext4 \
-      -b "${fs_blocksize}" -N "${fs_inodes}" -I "${fs_isize}" -O "${fs_features}" \
-      -U "${fs_uuid}" -E hash_seed="${fs_hashseed}" \
+   ## -U pins the UUID (must match the rootfs). -E hash_seed pins the directory
+   ## hash seed to the (deterministic) UUID instead of letting mke2fs choose one,
+   ## so the htree layout is reproducible without reading the original back.
+   ${SUDO_TO_ROOT} env MKE2FS_CONFIG="${mke2fs_config}" mke2fs -F -q -t ext4 \
+      -U "${fs_uuid}" -E hash_seed="${fs_uuid}" \
       -d "${reimage_tree}" "${dev_mapper_device}"
 
    ${SUDO_TO_ROOT} safe-rm --one-file-system --recursive --force -- "${reimage_tree}"
@@ -226,9 +224,6 @@ reimage_raw() {
    fi
 
    "${dist_source_help_steps_folder}"/unmount-raw "$@"
-   ## FIXME: The below line needs removed once the exithandler breakage issue
-   ## mentioned above is fixed.
-   trap - EXIT
 }
 
 main() {

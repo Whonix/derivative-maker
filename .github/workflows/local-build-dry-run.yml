@@ -91,6 +91,23 @@ jobs:
           FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
 
+      ## The dry-run's apt AND cowbuilder debootstrap fetch every .deb through the
+      ## in-container approx (127.0.0.1:9977 -> snapshot.debian.org). snapshot is
+      ## rate-limited and intermittently 404s a pool file that exists; apt treats a
+      ## 404 as permanent and does NOT retry, so a single flaky package fails the
+      ## whole lane. The build lanes avoid this by carrying a warm approx cache
+      ## across runs (docker-run's mounted CACHER_VOLUME); this lane runs in a
+      ## systemd container with no such mount, so it seeds/snapshots the container's
+      ## approx cache over 'docker cp' instead (see the seed/snapshot steps below).
+      ## Restored here on the runner; a miss is an empty seed (first cold run still
+      ## hits snapshot, then converges). G-A-007: the key carries hashFiles(), no
+      ## restore-keys.
+      - name: Restore approx package cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.approx-cache-sidecar
+          key: ${{ runner.os }}-dryrun-approx-${{ hashFiles('.github/workflows/local-build-dry-run.yml', 'docker/derivative-maker-docker-setup', 'help-steps/dm-build-official', 'help-steps/dm-build-official-one', 'build_sources/frozen-snapshot-timestamp') }}
+
       ## The dry-run must run in the SAME container the real build uses, or it
       ## cannot see the class of defect where a tool the build invokes is absent
       ## from the build image -- which is exactly how a missing 'kmod' reached
@@ -135,6 +152,14 @@ jobs:
           image: ${{ steps.dmimg-ref.outputs.ref }}
           wait-seconds: '90'
 
+      - name: Seed the container's approx cache from the runner sidecar
+        ## Populate approx's cache with .debs a prior run already fetched, BEFORE
+        ## the dry-run's first apt/debootstrap request, so those are served locally
+        ## and never touch (flaky) snapshot.debian.org. A cache miss is a no-op.
+        ## The build never wipes seeded .debs: approx-reset is not on the build
+        ## path and 1200 deletes only EMPTY files.
+        run: ./ci/approx-cache-sidecar seed-container dryrun
+
       ## FIXME: Let's use a more intuitive name than "dry-run". dry-run implies
       ## that the code does nothing, whereas our "dry-run" does quite a lot of
       ## file generation, commit amending, etc. "quick-blank-build" would be
@@ -145,6 +170,15 @@ jobs:
         ## referenced via './ci/dry-run' and needs PWD to match.
         run: docker exec --env CI=true --workdir /workspace dryrun ./ci/dry-run
 
+      - name: Snapshot the container's approx cache to the runner sidecar
+        ## if: always() -- a lane that failed on a snapshot flake is EXACTLY the run
+        ## whose partial cache is worth keeping, so the next run fetches less and is
+        ## likelier to complete. Must run while the container is alive (before the
+        ## teardown step). The paired Restore step (combined actions/cache)
+        ## auto-saves the sidecar at post on a key miss.
+        if: always()
+        run: ./ci/approx-cache-sidecar snapshot-container dryrun
+
       ## The lane BUILDS a real '.qcow2.libvirt.xz' and its '.dm-buildinfo' and
       ## then threw both away. Publishing them is what makes the lane's output
       ## inspectable at all -- and specifically what lets
@@ -153,22 +187,7 @@ jobs:
       ## home inside it, not to the bind-mounted workspace.
       - name: Collect the dry-run artifacts
         if: always()
-        run: |
-          set -o errexit
-          set -o nounset
-          set -o pipefail
-          ## sudo for the mkdir: the privileged dryrun container ran ./ci/dry-run
-          ## as ROOT in this bind-mounted workspace, so it is root-owned by now
-          ## and an unprivileged mkdir fails. The workflow's own "Reclaim
-          ## workspace ownership" step fixes that, but it runs LATER -- after the
-          ## container is torn down, and 'docker cp' needs the container alive.
-          sudo mkdir --parents dryrun-artifacts
-          ## '|| true' on the copy alone, never on the assertion below: a lane
-          ## that produced nothing must fail at the upload, not here.
-          sudo docker cp "dryrun:/home/builder/derivative-binary/." dryrun-artifacts/ || true
-          ## Hand it back before upload-artifact reads it.
-          sudo chown -R "$(id -u):$(id -g)" dryrun-artifacts
-          find dryrun-artifacts -type f \( -name '*.qcow2.libvirt.xz' -o -name '*.dm-buildinfo' \) -print
+        run: ./ci/dryrun-collect-artifacts dryrun dryrun-artifacts
 
       - name: Upload the dry-run artifacts
         if: always()

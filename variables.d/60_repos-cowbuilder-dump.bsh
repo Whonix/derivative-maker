@@ -1,0 +1,391 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sourced fragment of help-steps/variables, loaded via buildconfig.d/*.bsh.
+## apt repository + reprepro variables, cowbuilder folders + pbuilder config, SKIP_SCRIPTS, SUDO_TO_ROOT finalize, variable/function dump hooks.
+## Strict mode, locale, and the base path variables are owned by the loader
+## 'help-steps/variables' and inherited here; do not recompute them from
+## BASH_SOURCE (this file lives in buildconfig.d/, not help-steps/).
+## style-ok: no-strict
+## style-ok: no-has
+## style-ok: no-safe-rm
+## style-ok: no-tmp-hardcode
+# shellcheck disable=SC2086,SC2004
+
+## {{{ apt repository variables
+
+default_if_empty dist_build_apt_codename "local"
+export dist_build_apt_codename
+## developer local setting in buildconfig.d folder / dist_build_source_config_dir function:
+## export dist_build_apt_codename="trixie-developers"
+
+## }}}
+
+## {{{ reprepro variables
+
+set_dist_build_reprepro_folder_options() {
+   ## derivative_repository_name gets set by packages/kicksecure/genmkfile/usr/share/genmkfile/make-helper-one.bsh
+   local derivative_name_item valid_repository_name
+   valid_repository_name=false
+
+   if [ "${derivative_repository_name:-}" = "" ]; then
+      error "derivative_repository_name is empty!"
+   fi
+   true "derivative_repository_name: ${derivative_repository_name}"
+
+   for derivative_name_item in ${derivative_name_list} ; do
+      if [ "${derivative_repository_name:-}" = "${derivative_name_item}" ]; then
+         valid_repository_name=true
+         break
+      fi
+   done
+
+   if [ ! "${valid_repository_name:-}" = "true" ]; then
+      error "derivative_repository_name '${derivative_repository_name}' is invalid! (not in derivative_name_list)"
+   fi
+
+   [[ -v make_reprepro_codename_item ]] || make_reprepro_codename_item="${dist_build_apt_codename}"
+   true "make_reprepro_codename_item: ${make_reprepro_codename_item}"
+
+   if [ ! "${make_reprepro_codename_item:-}" = "local" ]; then
+      apt_repo_sub_folder="aptrepo_remote/${derivative_repository_name}"
+   else
+      apt_repo_sub_folder="aptrepo_local/${derivative_repository_name}"
+   fi
+
+   dist_apt_repository_folder="${binary_build_folder_dist}/${apt_repo_sub_folder}"
+   export dist_apt_repository_folder
+
+   ## Use an array so path components containing whitespace are preserved
+   ## correctly. Callers must expand as "${dist_build_reprepro_folder_options[@]}".
+   ## Note: bash cannot export arrays. The previous 'export' of a whitespace
+   ## joined scalar was a no-op for all practical purposes; no caller was
+   ## consuming it anyway.
+   dist_build_reprepro_folder_options=(
+      --basedir "${source_code_folder_dist}/${apt_repo_sub_folder}"
+      --outdir  "${binary_build_folder_dist}/${apt_repo_sub_folder}"
+      --dbdir   "${binary_build_folder_dist}/${apt_repo_sub_folder}/db"
+      --logdir  "${binary_build_folder_dist}/${apt_repo_sub_folder}/log"
+   )
+}
+
+## }}}
+
+default_if_empty host_architecture "$(dpkg --print-architecture)"
+export host_architecture
+
+default_if_empty make_cross_build_platform_list "${dist_build_target_arch}"
+#[ -n "${make_cross_build_platform_list:-}" ] || make_cross_build_platform_list="amd64 arm64"
+export make_cross_build_platform_list
+
+## Parent folder holding the cowbuilder 'base.cow_<arch>' / 'cow.cow_<arch>'
+## chroots. '--build-slot' adjusts to a slot-specific location.
+## '--reuse-cowbuilder-base' adjusts to a persistent location which is itself
+## already a slot-specific location.
+if [ -n "${cowbuilder_cache_dir:-}" ]; then
+   true "INFO: using explicitly set cowbuilder_cache_dir='${cowbuilder_cache_dir}'"
+elif [ "${dist_build_reuse_cowbuilder_base:-}" = "true" ]; then
+   cowbuilder_cache_dir="${binary_build_folder_dist}/pbuilder"
+elif [ -n "${dist_build_slot:-}" ]; then
+   cowbuilder_cache_dir="/var/cache/pbuilder/${dist_build_slot}"
+else
+   cowbuilder_cache_dir="/var/cache/pbuilder"
+fi
+export cowbuilder_cache_dir
+
+## Translate a Debian architecture to the matching qemu-user / kernel machine
+## name.
+source "${dist_developer_meta_files_folder}/usr/libexec/developer-meta-files/arch-to-qemu-machine.bsh"
+
+set_cowbuilder_folders() {
+   cow_folder="${cowbuilder_cache_dir}/cow.cow_${dist_build_multiarch_package_item}"
+   base_folder="${cowbuilder_cache_dir}/base.cow_${dist_build_multiarch_package_item}"
+}
+
+default_if_empty dist_build_file_system "ext4"
+
+## cowbuilder (which internally uses pbuilder).
+dist_build_pbuilder_main_chroot_script="${dist_source_help_steps_folder}/pbuilder-chroot-script-main"
+dist_build_pbuilder_virtualbox_chroot_script="${dist_source_help_steps_folder}/pbuilder-chroot-script-virtualbox"
+
+dist_build_pbuilder_config_file="${binary_build_folder_dist}/pbuilder.conf"
+## export so it can be read by genmkfile
+export dist_build_pbuilder_config_file
+
+make_cowbuilder_dist_folder="${binary_build_folder_dist}/genmkfile-packages-result"
+export make_cowbuilder_dist_folder
+
+## The build dirs are created and this config file is written once, at the end of
+## resolution, by variables.d/99_effects.bsh -- not here at source time.
+
+## pbuilder's post-bootstrap 'apt-get update' uses its own APTGETOPT, not
+## DIST_APTGETOPT, so pass the build's apt options through. All options are
+## plain '-o key=value' tokens, so no per-element quoting.
+if [ "${#DIST_APTGETOPT[@]}" -gt 0 ]; then
+   pbuilder_aptgetopt_block="APTGETOPT=(${DIST_APTGETOPT[*]})
+export APTGETOPT"
+else
+   pbuilder_aptgetopt_block=""
+fi
+
+## printf -v (not "$(...)") so the exact bytes -- including the trailing newline
+## the old 'printf | tee' produced -- are preserved for the atomic write in
+## variables.d/99_effects.bsh.
+printf -v dist_build_pbuilder_config_content "%s\n" "\
+## This is an auto generated file.
+## Auto generated by: '${dist_source_help_steps_folder}/$(basename -- "${BASH_SOURCE[0]}")'
+## Edits will be lost!
+
+## build-step cowbuilder-setup copies this file into the cowbuilder chroot to:
+## '/home/\$user_name/pbuilder_config_file'
+## NOTE: The in-chroot path is hardcoded (not derived from \$HOMEVAR) because
+## 'pbuilder-chroot-script-main' creates the in-chroot user via 'adduser'
+## with '--home /home/\$user_name' regardless of the host's HOMEVAR setting.
+
+## dist_build_pbuilder_config_file is passed to cowbuilder. example:
+## '--configfile /home/user/derivative-binary/pbuilder.conf'
+## NOTE: Cowbuilder ignores arbitrary environment variables such as 'DIST_APTGETOPT_SERIALIZED'.
+##       Therefore, cowbuilder chroot scripts must run:
+##       'source /home/${user_name}/pbuilder_config_file'
+##       Maybe false. Just requires correct 'export'.
+
+## Debugging.
+#set -x
+
+## making pbuilder /usr/lib/pbuilder/pbuilder-createbuildenv work with mmdebstrap.
+## so it can be read by help-steps/mmdebstrap wrapper
+export BUILDPLACE
+
+APTCACHEHARDLINK=no
+export APTCACHEHARDLINK
+
+## E: Cross building is possible only with the APT dependency resolver
+## Not compatible with 'set -o nounset'.
+PBUILDERSATISFYDEPENDSCMD=/usr/lib/pbuilder/pbuilder-satisfydepends-apt
+export PBUILDERSATISFYDEPENDSCMD
+
+${pbuilder_aptgetopt_block}
+
+## Technically unnecessary but maybe useful if we change what we set locale
+## variables to.
+export LANG=\"${LANG}\"
+export LC_ALL=\"${LC_ALL}\"
+export LANGUAGE=\"${LANGUAGE}\"
+
+## End of: '${dist_build_pbuilder_config_file}'
+"
+
+## Under non-Qubes, resolv.conf is bind-mounted from the host and must not be
+## changed for tb-updater to be able to download Tor Browser successfully.
+##
+## Under Qubes, resolv.conf is provided as part of the template and is
+## overridden by Whonix's network config, so resolv.conf.whonix-orig needs to
+## be moved back to resolv.conf temporarily to be able to download Tor Browser
+## successfully.
+##
+## Therefore, set tb_disable_anon_ws_dns_conf to false so that
+## derivative-maker Whonix builds can download Tor Browser. Qubes builds will
+## have this variable set to true, and will therefore also be able to download
+## Tor Browser.
+tb_disable_anon_ws_dns_conf=false
+export tb_disable_anon_ws_dns_conf
+
+## {{{ SKIP_SCRIPTS
+
+## Would be nicer to have this in the 'pre' script, but the 'variables' script
+## runs after 'pre' to provide pretty color functions.
+##
+## NOTE: '$0' refers to the outer build-step script that sourced 'pre'
+## (which in turn sources this file), not to 'variables' itself. Matching
+## '$0' against SKIP_SCRIPTS is intentional: it lets the caller skip an
+## entire build step via e.g. 'SKIP_SCRIPTS+=" 70_log_build_version "'.
+##
+## NOTE: 'exit 0' (not 'return 0') is intentional and correct. This file is
+## sourced from the outer build-step script via 'pre', so 'exit 0' here
+## terminates that build step cleanly, which is exactly what skipping
+## means. 'return 0' would only stop sourcing 'variables' and let the rest
+## of the skipped script continue to run.
+own_filename="$(basename -- "$0")"
+for skip_script in ${SKIP_SCRIPTS}; do
+   ## '--fixed-strings' so SKIP_SCRIPTS entries are treated as literal
+   ## substrings, not regular expressions. Otherwise a '.' or other regex
+   ## metacharacter in SKIP_SCRIPTS could match unintended scripts.
+   if matched_word=$(printf "%s\n" "${own_filename}" | grep --fixed-strings -- "${skip_script}") ; then
+      printf "%s\n" "${bold}${green}${BASH_SOURCE[0]} INFO: Skipping ${own_filename}, because SKIP_SCRIPTS matches it. matched_word: '${matched_word}'${reset}"
+      exit 0
+   fi
+done
+unset skip_script matched_word
+
+## }}}
+
+true "INFO: LD_PRELOAD: ${LD_PRELOAD:-}"
+
+env_vars_keep_list="
+   DIST_APTGETOPT_SERIALIZED
+   tbb_version
+   tb_onion
+   tpo_downloader_debug
+   tb_disable_anon_ws_dns_conf
+   anon_shared_inst_tb
+   CURL_PROXY
+   CURL_RESUME
+   SKIP_SCRIPTS
+   SOURCE_DATE_EPOCH
+   dist_aptgetopt_file
+   dist_build_sources_list_primary
+   dist_mmdebstrap_build_sources_list_primary
+   dist_build_sources_list_primary_contents
+   dist_build_apt_sources_mirror
+   dist_build_apt_stable_release
+   dist_build_target_arch
+   dist_grml_mount_point
+   dist_source_help_steps_folder
+   dist_build_multiarch_package_item
+   dist_build_unsafe_io
+   dist_build_version
+   derivative_maker
+   user_name
+   LD_PRELOAD
+   LC_ALL
+   LANG
+   LANGUAGE
+   TZ
+   DEBDEBUG
+   XZ_OPT
+   apt_unattended_opts
+   DERIVATIVE_APT_REPOSITORY_OPTS
+   DEBOOTSTRAP
+   http_proxy
+   https_proxy
+   REPO_PROXY
+   ALL_PROXY
+   DEBIAN_FRONTEND DEBIAN_PRIORITY DEBCONF_NOWARNINGS APT_LISTCHANGES_FRONTEND
+   INITRD
+   HOMEVAR
+   HOMEVAR_VBOX_TEMP
+   SUDO_TO_ROOT
+   SUDO_TO_VBOX_TEMP
+   build_dry_run
+   dist_build_flavor
+   dist_build_type_long
+   dist_build_type_short
+   dist_build_desktop
+   dist_build_virtualbox
+   dist_build_qcow2
+   dist_build_raw
+   dist_build_iso
+   dist_build_serial_console_enable
+   dist_build_smbios_reader
+   dist_build_grub_bios_theme
+   dist_build_slot
+   dist_build_utm
+   dist_build_install_to_root
+   dist_build_source_run
+   dist_build_fast1
+   dist_build_redistributable
+   VMNAME
+   SHORT_VMNAME
+   VMRAM
+   VRAM
+   dist_unified_name
+   vm_names_to_be_exported
+   target_architecture_pretty_name
+   binary_build_folder_dist
+   dist_binary_build_folder
+   binary_image_raw_file
+   binary_image_raw_file_for_unified
+   binary_image_qcow2_file
+   binary_image_qcow2_file_for_unified
+   binary_image_ova_file
+   binary_image_vdi_dir
+   cowbuilder_cache_dir
+   source_code_folder_dist
+   dist_developer_meta_files_folder
+   HELPER_SCRIPTS_PATH
+"
+## TODO:
+## UWT_DEV_PASSTHROUGH
+
+true "INFO: Environment variables that will be passed..."
+
+## Re-entrance guard: this block appends to 'sudo_preserve_env_list' and
+## 'SUDO_TO_ROOT'. If 'variables' is sourced twice in the same shell (e.g.
+## from nested build-step scripts), without this guard '--preserve-env=...'
+## would be appended to SUDO_TO_ROOT once per sourcing, producing
+## duplicated flags and an ever-growing SUDO_TO_ROOT string.
+##
+## The guard flag MUST NOT be exported: it guards a same-shell re-source, and
+## 'SUDO_TO_ROOT' itself is not exported. An exported flag leaks into child
+## processes (build steps run as children, plus the recursive 'derivative-maker'
+## and genmkfile invocations), where 'SUDO_TO_ROOT' is absent; the child then
+## rebuilds the plain 'sudo --non-interactive' default and, seeing the inherited
+## flag, skips the '--preserve-env=...' append. That drops every preserved
+## variable (e.g. DIST_APTGETOPT_SERIALIZED) from sudo, breaking the
+## cowbuilder -> pbuilder -> help-steps/mmdebstrap environment contract.
+if [ ! "${variables_sudo_to_root_finalized:-}" = "true" ]; then
+   sudo_preserve_env_list=""
+   for env_vars_var_keep_item in ${env_vars_keep_list} ; do
+      if [ -z "${env_vars_var_keep_item:-}" ]; then
+        error "env_vars_var_keep_item ${env_vars_var_keep_item} is empty!"
+      fi
+      if [ "${sudo_preserve_env_list:-}" = "" ]; then
+         sudo_preserve_env_list="${env_vars_var_keep_item}"
+      else
+         sudo_preserve_env_list+=",${env_vars_var_keep_item}"
+      fi
+      if [ "${env_vars_var_keep_item}" = "DIST_APTGETOPT_SERIALIZED" ]; then
+         found=true
+      fi
+   done
+
+   if ! [ "${found:-}" = "true" ]; then
+      error "env_vars_var_keep_item variable DIST_APTGETOPT_SERIALIZED not found!"
+   fi
+   unset found
+   if [ -z "${env_vars_var_keep_item}" ]; then
+      error "env_vars_var_keep_item variable DIST_APTGETOPT_SERIALIZED is empty!"
+   fi
+
+   SUDO_TO_ROOT+=" "
+   SUDO_TO_ROOT+="--preserve-env=${sudo_preserve_env_list}"
+
+   ## Deliberately NOT exported; see the re-entrance-guard note above.
+   variables_sudo_to_root_finalized="true"
+fi
+
+## XXX: Not possible because some scripts use extra sudo arguments such as "--preserve-env".
+#SUDO_TO_ROOT+=" "
+#SUDO_TO_ROOT+="--"
+
+#printf "%s\n" "INFO: SUDO_TO_ROOT:"
+#printf "%s\n" "${cyan}$SUDO_TO_ROOT${reset}"
+
+## Optional variable snapshot. When 'dist_build_dump_varnames' is set (to any
+## non-empty value), print the full variable state (name=value) and stop here,
+## before any build step runs. Consumed by dist-ai's dm-help-steps-tests to
+## baseline the variables this script sets, per build command, ahead of a large
+## 'variables' refactoring. Default unset -> no effect on a real build.
+## 'declare -p' dumps variables only (not functions); the consumer filters out
+## the inherited/env/'pre' names against a baseline. 'exit 0' (not 'return')
+## matches the sourced-file convention above: it ends the outer, sourcing shell.
+if [ -n "${dist_build_dump_varnames:-}" ]; then
+   declare -p | LC_ALL=C sort
+   exit 0
+fi
+
+## Companion function snapshot. 'declare -f' dumps every function DEFINITION
+## (name-sorted, bodies intact), so the consumer can baseline the functions this
+## script introduces on top of 'pre' -- the piece 'declare -p' cannot see. Used
+## by the same dm-help-steps-tests net to prove a 'variables' refactoring (the
+## buildconfig.d split) moves functions without altering their bodies.
+if [ -n "${dist_build_dump_funcnames:-}" ]; then
+   declare -f
+   exit 0
+fi
+
+xtrace_restore
+
+true "${BASH_SOURCE[0]} INFO: End of script, ok."

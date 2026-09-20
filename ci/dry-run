@@ -11,11 +11,21 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 if [ "${CI:-}" != "true" ]; then
    printf '%s\n' "${BASH_SOURCE[0]}: refusing to run outside CI (CI != \"true\")" >&2
    exit 1
 fi
+
+## Every dry-run.d step (and the build they drive) inherits this. 100_install
+## apt-installs packages whose postinst prompts via debconf (pbuilder asks for a
+## mirror). With a controlling terminal present -- as when the container is run
+## with a pty (docker run --tty) -- debconf's Readline frontend BLOCKS forever
+## waiting for input that never comes, hanging the whole lane. CI's 'docker exec'
+## happens to have no pty so it dodged this, but relying on that is fragile;
+## pin the frontend non-interactive so the outcome does not depend on a tty.
+export DEBIAN_FRONTEND=noninteractive
 
 cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.."
 

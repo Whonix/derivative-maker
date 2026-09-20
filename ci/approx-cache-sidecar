@@ -18,9 +18,15 @@
 ## the sidecar before the build and snapshots newly-downloaded packages back
 ## after.
 ##
-## Usage (from .github/workflows/local-build.yml):
+## Usage (from .github/workflows/local-reproducible-build-test.yml):
 ##   ./ci/approx-cache-sidecar seed       # after actions/cache restore, before build
 ##   ./ci/approx-cache-sidecar snapshot   # after the build (if: always)
+##
+## The dry-run lane runs the build inside a systemd container (no docker-run
+## CACHER_VOLUME mount), so it bridges the sidecar to the container's own approx
+## cache over 'docker cp' instead of the host volume:
+##   ./ci/approx-cache-sidecar seed-container <name>       # after container start, before the build
+##   ./ci/approx-cache-sidecar snapshot-container <name>   # after the build (if: always)
 ##
 ## The paired actions/cache step MUST NOT use restore-keys (G-A-007): its
 ## cache-key carries a hashFiles() so a workflow/package change invalidates.
@@ -31,6 +37,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 ## No sensible developer-machine invocation (it sudo-chowns a cache dir to the
 ## approx uid); mirrors developer-meta-files' apt-install-with-cache guard.
@@ -45,6 +52,9 @@ fi
 ## leaving the seeded contents in place for the in-container approx.
 approx_dir="${HOME}/approx_cache_mnt"
 sidecar_dir="${HOME}/.approx-cache-sidecar"
+## approx's on-disk cache inside the systemd container (approx.conf '$cache'),
+## used by the *-container subcommands the dry-run lane calls.
+container_approx_dir="/var/cache/approx-derivative-maker"
 ## Pinned at image build: docker-setup pre-creates the 'approx' user/group
 ## with these fixed ids before installing the approx package, so this literal
 ## is guaranteed correct rather than dependent on dynamic system-uid allocation.
@@ -70,8 +80,33 @@ case "${1:-}" in
       sudo --non-interactive -- cp --archive --update=none -- "${approx_dir}/." "${sidecar_dir}/"
       sudo --non-interactive -- chown --recursive -- "${runner_uid_gid}" "${sidecar_dir}"
       ;;
+   seed-container)
+      container="${2:-}"
+      [ -n "${container}" ] || { printf '%s\n' "${BASH_SOURCE[0]}: seed-container needs a container name" >&2; exit 64; }
+      ## Nothing to seed on a cache miss; skip an empty sidecar so 'docker cp' is
+      ## not handed a no-content path.
+      [ -d "${sidecar_dir}" ] || exit 0
+      [ -n "$(find "${sidecar_dir}" -mindepth 1 -print -quit 2>/dev/null)" ] || exit 0
+      ## docker cp lands the files as root; hand them to the in-container approx
+      ## uid/gid (pinned 101:102) so the non-root approx service can read them
+      ## (its cache dir is mode 770). The dir itself exists from the approx
+      ## package baked into the image.
+      docker cp -- "${sidecar_dir}/." "${container}:${container_approx_dir}/"
+      docker exec -- "${container}" chown --recursive -- "${approx_uid_gid}" "${container_approx_dir}"
+      ;;
+   snapshot-container)
+      container="${2:-}"
+      [ -n "${container}" ] || { printf '%s\n' "${BASH_SOURCE[0]}: snapshot-container needs a container name" >&2; exit 64; }
+      ## The container may be gone if an earlier step failed before it started.
+      docker inspect -- "${container}" >/dev/null 2>&1 || exit 0
+      mkdir --parents -- "${sidecar_dir}"
+      ## docker cp writes to the host as root; hand the sidecar back to the runner
+      ## so actions/cache can tar it at post.
+      docker cp -- "${container}:${container_approx_dir}/." "${sidecar_dir}/"
+      sudo --non-interactive -- chown --recursive -- "${runner_uid_gid}" "${sidecar_dir}"
+      ;;
    *)
-      printf '%s\n' "usage: ${BASH_SOURCE[0]} <seed|snapshot>" >&2
+      printf '%s\n' "usage: ${BASH_SOURCE[0]} <seed|snapshot|seed-container <name>|snapshot-container <name>>" >&2
       exit 64
       ;;
 esac

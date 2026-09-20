@@ -1,0 +1,192 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sourced fragment of help-steps/variables, loaded via buildconfig.d/*.bsh.
+## buildconfig.d sourcing, sign-and-tag toggle, OpenPGP policy/cert paths, debchange/dpkg-buildpackage fallbacks.
+## Strict mode, locale, and the base path variables are owned by the loader
+## 'help-steps/variables' and inherited here; do not recompute them from
+## BASH_SOURCE (this file lives in buildconfig.d/, not help-steps/).
+## style-ok: no-strict
+## style-ok: no-has
+## style-ok: no-safe-rm
+## style-ok: no-tmp-hardcode
+# shellcheck disable=SC2086,SC2004
+
+## {{{ buildconfig.d (shipped in-tree tier)
+
+## The user override tiers (/etc, ~/buildconfig.d, --confdir, --conffile) were
+## sourced in 10_core.bsh BEFORE the code defaults, so they can override a
+## default. The SHIPPED in-tree tier (the first list entry) is sourced HERE,
+## after the defaults and per-flavor blocks, because its snippets derive from
+## already-resolved inputs (freshness, arch, flavor). dist_build_config_dirs_list
+## is defined in 10_core.bsh; dist_build_source_config_dir lives in 05_lib.bsh.
+dist_build_source_config_dir "${dist_build_config_dirs_list%% *}"
+
+## }}}
+
+## {{{ sign-and-tag toggle and signature-verification escape
+##
+## Secure defaults; no auto-detection. Placed after buildconfig.d sourcing so
+## an explicit value (a ${HOMEVAR}/buildconfig.d snippet, env, or the
+## --sign-and-tag / --allow-unsigned options) always wins over the defaults.
+
+## dist_build_sign_and_tag: whether 'help-steps/sign-and-tag' signs and tags
+## HEAD and every submodule.
+[ -v dist_build_sign_and_tag ] || dist_build_sign_and_tag="false"
+export dist_build_sign_and_tag
+
+## dist_build_ignore_unsigned: whether to build even if HEAD is unsigned.
+[ -v dist_build_ignore_unsigned ] || dist_build_ignore_unsigned="false"
+export dist_build_ignore_unsigned
+
+## dist_build_script_skip_package_install: optional whitespace-separated list of
+## packages a custom-config build wants skipped at install time (see
+## build-steps.d/*_install-packages).
+[ -v dist_build_script_skip_package_install ] || dist_build_script_skip_package_install=""
+export dist_build_script_skip_package_install
+
+## install_package_list: optional whitespace-separated extra-package lists a
+## custom-config build may set (see build-steps.d/*_install-packages).
+[ -v install_package_list ] || install_package_list=""
+export install_package_list
+
+## flavor_meta_packages_to_install: The core metapackage(s) for an image (this
+## pulls in most of a system's packages).
+[ -v flavor_meta_packages_to_install ] || flavor_meta_packages_to_install=""
+export flavor_meta_packages_to_install
+
+## }}}
+
+## {{{ OpenPGP policy + cert paths
+##
+## Layered the same way as buildconfig.d/*.conf via
+## dist_build_config_dirs_list; later entries override earlier
+## ones. Written by signing-key-create, read by sign-and-tag.
+default_if_empty openpgp_policy_filename 'openpgp-policy.toml'
+[ -n "${openpgp_cert_filename:-}" ]   || openpgp_cert_filename='openpgp-cert.pem'
+
+## Shipped in-tree (upstream maintainer keys only, no local cert).
+default_if_empty openpgp_policy_file_project "${source_code_folder_dist}/buildconfig.d/${openpgp_policy_filename}"
+
+## signing-key-create writes to the highest-precedence (last) entry.
+[ -n "${openpgp_policy_dir_user:-}" ]  || openpgp_policy_dir_user="${dist_build_config_dirs_list##* }"
+default_if_empty openpgp_policy_file_user "${openpgp_policy_dir_user}/${openpgp_policy_filename}"
+[ -n "${openpgp_cert_file_user:-}" ]   || openpgp_cert_file_user="${openpgp_policy_dir_user}/${openpgp_cert_filename}"
+
+## Walk dist_build_config_dirs_list once for both policy and cert.
+## ${openpgp_policy_file_resolved} / ${openpgp_cert_file_resolved}
+## = last existing-and-readable file of each kind, or empty if
+## none. Search-paths arrays are kept for sign-and-tag's bail-out
+## error message. sign-and-tag bails when the policy is empty;
+## signing-key-create uses the cert-resolved value (or writes to
+## openpgp_cert_file_user when empty).
+if [ -z "${openpgp_policy_file_resolved:-}" ]; then
+   openpgp_policy_file_resolved=""
+   openpgp_cert_file_resolved=""
+   openpgp_policy_search_paths=()
+   openpgp_cert_search_paths=()
+   for openpgp_policy_dir in ${dist_build_config_dirs_list}; do
+      openpgp_policy_candidate="${openpgp_policy_dir}/${openpgp_policy_filename}"
+      openpgp_cert_candidate="${openpgp_policy_dir}/${openpgp_cert_filename}"
+      openpgp_policy_search_paths+=( "  ${openpgp_policy_candidate}" )
+      openpgp_cert_search_paths+=( "  ${openpgp_cert_candidate}" )
+      #printf '%s\n' "openpgp_policy_file_resolved: '$openpgp_policy_file_resolved'"
+      if [ -r "${openpgp_policy_candidate}" ]; then
+         openpgp_policy_file_resolved="${openpgp_policy_candidate}"
+      fi
+      #printf '%s\n' "openpgp_cert_candidate: '$openpgp_cert_candidate'"
+      if [ -r "${openpgp_cert_candidate}" ]; then
+         openpgp_cert_file_resolved="${openpgp_cert_candidate}"
+      fi
+   done
+   unset openpgp_policy_dir openpgp_policy_candidate openpgp_cert_candidate
+   ## openpgp_policy_file_resolved="" - in case:
+   # > openpgp_cert_candidate: '/home/user/derivative-maker/buildconfig.d/openpgp-cert.pem'
+   # > openpgp_cert_candidate: '/etc/buildconfig-dist.d/openpgp-cert.pem'
+   # > openpgp_cert_candidate: '/home/user/buildconfig.d/openpgp-cert.pem'
+fi
+
+## ${sq_git_policy_file} precedence:
+##   1. caller pre-set (env / parse-cmd)
+##   2. ${openpgp_policy_file_resolved}
+##   3. ${openpgp_policy_file_project}
+##
+## Redistributable builds must not pick up a contaminated override;
+## dm-build-official ensures no openpgp-policy.toml exists in any
+## dist_build_config_dirs_list entry above the shipped one, or
+## pins sq_git_policy_file explicitly.
+[[ -v sq_git_policy_file ]] || \
+   sq_git_policy_file="${openpgp_policy_file_resolved:-${openpgp_policy_file_project}}"
+export sq_git_policy_file
+
+## }}}
+
+## Late validation: redistributable builds disallow disabling the binary
+## derivative repository by default, because the resulting images would not
+## be able to fetch updates from the official APT repository. To override
+## (e.g. for testing), set 'dist_build_redistributable_allow_no_repo=true'
+## via the environment or a buildconfig.d/*.conf file. We don't expose this
+## as a command-line flag because it should be a deliberate, persistent
+## opt-in, not something pasted into an ad-hoc invocation.
+if [ "${dist_build_redistributable:-}" = "true" ] \
+   && [ "${build_remote_repo_enable:-}" = "false" ] \
+   && [ ! "${dist_build_redistributable_allow_no_repo:-}" = "true" ]; then
+   error "\
+${red}${bold}'--repo false' (or build_remote_repo_enable=false) is incompatible with a
+redistributable build (dist_build_redistributable=true)!
+
+Redistributable images must point at the official APT repository so end users
+can receive updates. To override this guard for testing or special-purpose
+builds set dist_build_redistributable_allow_no_repo=true via the environment or
+a buildconfig.d/*.conf file.${reset}"
+fi
+
+## }}}
+
+export make_use_lintian
+export genmkfile_make_cmd
+export make_use_cowbuilder
+
+default_if_empty signify_folder "${HOMEVAR}/.signify"
+default_if_empty signify_private_key "${signify_folder}/keyname.sec"
+default_if_empty signify_public_key "${signify_folder}/keyname.pub"
+
+## {{{ fallback variables for 'debchange' ('dch'), 'dpkg-buildpackage' and 'debuild'
+
+## see: 'man debchange'
+default_if_empty DEBFULLNAME "derivative distribution auto generated local APT signing key"
+export DEBFULLNAME
+
+default_if_empty DEBEMAIL "derivative-distribution@local-signing.key"
+export DEBEMAIL
+
+default_if_empty debsign_wrapper "${dist_source_help_steps_folder}/sq-debsign-wrapper"
+default_if_empty sq_git_wrapper "${dist_source_help_steps_folder}/sq-git-wrapper"
+[ -n "${git_verify_command_wrapper:-}" ] || git_verify_command_wrapper=( git -c "gpg.openpgp.program=${sq_git_wrapper}" )
+
+## Per-call 'git -c key=value' options that configure sq-git-wrapper
+## signing without writing to ~/.gitconfig. user.signingkey is set
+## to DEBEMAIL; sq-git-wrapper's case statement detects '@' and
+## dispatches to 'sq sign --signer-email'.
+git_signing_command_wrapper=(
+   git
+   -c "user.signingkey=${DEBEMAIL}"
+   -c gpg.format=openpgp
+   -c "gpg.openpgp.program=${sq_git_wrapper}"
+   -c commit.gpgsign=true
+   -c tag.gpgsign=true
+   -c "user.email=${DEBEMAIL}"
+   -c "user.name=${DEBFULLNAME}"
+)
+
+default_if_empty make_debsign_opts "-p ${debsign_wrapper}"
+export make_debsign_opts
+
+## For whatever it may be worth.
+## https://forums.whonix.org/t/end-to-end-signed-debs-debsign-debsig-and-dpkg-sig
+default_if_empty make_use_debsign "true"
+export make_use_debsign
+
+## }}}

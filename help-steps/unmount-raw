@@ -37,7 +37,7 @@ unmount_raw() {
       true "INFO: kpartx_only=${kpartx_only}, skipping unmount ${CHROOT_FOLDER}"
    else
       ${SUDO_TO_ROOT} "${dist_source_help_steps_folder}/mount-cleanup" -- "${CHROOT_FOLDER}"
-      "${dist_source_help_steps_folder}/unmount-helper" -- "${CHROOT_FOLDER}"
+      unmount_if_mounted "${CHROOT_FOLDER}"
    fi
 
    local img
