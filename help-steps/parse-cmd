@@ -538,8 +538,13 @@ dist_build_one_parse_cmd() {
                elif [ "${2:-}" = "none" ]; then
                   export BUILD_INITRAMFS_PKGS="none"
                   true "${cyan}BUILD_INITRAMFS_PKGS set to ${BUILD_INITRAMFS_PKGS}.${reset}"
+               elif [ "${BUILD_INITRAMFS_PKGS:-}" = "none" ]; then
+                  ## a real package clears a prior 'none' (exclusive sentinel);
+                  ## otherwise 3500 would try to install a package literally named 'none'
+                  export BUILD_INITRAMFS_PKGS="${2}"
+                  true "${cyan}BUILD_INITRAMFS_PKGS set to ${BUILD_INITRAMFS_PKGS}.${reset}"
                else
-                  export BUILD_INITRAMFS_PKGS="${BUILD_INITRAMFS_PKGS:-} ${2:-}"
+                  export BUILD_INITRAMFS_PKGS="${BUILD_INITRAMFS_PKGS:-} ${2}"
                   true "${cyan}BUILD_INITRAMFS_PKGS set to ${BUILD_INITRAMFS_PKGS}.${reset}"
                fi
                shift 2
@@ -551,8 +556,13 @@ dist_build_one_parse_cmd() {
                elif [ "${2:-}" = "none" ]; then
                   export BUILD_KERNEL_PKGS="none"
                   true "${cyan}BUILD_KERNEL_PKGS set to ${BUILD_KERNEL_PKGS}.${reset}"
+               elif [ "${BUILD_KERNEL_PKGS:-}" = "none" ]; then
+                  ## a real package clears a prior 'none' (exclusive sentinel);
+                  ## otherwise 3500 would try to install a package literally named 'none'
+                  export BUILD_KERNEL_PKGS="${2}"
+                  true "${cyan}BUILD_KERNEL_PKGS set to ${BUILD_KERNEL_PKGS}.${reset}"
                else
-                  export BUILD_KERNEL_PKGS="${BUILD_KERNEL_PKGS:-} ${2:-}"
+                  export BUILD_KERNEL_PKGS="${BUILD_KERNEL_PKGS:-} ${2}"
                   true "${cyan}BUILD_KERNEL_PKGS set to ${BUILD_KERNEL_PKGS}.${reset}"
                fi
                shift 2
@@ -564,8 +574,13 @@ dist_build_one_parse_cmd() {
                elif [ "${2:-}" = "none" ]; then
                   export BUILD_HEADER_PKGS="none"
                   true "${cyan}BUILD_HEADER_PKGS set to ${BUILD_HEADER_PKGS}.${reset}"
+               elif [ "${BUILD_HEADER_PKGS:-}" = "none" ]; then
+                  ## a real package clears a prior 'none' (exclusive sentinel);
+                  ## otherwise 3500 would try to install a package literally named 'none'
+                  export BUILD_HEADER_PKGS="${2}"
+                  true "${cyan}BUILD_HEADER_PKGS set to ${BUILD_HEADER_PKGS}.${reset}"
                else
-                  export BUILD_HEADER_PKGS="${BUILD_HEADER_PKGS:-} ${2:-}"
+                  export BUILD_HEADER_PKGS="${BUILD_HEADER_PKGS:-} ${2}"
                   true "${cyan}BUILD_HEADER_PKGS set to ${BUILD_HEADER_PKGS}.${reset}"
                fi
                shift 2
