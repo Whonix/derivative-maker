@@ -56,6 +56,14 @@ derive_unified_image_paths() {
       default_if_empty binary_image_raw_file_for_unified "${dist_binary_build_folder}/${vm_name_item_to_be_exported}-${dist_build_version}.${target_architecture_pretty_name}.raw"
       default_if_empty binary_image_qcow2_file_for_unified "${dist_binary_build_folder}/${vm_name_item_to_be_exported}-${dist_build_version}.${target_architecture_pretty_name}.qcow2"
    done
+
+   ## A real (non-'none') unified build always leaves these DECLARED, even when the
+   ## loop matched no "other VM" (e.g. a misconfigured vm_names_to_be_exported whose
+   ## every entry substring-matches dist_build_type_long). An empty value makes the
+   ## consumer's 'test -f' emit its actionable "missing other VM" error under
+   ## 'set -o nounset', instead of a raw unbound-variable crash.
+   export binary_image_raw_file_for_unified="${binary_image_raw_file_for_unified:-}"
+   export binary_image_qcow2_file_for_unified="${binary_image_qcow2_file_for_unified:-}"
 }
 
 ## Source every '*.conf' in directory $1 (nothing if it does not exist). Used
