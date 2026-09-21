@@ -121,14 +121,33 @@ value_charset_ok() {
    return 0
 }
 
-## Unmount a single path, but only if it is a mountpoint. No-op when the path is
-## not mounted, because callers pass paths that may or may not be mounted (bind
-## mounts that were never set up, an already-unmounted CHROOT_FOLDER). On a
-## mounted path that will not detach, 'umount' exits non-zero and the caller's
-## errexit fails the build. 'return', never 'exit'.
+## Unmount a single path if it is a mountpoint. No-op when the path does not
+## exist or is not a mountpoint (callers pass paths that may or may not be
+## mounted: bind mounts never set up, an already-unmounted CHROOT_FOLDER). A
+## genuine mountpoint(1) error (bad invocation, system error) is PROPAGATED, not
+## swallowed as "not mounted", so a caller never proceeds to delete across a
+## mount whose state could not be determined. On a mounted path that will not
+## detach, 'umount' exits non-zero and the caller's errexit fails the build.
+## 'return', never 'exit'.
 ##
-## Uses ambient 'SUDO_TO_ROOT' (word-split on purpose, e.g. 'sudo --non-interactive').
+## mountpoint(1) exit codes: 0 = is a mountpoint, 32 = not a mountpoint, other =
+## error. Uses ambient 'SUDO_TO_ROOT' (word-split on purpose, e.g.
+## 'sudo --non-interactive').
 unmount_if_mounted() {
-   ${SUDO_TO_ROOT} mountpoint --quiet -- "$1" || return 0
-   ${SUDO_TO_ROOT} umount --verbose -- "$1"
+   ## A missing target is nothing to unmount; distinguishes a benign absent path
+   ## from a real mountpoint(1) error, which shares exit code 1.
+   ${SUDO_TO_ROOT} test -e "$1" || return 0
+   local unmount_if_mounted_rc=0
+   ${SUDO_TO_ROOT} mountpoint --quiet -- "$1" || unmount_if_mounted_rc="$?"
+   case "${unmount_if_mounted_rc}" in
+      0)
+         ${SUDO_TO_ROOT} umount --verbose -- "$1"
+         ;;
+      32)
+         return 0
+         ;;
+      *)
+         return "${unmount_if_mounted_rc}"
+         ;;
+   esac
 }
