@@ -544,7 +544,7 @@ dist_build_one_parse_cmd() {
                   export BUILD_INITRAMFS_PKGS="${2}"
                   true "${cyan}BUILD_INITRAMFS_PKGS set to ${BUILD_INITRAMFS_PKGS}.${reset}"
                else
-                  export BUILD_INITRAMFS_PKGS="${BUILD_INITRAMFS_PKGS:-} ${2}"
+                  export BUILD_INITRAMFS_PKGS="${BUILD_INITRAMFS_PKGS:+${BUILD_INITRAMFS_PKGS} }${2}"
                   true "${cyan}BUILD_INITRAMFS_PKGS set to ${BUILD_INITRAMFS_PKGS}.${reset}"
                fi
                shift 2
@@ -562,7 +562,7 @@ dist_build_one_parse_cmd() {
                   export BUILD_KERNEL_PKGS="${2}"
                   true "${cyan}BUILD_KERNEL_PKGS set to ${BUILD_KERNEL_PKGS}.${reset}"
                else
-                  export BUILD_KERNEL_PKGS="${BUILD_KERNEL_PKGS:-} ${2}"
+                  export BUILD_KERNEL_PKGS="${BUILD_KERNEL_PKGS:+${BUILD_KERNEL_PKGS} }${2}"
                   true "${cyan}BUILD_KERNEL_PKGS set to ${BUILD_KERNEL_PKGS}.${reset}"
                fi
                shift 2
@@ -580,7 +580,7 @@ dist_build_one_parse_cmd() {
                   export BUILD_HEADER_PKGS="${2}"
                   true "${cyan}BUILD_HEADER_PKGS set to ${BUILD_HEADER_PKGS}.${reset}"
                else
-                  export BUILD_HEADER_PKGS="${BUILD_HEADER_PKGS:-} ${2}"
+                  export BUILD_HEADER_PKGS="${BUILD_HEADER_PKGS:+${BUILD_HEADER_PKGS} }${2}"
                   true "${cyan}BUILD_HEADER_PKGS set to ${BUILD_HEADER_PKGS}.${reset}"
                fi
                shift 2
