@@ -406,7 +406,11 @@ jobs:
   ## EXPLICIT instead of leaving a silent mystery.
   postmortem:
     needs: build
-    if: always() && needs.build.result != 'success'
+    ## CI runs only where we enabled it; ANDed with the always()-on-failure guard
+    ## so it still fires on a dead runner. Unset variable -> skipped, run green.
+    if: >-
+      vars.CI_ENABLED_ORG_AI_ASSISTED == 'true'
+      && always() && needs.build.result != 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
