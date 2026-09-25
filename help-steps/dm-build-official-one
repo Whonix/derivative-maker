@@ -207,6 +207,7 @@ if [ -n "${dist_build_multi_target_list+x}" ]; then
     multi_target_args+=("--target" "${multi_target_item}")
   done
 fi
+flavor_multi_target_args=("${multi_target_args[@]}")
 
 ############################################################
 ## Phase 1: per-flavor sanity tests.
