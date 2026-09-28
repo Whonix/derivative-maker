@@ -227,3 +227,5 @@ default_if_empty dist_build_apt_codename "local"
 export dist_build_apt_codename
 ## developer local setting in buildconfig.d folder / dist_build_source_config_dir function:
 ## export dist_build_apt_codename="trixie-developers"
+
+default_if_empty dist_build_file_system "ext4"
