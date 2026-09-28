@@ -217,7 +217,10 @@ esac
 
 ## Work directory + teardown. Track loop/kpartx maps and mounts and tear them down
 ## in reverse on any exit so a failure never leaks a loop device or a bind mount.
-workdir="$(mktemp --directory --tmpdir -- dm-raw-to-iso.XXXXXX)"
+## Place the work directory alongside the image to ensure the reimage isn't done
+## in a small tmpfs.
+raw_dir="$(dirname "${raw_img}")"
+workdir="$(mktemp --directory --tmpdir="${raw_dir}" -- dm-raw-to-iso.XXXXXX)"
 kpartx_image=""
 mount_list=()
 
