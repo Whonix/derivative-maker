@@ -1,9 +1,9 @@
-## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
-############################################
-## Build Dependencies for derivative-maker #
-############################################
+## Build dependencies for derivative-maker.
 
 #dist_build_script_build_dependency_debian_backports+=" currently-none "
 
@@ -182,14 +182,9 @@ dist_build_script_build_dependency+=" arch-test fakechroot fakeroot libdistro-in
 ## which would otherwise abort dependency installation on those hosts.
 dist_build_script_build_dependency+=" apt-transport-tor apt-utils binfmt-support ca-certificates debootstrap distro-info-data dpkg-dev perl-doc qemu-user qemu-user-static squashfs-tools-ng "
 
-## required for ISO creation (arch-INDEPENDENT tools; help-steps/dm-raw-to-iso +
-## build-steps.d/3600): xorriso/mtools/dosfstools pack the hybrid ISO + FAT ESP,
-## squashfs-tools builds the live squashfs, isomd5sum implants the medium checksum,
-## librsvg2-bin (rsvg-convert) rasterizes the GRUB splash. The host-arch-specific
-## GRUB/shim/memtest packages are installed per-arch under 'dist_build_iso=true' in
-## build-steps.d/1200_prepare-build-machine, NOT here (this list installs on every
-## build, including non-amd64 hosts and non-ISO targets).
+## required for ISO creation
 dist_build_script_build_dependency+=" squashfs-tools xorriso mtools isomd5sum "
+## rsvg-convert
 dist_build_script_build_dependency+=" librsvg2-bin "
 
 ## Build Dependencies for creating Virtual Machine Images (.raw)

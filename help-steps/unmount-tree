@@ -15,8 +15,6 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 export LC_ALL=C
 
-## Overridable so a mount-namespace test can neutralize privilege escalation
-## (e.g. SUDO_TO_ROOT=env).
 [ -n "${SUDO_TO_ROOT:-}" ] || SUDO_TO_ROOT="sudo --non-interactive"
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"

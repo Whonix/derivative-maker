@@ -1,19 +1,34 @@
 #!/bin/bash
 
-## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
+
+## Sets various apt configuration option variables.
 
 ## https://forums.whonix.org/t/debian-bullseye-apt-get-error-on-any/12068
 ## apt-get --error-on=any install
 ## E: Command line option --error-on=any is not understood in combination with the other options
 
-#set -x
-set -o errexit
-set -o nounset
-set -o pipefail
-set -o errtrace
-## style-ok: sourced-fragment -- this is a sourced configuration file.
-## style-ok: no-strict -- see above.
+## style-ok: no-strict -- sourced fragment.
+
+aptgetopt_add() {
+   local opt
+   opt="$1"
+
+   DIST_APTGETOPT+=("-o")
+   DIST_APTGETOPT+=("${opt}")
+   DIST_APTGETOPT_SERIALIZED="$(printf '%s\n' "${DIST_APTGETOPT[@]}")"
+
+   if [[ "${opt:-}" =~ [Pp]roxy ]]; then
+      return 0
+   fi
+   DIST_APTGETOPT_WITHOUT_APT_CACHE+=("-o")
+   DIST_APTGETOPT_WITHOUT_APT_CACHE+=("${opt}")
+}
+
+aptgetopt_conf_add() {
+   dist_aptgetopt_file_content+="$1"$'\n'
+}
 
 aptgetopt_add "APT::Update::Error-Mode=any"
 aptgetopt_conf_add "APT::Update::Error-Mode any;"
@@ -70,6 +85,24 @@ aptgetopt_conf_add "Apt::Install-Recommends false;"
 
 aptgetopt_add "Acquire::Retries=5"
 aptgetopt_conf_add "Acquire::Retries 5;"
+
+## }}
+
+## {{ unsafe io
+
+if [ "${dist_build_unsafe_io:-}" = "true" ]; then
+   aptgetopt_add "Dpkg::Options::=--force-unsafe-io"
+   aptgetopt_conf_add "Dpkg::Options:: \"--force-unsafe-io\";"
+fi
+
+## }}
+
+## {{ approx
+
+if [ "${APPROX_PROXY_ENABLE}" = "yes" ]; then
+   aptgetopt_add "Acquire::BlockDotOnion=false"
+   aptgetopt_conf_add "Acquire::BlockDotOnion \"false\";"
+fi
 
 ## }}
 

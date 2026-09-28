@@ -28,11 +28,6 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 export LC_ALL=C
 
-## This wrapper is invoked through PATH by pbuilder/grml-debootstrap with
-## help-steps stripped from PATH, so 'pre' (which defines 'error') is not
-## available. Define a minimal error handler; without it a failed sanity test
-## below would abort with a misleading 'exit_with_error: command not found'
-## instead of the intended message.
 exit_with_error() {
    printf '%s\n' "ERROR: $*" >&2
    exit 1
@@ -159,9 +154,6 @@ path_variable_remove_help_steps() {
 
    new_path=""
    for path_part in "${path_array[@]}"; do
-      ## Match a path COMPONENT named exactly 'help-steps' (trailing slash
-      ## trimmed), not the '*help-steps*' substring -- the latter would also drop
-      ## an unrelated entry like '/opt/legacy-help-steps-scripts'.
       if [[ "${path_part%/}" != */help-steps ]]; then
          new_path+="${path_part}:"
       fi

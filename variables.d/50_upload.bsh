@@ -1,0 +1,62 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Determine where and how to upload meaningful build artifacts.
+
+## style-ok: no-strict -- sourced fragment.
+
+unset dist_build_files_to_upload
+declare -a dist_build_files_to_upload
+
+unset dist_build_upload_locations
+declare -a dist_build_upload_locations
+
+append_upload_source_and_locations_to_lists() {
+  local upload_source upload_path
+
+  upload_source="${1}"
+  upload_path="${2}"
+  for dist_server_upload_location_item in "${dist_server_upload_location_list[@]}"; do
+    dist_build_files_to_upload+=( "${upload_source}" )
+    dist_build_upload_locations+=( "${ssh_uploader_account}@${dist_server_upload_location_item}:${upload_path}" )
+  done
+}
+
+if [ "${dist_build_virtualbox:-}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${binary_image_ova_file}" "/var/rsync/ova"
+fi
+
+if [ "${dist_build_iso:-}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${binary_image_iso_file}" "/var/rsync/iso"
+fi
+
+if [ "${dist_build_qcow2:-}" = "true" ]; then
+   #[ -n "${ssh_uploader_account:-}" ] || ssh_uploader_account="hulahoop"
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${libvirt_target_qcow2_xz_archive_file}" "/var/rsync/libvirt"
+fi
+
+if [ "${dist_build_installer_dist}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${binary_image_installer_dist_file}" "/var/rsync/dist-installer-cli"
+fi
+
+if [ "${dist_build_windows_installer:-}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${binary_image_windows_installer_file}" "/var/rsync/windows"
+fi
+
+if [ "${dist_build_source_archive:-}" = "true" ]; then
+   default_if_empty ssh_uploader_account "root"
+
+   append_upload_source_and_locations_to_lists "${source_archive_xz_file}" "/var/rsync/source"
+fi

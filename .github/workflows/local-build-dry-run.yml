@@ -91,17 +91,6 @@ jobs:
           FORK_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: ./ci/checkout-fork-submodule-branches "${FORK_BRANCH}"
 
-      ## The dry-run's apt AND cowbuilder debootstrap fetch every .deb through the
-      ## in-container approx (127.0.0.1:9977 -> snapshot.debian.org). snapshot is
-      ## rate-limited and intermittently 404s a pool file that exists; apt treats a
-      ## 404 as permanent and does NOT retry, so a single flaky package fails the
-      ## whole lane. The build lanes avoid this by carrying a warm approx cache
-      ## across runs (docker-run's mounted CACHER_VOLUME); this lane runs in a
-      ## systemd container with no such mount, so it seeds/snapshots the container's
-      ## approx cache over 'docker cp' instead (see the seed/snapshot steps below).
-      ## Restored here on the runner; a miss is an empty seed (first cold run still
-      ## hits snapshot, then converges). G-A-007: the key carries hashFiles(), no
-      ## restore-keys.
       - name: Restore approx package cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:

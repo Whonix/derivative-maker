@@ -20,6 +20,7 @@ cd help-steps
 source pre
 source variables
 
+# shellcheck disable=SC2317
 copy-vm-files(){
    exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
 

@@ -1,0 +1,25 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Create a list of packages to build by default, consisting of all supported
+## packages, unless someone has already set a custom package list.
+
+## style-ok: no-strict -- sourced fragment.
+# shellcheck disable=SC2086
+
+pkg_list_create() {
+   ## Important that derivative_name_item is a local variable.
+   local derivative_name_item
+   for derivative_name_item in ${derivative_name_list} ; do
+      if [ "${dist_build_only_packages:-}" = "" ] || [ "${pkg_automatic_list:-}" = "true" ]; then
+         pkg_automatic_list=true
+         dist_build_only_packages+=" $(ls "${source_code_folder_dist}/packages/${derivative_name_item}/")"
+      fi
+   done
+}
+
+if [ -z "${dist_build_only_packages:-}" ]; then
+   pkg_list_create
+fi

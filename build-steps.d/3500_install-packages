@@ -27,7 +27,6 @@ cd help-steps
 
 source pre
 source variables
-source "${MYDIR}/../help-steps/build-step-helpers.bsh"
 
 ## Debugging function.
 apt_get_parse_unmet_dependency() {
@@ -226,12 +225,7 @@ install-packages() {
 
    ${SUDO_TO_ROOT} install --mode=0755 -- "${source_code_folder_dist}/packages/kicksecure/helper-scripts/usr/bin/apt-get-noninteractive" "${CHROOT_FOLDER}/usr/bin/apt-get-noninteractive"
 
-   ## apt-get-noninteractive is staged as a bootstrap wrapper BEFORE the
-   ## helper-scripts package is installed, but it 'source's helper-scripts
-   ## libraries at runtime (strings.bsh -> wc-test.sh -> check_runtime.bsh).
-   ## Stage that transitive source-closure alongside it, or the wrapper aborts
-   ## with "strings.bsh: No such file or directory" at the first apt-get run.
-   ## dm-apt-get-wrapper-closure-test (dist-ai) guards this list against drift.
+   ## Some helper scripts are needed for apt-get-noninteractive to work.
    ${SUDO_TO_ROOT} mkdir --parents -- "${CHROOT_FOLDER}/usr/libexec/helper-scripts"
    for dist_apt_wrapper_lib in strings.bsh wc-test.sh check_runtime.bsh; do
       ${SUDO_TO_ROOT} install --mode=0755 -- "${source_code_folder_dist}/packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/${dist_apt_wrapper_lib}" "${CHROOT_FOLDER}/usr/libexec/helper-scripts/${dist_apt_wrapper_lib}"
@@ -287,10 +281,6 @@ install-packages() {
       ${SUDO_TO_ROOT} -- mkdir --parents -- "$(dirname "${target_dracut_disable_config_snippet}")"
       ${SUDO_TO_ROOT} -- cp --verbose -- "${source_dracut_disable_config_snippet}" "${target_dracut_disable_config_snippet}"
    fi
-
-   ## The live-image vs VM/disk path is selected in package maintainer scripts
-   ## by the 'dist_build_iso' environment variable, which chroot_run preserves
-   ## into the chroot (env_vars_keep_list). No on-disk marker file is written.
 
    ## Install legacy-dist earlier so debconf questions are answered before
    ## meta package installation.
@@ -465,15 +455,6 @@ ${dist_build_script_skip_package_install}${reset}"
       fi
    done
 
-   if [ "${dist_build_raw:-}" = "true" ]; then
-      ## XXX: Superfluous for non-libvirt raw image builds.
-      pkg-add-to-install-list spice-vdagent
-   elif [ "${dist_build_qcow2:-}" = "true" ]; then
-      pkg-add-to-install-list spice-vdagent
-   else
-      true "${cyan}INFO: skipping installation of weak recommended guest additions packages spice-vdagent because not using --target qcow2, ok.${reset}"
-   fi
-
    ## '--serial-console-enable true': install the serial-console-enable package
    ## so the image can be driven headless over a serial line.
    if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
@@ -481,18 +462,18 @@ ${dist_build_script_skip_package_install}${reset}"
       pkg-add-to-install-list serial-console-enable
    fi
 
-   ## kicksecure-network-conf{,-gui} cannot be listed in metapackages, as it
-   ## can break networking in some situations.
-   if [ "${dist_build_type_short:-}" = "kicksecure" ]; then
-      pkg-add-to-install-list kicksecure-network-conf
-      if [ "${dist_build_gui:-}" = 'true' ]; then
-         pkg-add-to-install-list kicksecure-network-conf-gui
-      fi
-   fi
-
    ## tirdad cannot be listed in metapackages, as it will result in the
    ## installation of a kernel, which is undesirable in containers.
    pkg-add-to-install-list tirdad
+
+   ## firmware-nonfreedom{,-noarch} cannot be listed in metapackages, as it is
+   ## in the non-free pocket.
+   if [ "${dist_build_type:-}" = 'host' ] && [ "${build_freedom_only:-}" = 'false' ]; then
+      pkg-add-to-install-list firmware-nonfreedom-noarch
+      if [ "${dist_build_target_arch:-}" = 'amd64' ]; then
+         pkg-add-to-install-list firmware-nonfreedom
+      fi
+   fi
 
    ## Debugging.
    #pkg-add-to-install-list debug-misc
@@ -516,14 +497,12 @@ ${dist_build_script_skip_package_install}${reset}"
    fi
 
    if [ "${dist_build_iso:-}" = "true" ]; then
-      if [ "${dist_build_iso_extra_packages:-}" = "" ] || [ "${dist_build_iso_extra_packages:-}" = "none" ]; then
-         true "${cyan}INFO: variable dist_build_iso_extra_packages is empty, skipping ISO extras.${reset}"
-      else
-         for dist_build_iso_extra_package_item in ${dist_build_iso_extra_packages} ; do
-            true "${cyan}INFO: ISO extra package: '${dist_build_iso_extra_package_item}'${reset}"
-            pkg-add-to-install-list "${dist_build_iso_extra_package_item}"
-         done
-      fi
+      ## Add packages that are necessary for the ISO to function.
+      pkg-add-to-install-list calamares
+      pkg-add-to-install-list calamares-settings-debian
+      pkg-add-to-install-list live-config-dist
+      pkg-add-to-install-list dracut-live
+      pkg-add-to-install-list isomd5sum
    fi
 
    pkg-list-install
@@ -542,7 +521,6 @@ ${dist_build_script_skip_package_install}${reset}"
    ## Generate GRUB keyboard layouts.
    ## 'set-grub-keymap' is provided by package 'helper-scripts'.
    ## Use '--no-live-changes' because GRUB is handled by 'build-steps.d/*_install-packages'.
-   ## NOTE: 'build-steps.d/4310_convert-raw-to-iso' also uses 'set-grub-keymap'. Should use the same/similar options.
    chroot_run set-grub-keymap --build-all --no-live-changes
 
    if printf "%s\n" "${BUILD_INITRAMFS_PKGS}" | grep dracut >/dev/null 2>&1 ; then
@@ -622,9 +600,13 @@ ${dist_build_script_skip_package_install}${reset}"
    chroot_run cat -- /boot/grub/grub.cfg | grep --color "root=" || true
 
    ## Sanity test.
-   if chroot_run grep --quiet "root=/dev/mapper" /boot/grub/grub.cfg ; then
+   if chroot_run grep "root=/dev/mapper" /boot/grub/grub.cfg >/dev/null 2>&1; then
       ## Attempt to fix /dev/mapper issue.
-      grub_probe_target_device="$(select-grub-probe-device "${grub_probe_main_device_output}" "${grub_probe_boot_device_output}")"
+      if [ -z "${grub_probe_boot_device_output}" ]; then
+        grub_probe_target_device="${grub_probe_main_device_output}"
+      else
+        grub_probe_target_device="${grub_probe_boot_device_output}"
+      fi
       if ! [[ "${grub_probe_target_device}" =~ /dev/mapper ]]; then
         error '/boot/grub/grub.cfg contains root=/dev/mapper and cannot find proper boot device - image most likely unbootable!'
       fi

@@ -1,36 +1,18 @@
 #!/bin/bash
 
-## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## Copyright (C) 2025 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## Copyright (C) 2016 - 2020 The Debian Live team
 ## Copyright (C) 2006 - 2015 Daniel Baumann <mail@daniel-baumann.ch>
 ## Derived from and inspired by Debian live-build's hybrid-ISO packaging.
-## License: GPL-3+; see the file COPYING for copying conditions.
+## See the file COPYING for copying conditions.
 
 ## AI-Assisted
 
-## Convert a bootable raw disk image into a HIGHLY boot-compatible hybrid ISO,
-## using only packages.debian.org tools -- the same approach Debian live-build
-## uses, reimplemented WITHOUT live-build. The output boots as:
-##   - legacy BIOS from optical media (El Torito) and from USB/HDD (hybrid MBR),
-##   - UEFI from optical media and from USB/HDD (ESP as El Torito EFI entry AND
-##     as a real GPT partition),
-##   - UEFI Secure Boot (firmware -> MS-signed shim -> distro-signed GRUB -> kernel),
-##   - as a loop-mounted .iso file from another GRUB (loopback.cfg + findiso).
+## Convert a bootable raw disk image into a bootable hybrid ISO. Uses the same
+## techniques as live-build to allow booting in a wide variety of scenarios.
 ##
-## Input is the bootable raw disk image derivative-maker's 3200_create-raw-image
-## produces (grml-debootstrap --vmefi: GPT with a root filesystem carrying a full
-## Debian/Kicksecure install incl. a kernel and dracut + dracut-live). The rootfs
-## is copied out, wrapped as a live squashfs with a freshly built dracut-live
-## initramfs, and packed into the ISO. The input image is never modified.
-##
-## Loop devices, kpartx and chroot require root and a permissive environment; run
-## this in the build container, not a trusted host.
-##
-## derivative-maker-SPECIFIC (not a generic tool): it reads dm's GRUB menu/theme
-## from --grub-config-dir (iso-build-data/grub-config), harvests the rootfs itself
-## (keyboard-layout submenu, package manifest, kernel-hardening cmdline) in the
-## SAME chroot it builds the live initramfs in, and assembles the boot roles. Its
-## only caller is build-steps.d/4310_convert-raw-to-iso.
+## Note that all command-line arguments and environment variables are trusted
+## and therefore many of them are not validated here.
 
 set -o errexit
 set -o nounset
@@ -41,59 +23,52 @@ shopt -s shift_verbose
 export LC_ALL=C
 
 me="${BASH_SOURCE[0]##*/}"
+MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
 
-## Shared pure build-step helpers (newest-kernel-version, ...). Sibling in
-## help-steps; sourced by absolute path so it resolves regardless of CWD.
-# shellcheck source=./build-step-helpers.bsh
-source "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )/build-step-helpers.bsh"
+# shellcheck source=./misc-helpers.bsh
+source "${MYDIR}/misc-helpers.bsh"
 
 usage() {
    cat <<EOF
-Usage: ${me} --raw <image> --output <iso> --grub-config-dir <dir> --hostname <h> [options]
+Usage: ${me} --raw <image> --output <iso> --grub-config-dir <dir> [options]
 
 Required:
-  --raw <image>            bootable raw disk image (from 3200_create-raw-image)
-  --output <iso>           output ISO path
-  --grub-config-dir <dir>  dm's GRUB config source (iso-build-data/grub-config):
-                           config.cfg, grub.cfg, loopback.cfg, esp-redirect.cfg,
-                           theme.cfg, smbios-reader.cfg, live-theme/theme.txt,
-                           splash.svg. Assembled into the ISO's /boot/grub here.
-  --hostname <h>           live-config.hostname value for the live boot roles
+  --raw <image>            bootable raw disk image.
+  --output <iso>           output ISO path.
+  --grub-config-dir <dir>  dm's GRUB config source (iso-build-data/grub-config).
 
 Options:
-  --arch <a>               target architecture: amd64|i386|arm64|armhf (default:
-                           host dpkg architecture). amd64/i386 get legacy BIOS too;
-                           arm64/armhf are EFI-only.
-  --label <volid>          ISO volume label; must match root=live:CDLABEL=<volid>
-                           (default: DM_LIVE)
-  --dist-pretty <name>     product name substituted into the splash (@DIST_NAME@)
-  --dist-version <ver>     product version substituted into the splash (@DIST_VERSION@)
-  --serial-console         route GRUB + kernel to ttyS0,115200 and boot the default
-                           entry immediately (timeout 0) -- headless boot testing
-  --smbios-reader          inline the SMBIOS cmdline reader into the menu (test builds)
-  --source-date-epoch <n>  UNIX timestamp for reproducible output (default: env
-                           SOURCE_DATE_EPOCH, else the raw image's mtime)
-  --keep-workdir           do not delete the temporary work directory on exit
-  --help                   show this help
+  --arch <a>               target architecture: amd64|arm64|armhf. Defaults to host
+                           architecture.
+  --label <volid>          ISO volume label. Defaults to 'DM_LIVE'.
+  --dist-pretty <name>     product name shown in the splash.
+  --dist-version <ver>     product version shown in the splash.
+  --serial-console         enable a serial console on ttyS0 at speed 115200 and boot
+                           the default entry immediately, for headless boot testing.
+  --smbios-reader          inline the SMBIOS cmdline reader into the menu (test builds).
+  --source-date-epoch <n>  UNIX timestamp for reproducible output. Defaults to env
+                           SOURCE_DATE_EPOCH if available, or the raw image's mtime
+                           otherwise.
+  --keep-workdir           do not delete the temporary work directory on exit.
+  --help                   show this help.
 EOF
 }
 
 error() {
-   printf '%s: ERROR: %s\n' "${me}" "$*" >&2
+   printf '%s\n' "${me}: ERROR: $*" >&2
    exit 1
 }
 
-## Fail loudly on a missing dependency rather than skipping -- a required tool
-## that is absent is an environment bug, not an optional feature.
+## Fail loudly on a missing dependency.
 require_cmd() {
-   local cmd
+   local cmd command_v_output
    for cmd in "$@" ; do
-      if ! type -P "${cmd}" >/dev/null 2>&1 ; then
-         error "required command not found: '${cmd}'. Install its Debian package (see debian/control)."
+      command_v_output="$(command -v "${cmd}" 2>/dev/null)" || true
+      if [ -z "${command_v_output}" ] || ! [ -x "${command_v_output}" ]; then
+         error "required command not found: '${cmd}'. Install its Debian package."
       fi
    done
 }
-
 require_file() {
    local f
    for f in "$@" ; do
@@ -103,14 +78,19 @@ require_file() {
    done
 }
 
-## Arguments (dm-specific; 4310_convert-raw-to-iso passes them from the build's
-## variables).
-raw=""
-output=""
+## Utility function for unsettting the last item of an array.
+unset_last() {
+   local -n target_arr
+   target_arr="${1:-}"
+   unset "target_arr[$(( "${#target_arr[@]}" - 1 ))]"
+}
+
+## Parse arguments.
+raw_img=""
+output_iso=""
 arch=""
-label="DM_LIVE"
+volume_label="DM_LIVE"
 grub_config_dir=""
-dist_hostname=""
 dist_pretty=""
 dist_version=""
 serial_console="false"
@@ -122,12 +102,12 @@ while [ "$#" -gt 0 ] ; do
    case "$1" in
       --raw)
          [ "$#" -ge 2 ] || error "--raw requires a value"
-         raw="$2"
+         raw_img="$2"
          shift 2
          ;;
       --output)
          [ "$#" -ge 2 ] || error "--output requires a value"
-         output="$2"
+         output_iso="$2"
          shift 2
          ;;
       --arch)
@@ -137,17 +117,12 @@ while [ "$#" -gt 0 ] ; do
          ;;
       --label)
          [ "$#" -ge 2 ] || error "--label requires a value"
-         label="$2"
+         volume_label="$2"
          shift 2
          ;;
       --grub-config-dir)
          [ "$#" -ge 2 ] || error "--grub-config-dir requires a value"
          grub_config_dir="$2"
-         shift 2
-         ;;
-      --hostname)
-         [ "$#" -ge 2 ] || error "--hostname requires a value"
-         dist_hostname="$2"
          shift 2
          ;;
       --dist-pretty)
@@ -187,64 +162,25 @@ while [ "$#" -gt 0 ] ; do
    esac
 done
 
-[ -n "${raw}" ]    || error "--raw is required (see --help)"
-[ -n "${output}" ] || error "--output is required (see --help)"
-[ -r "${raw}" ]    || error "raw image not readable: '${raw}'"
-## The output is removed before it is written; if it is the input image, that
-## destroys the raw. Refuse output == input (resolved, so a symlink cannot alias).
-if [ "$(readlink -f -- "${raw}")" = "$(readlink -f -- "${output}" 2>/dev/null)" ] ; then
+[ -n "${raw_img}" ] || error "--raw is required (see --help)"
+[ -n "${output_iso}" ] || error "--output is required (see --help)"
+[ -r "${raw_img}" ] || error "raw image not readable: '${raw_img}'"
+
+if [ "$(readlink -f -- "${raw_img}")" = "$(readlink -f -- "${output_iso}" 2>/dev/null)" ]; then
    error "--output must not be the same file as --raw"
 fi
-## dist_hostname / dist_pretty / dist_version / label are branding+identity build
-## variables validated at their resolution in variables.d (10_core / 30_version-paths)
-## and passed here by the sole caller, 4310_convert-raw-to-iso; this root helper
-## trusts them (it is not a standalone tool). See --help for the arg contract.
 
-if [ -z "${arch}" ] ; then
+if [ -z "${arch}" ]; then
    require_cmd dpkg
    arch="$(dpkg --print-architecture)"
 fi
 
-case "${arch}" in amd64|i386|arm64|armhf) true ;; *) error "unsupported --arch '${arch}' (supported: amd64, i386, arm64, armhf)" ;; esac
-
-## label (the ISO9660 volume id and the root=live:CDLABEL= value) is validated in
-## variables.d as dist_build_type_short; trusted here.
-
-## SOURCE_DATE_EPOCH is validated + normalized in variables.d (source_date_epoch_valid)
-## and passed as --source-date-epoch; the fallback (a standalone raw-image mtime) is
-## itself a clean integer. Just export it for the reproducible squashfs/xorriso.
-if [ -z "${source_date_epoch}" ] ; then
-   source_date_epoch="$(stat -c %Y -- "${raw}")"
+if ! [[ "${arch}" =~ ^(amd64|arm64|armhf)$ ]]; then
+   error "unsupported --arch '${arch}' (see --help)"
 fi
-export SOURCE_DATE_EPOCH="${source_date_epoch}"
 
-## Per-arch GRUB platform / EFI naming, matching live-build's efi-image mapping.
-## bios=true means a legacy-BIOS El Torito image is produced (amd64 only; arm has
-## no legacy BIOS). efi_platforms is the ordered list of (grub-platform:efi-name)
-## pairs whose loaders go into the shared ESP.
-bios="false"
-efi_platforms=()
-case "${arch}" in
-   amd64)
-      bios="true"
-      ## x64 first so its BOOTX64.EFI is what firmware loads; ia32 adds 32-bit UEFI.
-      efi_platforms=( "x86_64-efi:x64" "i386-efi:ia32" )
-      ;;
-   i386)
-      bios="true"
-      efi_platforms=( "i386-efi:ia32" )
-      ;;
-   arm64)
-      efi_platforms=( "arm64-efi:aa64" )
-      ;;
-   armhf)
-      efi_platforms=( "arm-efi:arm" )
-      ;;
-esac
-
-## dm's GRUB config source (iso-build-data/grub-config): dm-raw-to-iso assembles
-## the ISO's /boot/grub from these, so the directory and its core files must
-## exist. Checked after --arch / --source-date-epoch so those report first.
+## The contents of grub_config_dir will be used as part of building the ISO's
+## /boot/grub.
 [ -n "${grub_config_dir}" ] || error "--grub-config-dir is required (see --help)"
 [ -d "${grub_config_dir}" ] || error "--grub-config-dir is not a directory: '${grub_config_dir}'"
 grub_config_required_file=""
@@ -252,499 +188,426 @@ for grub_config_required_file in config.cfg grub.cfg loopback.cfg esp-redirect.c
    [ -r "${grub_config_dir}/${grub_config_required_file}" ] || error "--grub-config-dir is missing required file '${grub_config_required_file}'"
 done
 
-## Dependency check up front (fail loud). Only HOST tools here. The GRUB modules,
-## unicode font and signed EFI loaders are taken from the TARGET ROOTFS (checked
-## after the rootfs is copied out). The /etc/grub.d harvest scripts (44_kb_layout)
-## run in the chroot (the rootfs ships them), so they are not host requirements.
+## Check for all dependencies we need on the host.
 require_cmd xorriso grub-mkimage mkfs.msdos mmd mcopy mksquashfs cp find touch stat chroot mount umount kpartx losetup safe-rm dpkg-query rsvg-convert sed grep
+
+if [ -z "${source_date_epoch}" ]; then
+   source_date_epoch="$(stat -c %Y -- "${raw_img}")"
+fi
+export SOURCE_DATE_EPOCH="${source_date_epoch}"
+
+## Determine which bootloader binaries we need and save info to help locate them
+## later. Each entry in efi_platform_pair_list contains "grub_platform:efi_arch".
+enable_bios_boot="false"
+efi_platform_pair_list=()
+case "${arch}" in
+   amd64)
+      enable_bios_boot="true"
+      ## We don't support i386, but some amd64 systems use 32-bit EFI firmware,
+      ## which requires the 32-bit bootloader.
+      efi_platform_pair_list=( "x86_64-efi:x64" "i386-efi:ia32" )
+      ;;
+   arm64)
+      efi_platform_pair_list=( "arm64-efi:aa64" )
+      ;;
+   armhf)
+      efi_platform_pair_list=( "arm-efi:arm" )
+      ;;
+esac
 
 ## Work directory + teardown. Track loop/kpartx maps and mounts and tear them down
 ## in reverse on any exit so a failure never leaks a loop device or a bind mount.
-workdir="$(mktemp --directory --tmpdir dm-raw-to-iso.XXXXXX)"
+workdir="$(mktemp --directory --tmpdir -- dm-raw-to-iso.XXXXXX)"
 kpartx_image=""
-mounts=()
+mount_list=()
 
 cleanup() {
-   ## Explicit rc for a signal handler (see on_signal) so an interruption during a
-   ## successful command does not exit 0 and read as success; otherwise $?.
    local rc="${1:-$?}"
    local m
    ## Unmount in reverse order.
-   for (( idx=${#mounts[@]}-1 ; idx>=0 ; idx-- )) ; do
-      m="${mounts[idx]}"
-      umount -- "${m}" 2>/dev/null || umount --lazy -- "${m}" 2>/dev/null || true
+   for (( idx=${#mount_list[@]}-1 ; idx>=0 ; idx-- )); do
+      m="${mount_list[idx]}"
+      ## Never use umount --lazy, it is dangerous unless system reboot is
+      ## imminent.
+      umount -- "${m}" 2>/dev/null || true
    done
    if [ -n "${kpartx_image}" ] ; then
-      kpartx -d -s -- "${kpartx_image}" 2>/dev/null || true
+      kpartx -d -s -v -- "${kpartx_image}" 2>/dev/null || true
    fi
-   if [ "${keep_workdir}" = "true" ] ; then
-      printf '%s: keeping work directory: %s\n' "${me}" "${workdir}" >&2
+   if [ "${keep_workdir}" = "true" ]; then
+      printf '%s\n' "${me}: keeping work directory: '${workdir}'" >&2
    else
       safe-rm --recursive --force -- "${workdir}" 2>/dev/null || true
    fi
    trap - EXIT
    exit "${rc}"
 }
-## A signal must exit non-zero even if it lands right after a command that
-## returned 0 -- never report success for an interrupted build.
 on_signal() {
    cleanup 143
 }
 trap cleanup EXIT
 trap on_signal INT TERM
 
-binary="${workdir}/binary"
-rootfs="${workdir}/rootfs"
-mkdir -p -- "${binary}/boot/grub" "${binary}/live" "${binary}/.disk" "${rootfs}"
+binary_dir="${workdir}/binary"
+rootfs_dir="${workdir}/rootfs"
+mkdir -p -- "${binary_dir}/boot/grub" "${binary_dir}/live" "${binary_dir}/.disk" "${rootfs_dir}"
 
-######################################################################
-## 1. Mount the raw image's root partition and copy the rootfs out.
-######################################################################
 ## kpartx maps each partition to /dev/mapper/loop<N>p<M>. grml-debootstrap's
-## --vmefi layout puts the root filesystem in the last partition; verify the
-## mapped partition really looks like a root filesystem before trusting it.
-printf '%s: mapping partitions of %s\n' "${me}" "${raw}" >&2
-kpartx_image="${raw}"
-## -r: read-only device-mapper devices, so mounting an unclean ext4 cannot replay
-## its journal and mutate the input image (the "input is never modified" guarantee).
-kpartx_output="$(kpartx -a -r -s -v -- "${raw}")"
-[ -n "${kpartx_output}" ] || error "kpartx produced no partition maps for '${raw}'"
+## --vmefi layout puts the root filesystem in the last partition.
+printf '%s\n' "${me}: mapping partitions of '${raw_img}'" >&2
+kpartx_image="${raw_img}"
 
-## Pick the last mapped partition (grml --vmefi root), same heuristic mount-raw uses.
+## -r makes the partition maps read-only.
+kpartx_output="$(kpartx -a -r -s -v -- "${raw_img}")"
+[ -n "${kpartx_output}" ] || error "kpartx produced no partition maps for '${raw_img}'"
+
+## Pick the last mapped partition and mount it.
 mapper_name="$(printf '%s\n' "${kpartx_output}" | sed -n 's/^add map \([^ ]*\) .*/\1/p' | tail -n 1)"
 [ -n "${mapper_name}" ] || error "could not parse a partition map from kpartx output"
 mapper_dev="/dev/mapper/${mapper_name}"
 require_file "${mapper_dev}"
-
 rootfs_mnt="${workdir}/mnt"
 mkdir -p -- "${rootfs_mnt}"
 mount --read-only -- "${mapper_dev}" "${rootfs_mnt}"
-mounts+=( "${rootfs_mnt}" )
+mount_list+=( "${rootfs_mnt}" )
 
-marker=""
-for marker in etc usr bin sbin var ; do
-   [ -e "${rootfs_mnt}/${marker}" ] || error "'${mapper_dev}' does not look like a root filesystem (missing /${marker})"
+## Make sure the partition looks like a root partition.
+expected_root_dir=""
+for expected_root_dir in etc usr bin sbin var ; do
+   [ -e "${rootfs_mnt}/${expected_root_dir}" ] || error "'${mapper_dev}' does not look like a root filesystem (missing '/${expected_root_dir}')"
 done
 
-printf '%s: copying rootfs out of the image\n' "${me}" >&2
-## --one-file-system: never descend into the read-only mount's sub-mounts.
-cp --archive --one-file-system -- "${rootfs_mnt}/." "${rootfs}/"
+## Copy the image's contents out.
+printf '%s\n' "${me}: copying rootfs out of the image" >&2
+cp --archive --one-file-system -- "${rootfs_mnt}/." "${rootfs_dir}/"
 
-## Release the input image immediately; the rest operates on the copy only.
+## Release the input image immediately, we don't need it anymore.
 umount -- "${rootfs_mnt}"
-mounts=()
-kpartx -d -s -- "${raw}"
+unset_last mount_list
+kpartx -d -s -v -- "${raw_img}"
 kpartx_image=""
 
-## rootfs bootloader inputs: the GRUB modules, font and signed loaders come from
-## the copied TARGET rootfs (grml installs grub-efi-${arch}-signed + shim-signed +
-## the grub -bin package per target arch), so these are the TARGET-arch loaders even
-## on a cross-arch build. Fail loud now if the image lacks them. (The per-platform
-## signed EFI loaders are checked in the ESP loop below.)
-if [ "${bios}" = "true" ] ; then
-   require_file "${rootfs}/usr/lib/grub/i386-pc/cdboot.img" \
-      "${rootfs}/usr/lib/grub/i386-pc/boot_hybrid.img" \
-      "${rootfs}/usr/lib/grub/i386-pc/normal.mod"
+## Ensure mandatory bootloader files are present. Note that some of the EFI
+## bootloader files may not be mandatory, so we don't look for those here.
+if [ "${enable_bios_boot}" = "true" ] ; then
+   require_file "${rootfs_dir}/usr/lib/grub/i386-pc/cdboot.img" \
+      "${rootfs_dir}/usr/lib/grub/i386-pc/boot_hybrid.img" \
+      "${rootfs_dir}/usr/lib/grub/i386-pc/normal.mod"
 fi
-require_file "${rootfs}/usr/share/grub/unicode.pf2"
+require_file "${rootfs_dir}/usr/share/grub/unicode.pf2"
 
-######################################################################
-## 2. Harvest from the rootfs, then build the live (dracut-live) initramfs, in
-##    ONE chroot of the copied rootfs.
-######################################################################
 ## Bind the host API filesystems into the rootfs copy so the chroot can run.
-for api in /dev /dev/pts /proc /sys /run ; do
-   target="${rootfs}${api}"
-   mkdir -p -- "${target}"
-   mount --bind -- "${api}" "${target}"
-   mounts+=( "${target}" )
+for api_fs_dir in /dev /dev/pts /proc /sys /run ; do
+   bind_path="${rootfs_dir}${api_fs_dir}"
+   mkdir -p -- "${bind_path}"
+   mount --bind -- "${api_fs_dir}" "${bind_path}"
+   mount_list+=( "${bind_path}" )
 done
 
-## 2a. Harvest the things that can only come from inside the image.
-## Package manifest -> the ISO's /live/filesystem.packages (host dpkg-query
-## reading the rootfs db; no chroot needed).
-dpkg-query --admindir="${rootfs}/var/lib/dpkg" --show > "${binary}/live/filesystem.packages"
+## Create the package manifest.
+dpkg-query --admindir="${rootfs_dir}/var/lib/dpkg" --show > "${binary_dir}/live/filesystem.packages"
 
-## Keyboard-layout submenu (44_kb_layout, usability-misc); the layouts it loads
-## are already built in the rootfs by 3500 (set-grub-keymap --build-all), so the
-## harvest is expected to succeed. FAIL CLOSED (like the kernel-hardening harvest
-## below) on a non-zero exit rather than silently shipping an ISO with a broken /
-## missing keyboard-layout menu; stderr is left un-redirected so the underlying
-## error reaches the build log. An exit-0 empty result is a legitimate "no
-## layouts" and is handled by the '-n' guard where the submenu is emitted.
+## Copy the GRUB keyboard layouts where they can be used and generate the
+## keyboard layout submenu.
 kb_layout_rc=0
-kb_layout_submenu="$(chroot "${rootfs}" /etc/grub.d/44_kb_layout)" || kb_layout_rc=$?
+kb_layout_submenu="$(chroot "${rootfs_dir}" /etc/grub.d/44_kb_layout)" || kb_layout_rc=$?
 if [ "${kb_layout_rc}" -ne 0 ] ; then
-   error "keyboard-layout harvest (/etc/grub.d/44_kb_layout) failed in the rootfs (exit ${kb_layout_rc}); refusing to build an ISO with a broken keyboard-layout menu"
+   error "Failed to build the keyboard layout submenu (exit '${kb_layout_rc}')"
 fi
-mkdir -p -- "${binary}/boot/grub/kb_layouts"
-if [ -d "${rootfs}/boot/grub/kb_layouts" ] ; then
-   cp -a -- "${rootfs}/boot/grub/kb_layouts/." "${binary}/boot/grub/kb_layouts/"
+mkdir -p -- "${binary_dir}/boot/grub/kb_layouts"
+if [ -d "${rootfs_dir}/boot/grub/kb_layouts" ] ; then
+   cp -a -- "${rootfs_dir}/boot/grub/kb_layouts/." "${binary_dir}/boot/grub/kb_layouts/"
 fi
 
-## Kernel-command-line hardening (mitigations, slab_nomerge, rd.shell=0,
-## rd.emergency=halt, debugfs=off, ...) that security-misc sets via
-## /etc/default/grub.d: the live path has none, so without it the ISO boots
-## UNHARDENED. Read GRUB_CMDLINE_LINUX(_DEFAULT) the way grub-mkconfig assembles
-## it -- source /etc/default/grub then the grub.d drop-ins -- rather than scraping
-## grub-mkconfig OUTPUT: grub-mkconfig runs 'grub-probe /', which FAILS on the
-## copied rootfs (its workdir is a tmpfs with no backing block device) and would
-## also pull in the disk's root=/rootflags. Sourcing yields exactly the hardening;
-## root=/ro/rootflags come from 10_linux, not from GRUB_CMDLINE_LINUX.
-## The '${...}' expand in the INNER chroot 'sh', not the outer bash -- keep single-quoted.
-# shellcheck disable=SC2016
-rootfs_kernel_hardening="$(chroot "${rootfs}" sh -c '
-   GRUB_CMDLINE_LINUX=""
-   GRUB_CMDLINE_LINUX_DEFAULT=""
-   [ -e /etc/default/grub ] && . /etc/default/grub
-   for grub_d_file in /etc/default/grub.d/*.cfg ; do
-      [ -e "${grub_d_file}" ] && . "${grub_d_file}"
-   done
-   printf "%s %s" "${GRUB_CMDLINE_LINUX}" "${GRUB_CMDLINE_LINUX_DEFAULT}"
-' 2>/dev/null)" || rootfs_kernel_hardening=""
-## Drop the literal ${dm_smbios_extra} the disk grub.d appends under its own reader
-## option (the ISO adds its OWN, below, only under --smbios-reader); collapse+trim.
+## Extract kernel hardening settings. These are retrieved from grub.cfg rather
+## than calculated from grub.d to ensure there is no chance of missing settings
+## that may have been generated directly by a grub-mkconfig module.
+##
+## 'mitigations=auto,smt' is always the first hardening argument. It must be at
+## the start of all hardening arguments to ensure it doesn't disable other
+## mitigations, so it can be used to signal the beginning of the hardening
+## arguments. Non-hardening arguments can be removed from the list on a
+## case-by-case basis if needed.
+rootfs_kernel_hardening="$(grep '^[[:space:]]*linux[[:space:]]\+\/boot\/vmlinuz' "${rootfs_dir}/boot/grub/grub.cfg" | head -n1 | sed -n 's/.*\(mitigations=auto,nosmt .*\)/\1/p')" || true
+
+## Remove any literal ${dm_smbios_extra}, as we set up the SMBIOS reader for
+## the ISO separately when --smbios-reader is passed.
 # shellcheck disable=SC2016
 rootfs_kernel_hardening="${rootfs_kernel_hardening//'${dm_smbios_extra}'/}"
+
+## Trim and collapse whitespace.
 rootfs_kernel_hardening="$(printf '%s' "${rootfs_kernel_hardening}" | tr -s ' ')"
 rootfs_kernel_hardening="${rootfs_kernel_hardening#"${rootfs_kernel_hardening%%[![:space:]]*}"}"
 rootfs_kernel_hardening="${rootfs_kernel_hardening%"${rootfs_kernel_hardening##*[![:space:]]}"}"
-## FAIL CLOSED on an EMPTY result: a dm image is hardened, so empty means the grub
-## defaults could not be read. Silently shipping an unhardened live ISO is exactly
-## the failure this exists to prevent, so refuse rather than warn.
+
+## Fail closed if no hardening vars were found.
 if [ -z "${rootfs_kernel_hardening}" ] ; then
-   error "no kernel-hardening parameters found in /etc/default/grub[.d] of the rootfs; refusing to build an unhardened live ISO"
+   error "no kernel-hardening parameters found in '${rootfs_dir}/boot/grub/grub.cfg'"
 fi
 
-## 2b. Neutralize /etc/fstab + /etc/crypttab: a DISK image mounts its own partitions
-## (root by UUID, /boot/efi, swap) and crypto volumes, none of which exist in a
-## live boot -- local-fs.target would fail and drop the guest to emergency mode.
-## The live root is the squashfs via dracut-live; an empty fstab is what
-## live-config does.
-if [ -e "${rootfs}/etc/fstab" ] ; then
-   printf '# emptied by dm-raw-to-iso: live boot mounts no disk partitions\n' > "${rootfs}/etc/fstab"
+## Neutralize /etc/fstab and /etc/crypttab. We will add root mount information
+## to the kernel command line later.
+if [ -f "${rootfs_dir}/etc/fstab" ] ; then
+   printf '%s\n' '# emptied by dm-raw-to-iso' > "${rootfs_dir}/etc/fstab"
 fi
-if [ -e "${rootfs}/etc/crypttab" ] ; then
-   printf '# emptied by dm-raw-to-iso: no disk crypto volumes in a live boot\n' > "${rootfs}/etc/crypttab"
+if [ -f "${rootfs_dir}/etc/crypttab" ] ; then
+   printf '%s\n' '# emptied by dm-raw-to-iso' > "${rootfs_dir}/etc/crypttab"
 fi
 
-## 2c. Build the live initramfs.
-
-## newest-kernel-version picks the greatest VERSION (not byte order) so an image
-## carrying more than one kernel builds dracut for the right one; empty when the
-## rootfs /boot has no vmlinuz-*.
-kernel_ver="$(newest-kernel-version "$(chroot "${rootfs}" sh -c 'ls -1 /boot')")"
+## Find the latest kernel so we can build an initramfs for it.
+kernel_ver="$(newest-kernel-version "$(ls -1 "${rootfs_dir}/boot")")"
 [ -n "${kernel_ver}" ] || error "no /boot/vmlinuz-* kernel found in the rootfs"
 kernel_img="vmlinuz-${kernel_ver}"
-printf '%s: building dracut-live initramfs for kernel %s\n' "${me}" "${kernel_ver}" >&2
+printf '%s\n' "${me}: building dracut-live initramfs for kernel '${kernel_ver}'" >&2
 
-## --no-hostonly: a portable live initramfs, not tied to this build host.
-## dmsquash-live comes from the dracut-live package installed in the rootfs; dracut
-## adds it automatically. Fail loud if the rootfs lacks dracut OR the live module:
-## without 90dmsquash-live the initramfs cannot read root=live:CDLABEL= / rd.live.*
-## and the ISO boots to an emergency shell.
-chroot "${rootfs}" sh -c 'command -v dracut >/dev/null 2>&1' \
-   || error "the rootfs has no 'dracut'; a live ISO needs dracut + dracut-live installed in the image"
-[ -e "${rootfs}/usr/lib/dracut/modules.d/90dmsquash-live" ] \
-   || error "the rootfs lacks the dracut 'dmsquash-live' module; install 'dracut-live' in the image (the live ISO cannot boot without it)"
-## env TMPDIR=/tmp: the caller's TMPDIR (e.g. a per-uid /tmp/user/<uid>) does not
-## exist inside the chroot, and dracut aborts on an invalid tmpdir. /tmp always
-## exists in a Debian rootfs, so force it rather than leaking the host's path.
-## --add dmsquash-live: FORCE the live module in, do not rely on auto-inclusion.
-## Its dracut check() is include-on-demand, and a hardened image (Kicksecure /
-## security-misc dracut.conf.d) suppresses it -- without it the initrd cannot
-## handle root=live:CDLABEL= and dracut powers the machine off at boot. This is
-## what live-build's 'dracut-live' effectively guarantees.
-chroot "${rootfs}" env TMPDIR=/tmp dracut --no-hostonly --add dmsquash-live --kver "${kernel_ver}" --force --reproducible /boot/initrd.img-live "${kernel_ver}"
-
-## Do NOT --dereference: the copy runs in the HOST namespace, so an absolute
-## symlink in the guest /boot would resolve against the host filesystem and pull a
-## host file into the ISO. A normal kernel is a regular file; refuse a symlink.
-if [ -L "${rootfs}/boot/${kernel_img}" ] ; then
-   error "kernel '/boot/${kernel_img}' is a symlink; refusing (it would resolve against the host filesystem, not the guest)"
+## One of the kernel "images" we find here may be a symlink. Refuse it, as it
+## will become dangling after being placed on the ISO.
+if [ -L "${rootfs_dir}/boot/${kernel_img}" ] ; then
+   error "kernel '/boot/${kernel_img}' is a symlink"
 fi
-cp -- "${rootfs}/boot/${kernel_img}" "${binary}/live/vmlinuz"
-cp -- "${rootfs}/boot/initrd.img-live" "${binary}/live/initrd.img"
-safe-rm --force -- "${rootfs}/boot/initrd.img-live"
+
+## Make sure dracut and dmsquash-live are available in the rootfs.
+chroot "${rootfs_dir}" sh -c 'command -v dracut >/dev/null 2>&1' \
+   || error "the rootfs has no 'dracut'"
+[ -d "${rootfs_dir}/usr/lib/dracut/modules.d/90dmsquash-live" ] \
+   || error "the rootfs lacks the dracut 'dmsquash-live' module"
+
+## Build the initramfs. --no-hostonly enhances portability. dmsquash-live
+## handles critical live ISO features like the root overlay and integrity
+## checks.
+chroot "${rootfs_dir}" env TMPDIR=/tmp dracut --no-hostonly --add dmsquash-live --force --reproducible /boot/initrd.img-live "${kernel_ver}"
+
+## Install the kernel and initramfs into the ISO binary area.
+cp -- "${rootfs_dir}/boot/${kernel_img}" "${binary_dir}/live/vmlinuz"
+cp -- "${rootfs_dir}/boot/initrd.img-live" "${binary_dir}/live/initrd.img"
+
+safe-rm --force -- "${rootfs_dir}/boot/initrd.img-live"
 
 ## Tear down the API binds before squashing so they are not packed.
-for (( idx=${#mounts[@]}-1 ; idx>=0 ; idx-- )) ; do
-   umount -- "${mounts[idx]}" 2>/dev/null || umount --lazy -- "${mounts[idx]}" 2>/dev/null || true
+while [ "${#mount_list[@]}" -gt 0 ]; do
+   last_mount="${mount_list[$(( "${#mount_list[@]}" - 1 ))]}"
+   umount -- "${last_mount}" 2>/dev/null
+   unset_last mount_list
 done
-mounts=()
 
-######################################################################
-## 3. Pack the rootfs into a reproducible squashfs.
-######################################################################
-printf '%s: creating filesystem.squashfs\n' "${me}" >&2
-## Exclude runtime-only /dev contents (devtmpfs repopulates at boot) and the
-## transient /run and /tmp. Reproducible timestamps come from the exported
-## SOURCE_DATE_EPOCH (mksquashfs honors it); do NOT also pass -all-time/-mkfs-time,
-## mksquashfs rejects using both at once.
-## -one-file-system: the /dev, /proc, /sys, /run, /dev/pts binds are torn down above,
-## but that teardown swallows failures; without this a bind that failed to unmount
-## would pack the build HOST's live /proc, /sys, ... (process list, cmdlines, kernel
-## state) into the public ISO. This stops mksquashfs at every mount boundary, and the
-## proc/* + sys/* excludes are the belt-and-braces (dev/run/tmp were already covered).
-mksquashfs "${rootfs}" "${binary}/live/filesystem.squashfs" \
+## Build the root squashfs. Exclude API / ephemeral filesystems.
+##
+## mksquashfs honors SOURCE_DATE_EPOCH.
+printf '%s\n' "${me}: creating filesystem.squashfs" >&2
+mksquashfs "${rootfs_dir}" "${binary_dir}/live/filesystem.squashfs" \
+   -reproducible \
    -noappend \
    -comp xz \
    -no-progress \
    -one-file-system \
    -wildcards \
-   -e "dev/*" "proc/*" "sys/*" "run/*" "tmp/*" "boot/initrd.img-live"
+   -e "dev/*" "proc/*" "sys/*" "run/*" "tmp/*"
 
-######################################################################
-## 4. The boot medium marker the GRUB EFI cores search for.
-######################################################################
-printf 'Derivative ISO; label=%s; arch=%s\n' "${label}" "${arch}" > "${binary}/.disk/info"
+## Create /.disk/info.
+printf '%s\n' "Derivative ISO; label=${volume_label}; arch=${arch}" > "${binary_dir}/.disk/info"
 
-######################################################################
-## 5. BIOS GRUB El Torito core (amd64 only).
-######################################################################
-if [ "${bios}" = "true" ] ; then
-   printf '%s: building BIOS GRUB El Torito core\n' "${me}" >&2
-   mkdir -p -- "${binary}/boot/grub/i386-pc"
-   ## Runtime modules loaded from the ISO by the core (from the target rootfs).
-   cp -a -- "${rootfs}"/usr/lib/grub/i386-pc/*.mod "${binary}/boot/grub/i386-pc/"
-   cp -a -- "${rootfs}"/usr/lib/grub/i386-pc/*.lst "${binary}/boot/grub/i386-pc/" 2>/dev/null || true
+## Install BIOS GRUB components.
+if [ "${enable_bios_boot}" = "true" ] ; then
+   printf '%s\n' "${me}: installing BIOS GRUB components" >&2
+   mkdir -p -- "${binary_dir}/boot/grub/i386-pc"
+   ## Include all runtime modules, they all can be useful in some situations.
+   cp -a -- "${rootfs_dir}"/usr/lib/grub/i386-pc/*.mod "${binary_dir}/boot/grub/i386-pc/"
+   cp -a -- "${rootfs_dir}"/usr/lib/grub/i386-pc/*.lst "${binary_dir}/boot/grub/i386-pc/" 2>/dev/null || true
    core_img="${workdir}/core.img"
-   ## biosdisk + iso9660 are enough to reach /boot/grub on the CD; the rest load
-   ## from i386-pc/ above. cdboot.img prepended makes it El Torito no-emulation.
-   ## Host grub-mkimage assembles the target's i386-pc modules (same distro release,
-   ## so the module format matches); i386-pc output is host-arch-independent.
-   grub-mkimage -d "${rootfs}/usr/lib/grub/i386-pc" -o "${core_img}" -O i386-pc --prefix=/boot/grub biosdisk iso9660
-   cat "${rootfs}/usr/lib/grub/i386-pc/cdboot.img" "${core_img}" > "${binary}/boot/grub/grub_eltorito"
+   grub-mkimage -d "${rootfs_dir}/usr/lib/grub/i386-pc" -o "${core_img}" -O i386-pc --prefix=/boot/grub biosdisk iso9660
+   ## xorriso will use this image as the boot image file for the ISO later.
+   cat "${rootfs_dir}/usr/lib/grub/i386-pc/cdboot.img" "${core_img}" > "${binary_dir}/boot/grub/grub_eltorito"
    safe-rm --force -- "${core_img}"
 fi
 
-######################################################################
-## 6. EFI System Partition: signed shim + signed grub, then pack the FAT ESP.
-######################################################################
-## Debian-signed loaders only (shim boots UEFI with Secure Boot on OR off), plus
-## the FAT ESP xorriso registers as the El Torito EFI entry and as a GPT partition.
-## Produces binary/boot/grub/efi.img and a plain-file copy of EFI/boot/*.efi.
-printf '%s: installing signed EFI loaders and building the ESP\n' "${me}" >&2
-esp_stage="${workdir}/esp"
-mkdir -p -- "${esp_stage}/EFI/boot" "${esp_stage}/boot/grub"
+## Prepare to build the EFI System Partition. This is done unconditionally as
+## all supported platforms can boot from EFI.
+printf '%s\n' "${me}: installing signed EFI loaders and building the ESP" >&2
+esp_stage_dir="${workdir}/esp"
+mkdir -p -- "${esp_stage_dir}/EFI/boot" "${esp_stage_dir}/boot/grub"
 
-## Per EFI platform: install the MS-signed shim (loaded first) + the distro-signed
-## grub it chainloads. The signed shim boots UEFI whether Secure Boot is ON or OFF,
-## so this single path is EFI AND Secure Boot -- no unsigned core, no embedded
-## config. gcd* is the removable-media (CD/USB) signed grub variant.
-## The FIRST platform is the SUPPORTED one for the arch (x64 on amd64, aa64 on
-## arm64): a missing signed dependency there is a hard error. The rest are OPTIONAL
-## (32-bit UEFI): auto-skip them when their signed pair is absent.
-for pair in "${efi_platforms[@]}" ; do
-   platform="${pair%%:*}"
-   efi_name="${pair##*:}"
-   signed_grub="${rootfs}/usr/lib/grub/${platform}-signed/gcd${efi_name}.efi.signed"
-   signed_shim="${rootfs}/usr/lib/shim/shim${efi_name}.efi.signed"
-   mokmanager="${rootfs}/usr/lib/shim/mm${efi_name}.efi.signed"
+## Locate and install the needed EFI binaries. shim is a first-stage loader
+## that is compatible with Secure Boot. grub is of course the primary
+## bootloader. mokmanager is used to reconfigure Secure Boot Machine Owner
+## Keys; it isn't strictly needed here, but it could be useful for some people.
+for efi_platform_pair in "${efi_platform_pair_list[@]}" ; do
+   efi_platform="${efi_platform_pair%%:*}"
+   efi_arch="${efi_platform_pair#*:}"
+   signed_grub_file="${rootfs_dir}/usr/lib/grub/${efi_platform}-signed/gcd${efi_arch}.efi.signed"
+   signed_shim_file="${rootfs_dir}/usr/lib/shim/shim${efi_arch}.efi.signed"
+   signed_mokmanager_file="${rootfs_dir}/usr/lib/shim/mm${efi_arch}.efi.signed"
 
-   if [ -r "${signed_grub}" ] && [ -r "${signed_shim}" ] ; then
-      cp -a --dereference -- "${signed_shim}" "${esp_stage}/EFI/boot/boot${efi_name}.efi"
-      cp -a -- "${signed_grub}" "${esp_stage}/EFI/boot/grub${efi_name}.efi"
-      if [ -r "${mokmanager}" ] ; then
-         cp -a -- "${mokmanager}" "${esp_stage}/EFI/boot/mm${efi_name}.efi"
+   if [ -r "${signed_grub_file}" ] && [ -r "${signed_shim_file}" ] ; then
+      cp -a --dereference -- "${signed_shim_file}" "${esp_stage_dir}/EFI/boot/boot${efi_arch}.efi"
+      cp -a -- "${signed_grub_file}" "${esp_stage_dir}/EFI/boot/grub${efi_arch}.efi"
+      if [ -r "${signed_mokmanager_file}" ] ; then
+         cp -a -- "${signed_mokmanager_file}" "${esp_stage_dir}/EFI/boot/mm${efi_arch}.efi"
       fi
-   elif [ "${pair}" = "${efi_platforms[0]}" ] ; then
-      error "missing signed EFI dependency for the supported platform ${efi_name} (${arch}) in the image: the target rootfs must have shim-signed + grub-efi-${arch}-signed installed (need ${signed_shim} and ${signed_grub})"
+   elif [ "${efi_platform_pair}" = "${efi_platform_pair_list[0]}" ] ; then
+      error "missing signed EFI dependency for the supported EFI arch '${efi_arch}' in the image (need '${signed_shim_file}' and '${signed_grub_file}')"
    else
-      printf '%s: NOTE: no signed shim+grub for optional EFI platform %s; skipping it.\n' "${me}" "${efi_name}" >&2
+      printf '%s\n' "${me}: NOTE: no signed shim+grub for optional EFI arch '${efi_arch}', skipping it." >&2
    fi
 done
 
-## ESP-redirect grub.cfg (from the overlay): some firmware loads the EFI grub with
-## root set to the ESP itself, so redirect to the real config on the medium
-## carrying /.disk/info.
-cp -- "${grub_config_dir}/esp-redirect.cfg" "${esp_stage}/boot/grub/grub.cfg"
+## Install bootstrap GRUB config that locates the live ISO root.
+cp -- "${grub_config_dir}/esp-redirect.cfg" "${esp_stage_dir}/boot/grub/grub.cfg"
 
-## Pack EFI/boot/*.efi + the redirect grub.cfg into a minimal FAT ESP.
-find "${esp_stage}" -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" -- {} +
-esp_bytes=0
+## Calculate the approximate size of the ESP before building it.
+find "${esp_stage_dir}" -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" -- {} +
+esp_byte_count=0
 while IFS= read -r -d '' f ; do
-   esp_bytes=$(( esp_bytes + $(stat -c %s -- "${f}") ))
-done < <(find "${esp_stage}" -type f -print0)
-## + directory slack (EFI, EFI/boot, boot, boot/grub); round the KiB up to 32.
-esp_bytes=$(( esp_bytes + 4096 * 4 ))
-esp_blocks=$(( (esp_bytes / 1024 + 55) / 32 * 32 ))
-efi_img="${binary}/boot/grub/efi.img"
+   esp_byte_count=$(( esp_byte_count + $(stat -c %s -- "${f}") ))
+done < <(find "${esp_stage_dir}" -type f -print0)
+
+## Add some extra clusters' worth for directory slack.
+esp_byte_count=$(( esp_byte_count + 4096 * 4 ))
+
+## Add some more slack for filesystem structures, round up to nearest 32 KB
+## boundary
+esp_block_count=$(( (esp_byte_count / 1024 + 55) / 32 * 32 ))
+
+## Build the ESP.
+efi_img="${binary_dir}/boot/grub/efi.img"
 ## 32-bit hex volume id derived from SOURCE_DATE_EPOCH for reproducibility.
-esp_volid="$(printf '%08x' $(( SOURCE_DATE_EPOCH % 4294967296 )))"
-mkfs.msdos -C "${efi_img}" "${esp_blocks}" -i "${esp_volid}" >/dev/null
-mmd -i "${efi_img}" ::EFI ::EFI/boot ::boot ::boot/grub
-mcopy -m -o -i "${efi_img}" "${esp_stage}/EFI/boot/"*.efi ::EFI/boot
-mcopy -m -o -i "${efi_img}" "${esp_stage}/boot/grub/grub.cfg" ::boot/grub
-## Plain-file copy of the loaders on the ISO too (USB/loopback reachability).
-cp -a -- "${esp_stage}/EFI" "${binary}/EFI"
+esp_volid="$(printf '%08x' $(( SOURCE_DATE_EPOCH % 4294967296 )) )"
+mkfs.msdos -F 32 -C "${efi_img}" "${esp_block_count}" -i "${esp_volid}" >/dev/null
+mmd -i "${efi_img}" ::/EFI ::/EFI/boot ::/boot ::/boot/grub
+mcopy -m -o -i "${efi_img}" "${esp_stage_dir}/EFI/boot/"*.efi ::/EFI/boot
+mcopy -m -o -i "${efi_img}" "${esp_stage_dir}/boot/grub/grub.cfg" ::/boot/grub
 
-######################################################################
-## 7. Main grub.cfg + config.cfg + loopback.cfg.
-######################################################################
-printf '%s: writing GRUB configuration\n' "${me}" >&2
-cp -a -- "${rootfs}/usr/share/grub/unicode.pf2" "${binary}/boot/grub/unicode.pf2"
+## Copy the loaders to the ISO too, some firmware will use these instead.
+cp -a -- "${esp_stage_dir}/EFI" "${binary_dir}/"
 
-## Live kernel command line. The base carries the dracut-live boot contract
-## (root=live:CDLABEL=, rd.live.*, iso-scan/filename for loop-mount); ${iso_path}
-## stays unexpanded for GRUB. On top: the live-config hostname, the harvested
-## kernel hardening, an optional serial console, and (for test builds) the literal
-## ${dm_smbios_extra} the SMBIOS reader fills at boot.
-live_append="rd.live.overlay.overlayfs=1 boot=live components splash rd.live.image root=live:CDLABEL=${label} rd.live.dir=live rd.live.squashimg=filesystem.squashfs iso-scan/filename=\${iso_path}"
-live_append="${live_append} live-config.hostname=${dist_hostname}"
+## Prepare to write GRUB configuration.
+printf '%s\n' "${me}: writing GRUB configuration" >&2
+cp -a -- "${rootfs_dir}/usr/share/grub/unicode.pf2" "${binary_dir}/boot/grub/unicode.pf2"
 
+## Prepare to assemble GRUB config.
+iso_cmdline="rd.live.overlay.overlayfs=1 splash rd.live.image root=live:CDLABEL=${volume_label} rd.live.dir=live rd.live.squashimg=filesystem.squashfs iso-scan/filename=\${iso_path}"
 grub_timeout="30"
 if [ "${serial_console}" = "true" ] ; then
-   ## kernel + serial console; boot the default entry immediately (headless).
-   live_append="${live_append} console=tty0 console=ttyS0,115200n8"
+   iso_cmdline="${iso_cmdline} console=tty0 console=ttyS0,115200n8"
+   ## When the serial console is enabled, boot the default entry immediately.
    grub_timeout="0"
 fi
-## Kernel hardening ahead of the SMBIOS token so an injected console= still wins.
-live_append="${live_append} ${rootfs_kernel_hardening}"
+## Add kernel hardening before the SMBIOS reader so SMBIOS can inject console=
+## and not be overridden.
+iso_cmdline="${iso_cmdline} ${rootfs_kernel_hardening}"
 if [ "${smbios_reader}" = "true" ] ; then
-   ## Single quotes: '${dm_smbios_extra}' must reach grub.cfg un-expanded.
-   # shellcheck disable=SC2016
-   live_append="${live_append} "'${dm_smbios_extra}'
+   iso_cmdline="${iso_cmdline} \${dm_smbios_extra}"
 fi
 
-## Assemble dm's GRUB config (from --grub-config-dir) into the ISO's /boot/grub.
-printf '%s: assembling GRUB configuration\n' "${me}" >&2
-cp -- "${grub_config_dir}/grub.cfg"     "${binary}/boot/grub/grub.cfg"
-cp -- "${grub_config_dir}/config.cfg"   "${binary}/boot/grub/config.cfg"
-cp -- "${grub_config_dir}/loopback.cfg" "${binary}/boot/grub/loopback.cfg"
-cp -- "${grub_config_dir}/theme.cfg"    "${binary}/boot/grub/theme.cfg"
-mkdir -p -- "${binary}/boot/grub/live-theme"
-cp -- "${grub_config_dir}/live-theme/theme.txt" "${binary}/boot/grub/live-theme/theme.txt"
+## Install template GRUB config files.
+printf '%s\n' "${me}: assembling GRUB configuration" >&2
+cp -- "${grub_config_dir}/grub.cfg" \
+  "${grub_config_dir}/config.cfg" \
+  "${grub_config_dir}/loopback.cfg" \
+  "${grub_config_dir}/theme.cfg" \
+  "${binary_dir}/boot/grub/"
+mkdir -p -- "${binary_dir}/boot/grub/live-theme"
+cp -- "${grub_config_dir}/live-theme/theme.txt" "${binary_dir}/boot/grub/live-theme/theme.txt"
 
-## Append the harvested keyboard-layout submenu and source the theme inside it so
-## it matches the rest of the menu.
+## Append the keyboard layout submenu, sourcing the theme inside it so it
+## matches the rest of the menu.
 if [ -n "${kb_layout_submenu}" ] ; then
-   printf '%s\n' "${kb_layout_submenu}" >> "${binary}/boot/grub/grub.cfg"
+   printf '%s\n' "${kb_layout_submenu}" >> "${binary_dir}/boot/grub/grub.cfg"
    sed -i "s/\(submenu 'Keyboard layout options'.*\)/\1\n  source \/boot\/grub\/theme.cfg/" \
-      "${binary}/boot/grub/grub.cfg"
+      "${binary_dir}/boot/grub/grub.cfg"
 fi
 
-## --serial-console: route the GRUB menu to ttyS0 too (video kept), appended after
-## config.cfg's 'terminal_output gfxterm'.
+## Tee the GRUB menu to ttyS0 if --serial-console is passed.
 if [ "${serial_console}" = "true" ] ; then
-   {
-      printf '%s\n' ''
-      printf '%s\n' 'insmod serial'
-      printf '%s\n' 'serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1'
-      printf '%s\n' 'terminal_output serial console'
-   } >> "${binary}/boot/grub/config.cfg"
+  printf '%s\n' "
+insmod serial
+serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1
+terminal_output serial console" >> "${binary_dir}/boot/grub/config.cfg"
 fi
 
-## --smbios-reader: inline the SMBIOS cmdline reader into config.cfg (grub.cfg
-## sources config.cfg first, so ${dm_smbios_extra} is set before any menuentry).
+## Install the SMBIOS cmdline reader if --smbios-reader is passed.
 if [ "${smbios_reader}" = "true" ] ; then
-   printf '%s\n' '' >> "${binary}/boot/grub/config.cfg"
-   cat -- "${grub_config_dir}/smbios-reader.cfg" >> "${binary}/boot/grub/config.cfg"
+   printf '%s\n' '' >> "${binary_dir}/boot/grub/config.cfg"
+   cat -- "${grub_config_dir}/smbios-reader.cfg" >> "${binary_dir}/boot/grub/config.cfg"
 fi
 
-## splash.png: substitute the branding placeholders in the SVG, then rasterize to
-## the 800x600 PNG the theme (live-theme/theme.txt) references. Bash string
-## replace, NOT 'sed s|...|${value}|' -- the value must not be interpreted as a
-## sed program (a '|' would break it, a crafted value could reach sed's 'e' flag).
+## Substitute branding placeholders in the SVG, then rasterize to PNG.
 splash_svg="${workdir}/splash.svg"
-splash_content="$(cat -- "${grub_config_dir}/splash.svg"; printf x)"
+splash_content="$(cat -- "${grub_config_dir}/splash.svg"; printf '%s\n' 'x')"
 splash_content="${splash_content%x}"
 splash_content="${splash_content//@DIST_NAME@/${dist_pretty}}"
 splash_content="${splash_content//@DIST_VERSION@/${dist_version}}"
 printf '%s' "${splash_content}" > "${splash_svg}"
 rsvg-convert --format png --width 800 --height 600 \
-   --output "${binary}/boot/grub/splash.png" -- "${splash_svg}"
+   --output "${binary_dir}/boot/grub/splash.png" -- "${splash_svg}"
 
-## Substitute the two computed tokens in every staged *.cfg -- @APPEND_LIVE@ (the
-## live kernel cmdline) and @TIMEOUT@ (the menu timeout). Literal (parameter)
-## substitution only: ${iso_path} / ${dm_smbios_extra} stay unexpanded for GRUB to
-## resolve at boot.
-while IFS= read -r -d '' cfg ; do
-   ## 'cat; printf x' then strip the x preserves any trailing newline that a
-   ## bare command substitution would drop.
-   cfg_content="$(cat -- "${cfg}"; printf x)"
+## Substitute setting placeholders in each GRUB config file.
+while IFS= read -r -d '' cfg_file ; do
+   cfg_content="$(cat -- "${cfg_file}"; printf '%s\n' 'x')"
    cfg_content="${cfg_content%x}"
-   cfg_content="${cfg_content//@APPEND_LIVE@/${live_append}}"
+   cfg_content="${cfg_content//@APPEND_LIVE@/${iso_cmdline}}"
    cfg_content="${cfg_content//@TIMEOUT@/${grub_timeout}}"
-   printf '%s' "${cfg_content}" > "${cfg}"
-done < <(find "${binary}/boot/grub" -type f -name '*.cfg' -print0)
+   printf '%s' "${cfg_content}" > "${cfg_file}"
+done < <(find "${binary_dir}/boot/grub" -type f -name '*.cfg' -print0)
 
-######################################################################
-## 8. Assemble the hybrid ISO in a single xorriso pass.
-######################################################################
-printf '%s: assembling ISO %s\n' "${me}" "${output}" >&2
+## Assemble command line options to xorriso.
+printf '%s\n' "${me}: assembling ISO '${output_iso}'" >&2
 xorriso_opts=(
-   -R -r -J -joliet-long -l -cache-inodes -iso-level 3
-   -volid "${label}"
+   -R -r -J -joliet-long -l -iso-level 3
+   -volid "${volume_label}"
    --modification-date="$(date --utc --date="@${SOURCE_DATE_EPOCH}" +%Y%m%d%H%M%S00)"
 )
 
-if [ "${bios}" = "true" ] ; then
+if [ "${enable_bios_boot}" = "true" ] ; then
    ## Legacy BIOS: hybrid MBR from GRUB (USB) + El Torito no-emulation core (CD).
    xorriso_opts+=(
       --grub2-boot-info
-      --grub2-mbr "${rootfs}/usr/lib/grub/i386-pc/boot_hybrid.img"
+      --grub2-mbr "${rootfs_dir}/usr/lib/grub/i386-pc/boot_hybrid.img"
       -no-emul-boot -boot-load-size 4 -boot-info-table
       -b boot/grub/grub_eltorito
       -eltorito-alt-boot
    )
 fi
 
-## UEFI (ALL arches): expose the ESP FAT image as the El Torito EFI entry AND as a
-## real GPT partition so USB/HDD firmware ESP-scan finds it. -efi-boot-part must
-## apply on arm64 too (it has no BIOS block), or an arm64 ISO has only the optical
-## El Torito EFI entry and no partition to boot from as a USB stick.
-## No -isohybrid-apm-hfsplus: an Apple Partition Map only maps an HFS+ partition,
-## and this ISO ships none (just the FAT ESP), so it emits nothing here and is
-## dropped by the grub2-mbr system area on amd64 -- we do not claim Mac/APM boot.
+## For UEFI, expose the ESP FAT image as the El Torito EFI entry and as a
+## real GPT partition so USB/HDD firmware ESP-scan finds it.
+##
+## TODO: `man xorrisofs` states that -efi-boot-part and -isohybrid-gpt-basdat
+## cannot be used together, yet they're used together here and in live-build.
+## Why does this work / does it work?
 xorriso_opts+=(
    -efi-boot-part --efi-boot-image
    -e boot/grub/efi.img -no-emul-boot
    -isohybrid-gpt-basdat
 )
 
-## memtest86+ (x86 only): staged into /live so the menu can boot it directly. It
-## comes from the BUILD HOST's /boot (1200 installs memtest86+ on amd64). The GRUB
-## entry self-hides when the file is absent, so a non-x86 target or a host without
-## memtest86+ warns and skips rather than failing the ISO. (filesystem.packages
-## was written to /live during the rootfs harvest above.)
-case "${arch}" in
-   amd64)
-      mt_bin="/boot/memtest86+x64.bin"
-      mt_efi="/boot/memtest86+x64.efi"
-      ;;
-   i386)
-      mt_bin="/boot/memtest86+ia32.bin"
-      mt_efi="/boot/memtest86+ia32.efi"
-      ;;
-   *)
-      mt_bin=""
-      mt_efi=""
-      ;;
-esac
-if [ -n "${mt_bin}" ] && [ -e "${mt_bin}" ] ; then
-   printf '%s: staging memtest86+ into /live\n' "${me}" >&2
-   cp -- "${mt_bin}" "${binary}/live/memtest.bin"
+## Add memtest86+ to the ISO if applicable.
+memtest_bios_file=""
+memtest_efi_file=""
+if [ "${arch}" = 'amd64' ]; then
+   memtest_bios_file="/boot/memtest86+x64.bin"
+   memtest_efi_file="/boot/memtest86+x64.efi"
+fi
+if [ -n "${memtest_bios_file}" ] && [ -e "${memtest_bios_file}" ]; then
+   printf '%s\n' "${me}: staging memtest86+ into /live" >&2
+   cp -- "${memtest_bios_file}" "${binary_dir}/live/memtest.bin"
    ## The EFI image is best-effort (older memtest86+ ships BIOS only).
-   [ ! -e "${mt_efi}" ] || cp -- "${mt_efi}" "${binary}/live/memtest.efi"
-elif [ -n "${mt_bin}" ] ; then
-   printf '%s: NOTE: memtest86+ binary %s not found; the ISO menu memtest entry will self-hide.\n' "${me}" "${mt_bin}" >&2
+   [ -f "${memtest_efi_file}" ] && cp -- "${memtest_efi_file}" "${binary_dir}/live/memtest.efi"
+elif [ -n "${memtest_bios_file}" ]; then
+   printf '%s\n' "${me}: NOTE: memtest86+ binary '${memtest_bios_file}' not found." >&2
 fi
 
-## Pin every staged file's mtime to SOURCE_DATE_EPOCH so the ISO is reproducible:
-## xorriso records per-file mtimes, and overlay / live-overlay / copied loader
-## files otherwise carry build-host times. Done last, after all staging.
-find "${binary}" -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" -- {} +
+## Pin every staged file's mtime to SOURCE_DATE_EPOCH so the ISO is reproducible.
+find "${binary_dir}" -exec touch --no-dereference --date="@${SOURCE_DATE_EPOCH}" -- {} +
 
-safe-rm --force -- "${output}"
-xorriso -as mkisofs "${xorriso_opts[@]}" -o "${output}" "${binary}"
+safe-rm --force -- "${output_iso}"
+xorriso -as mkisofs "${xorriso_opts[@]}" -o "${output_iso}" "${binary_dir}"
 
 ## Embed an ISO md5 for GRUB/dracut 'rd.live.check' if isomd5sum is present.
-if type -P implantisomd5 >/dev/null 2>&1 ; then
-   implantisomd5 "${output}"
+if command -v implantisomd5 >/dev/null 2>&1 ; then
+   implantisomd5 "${output_iso}"
 fi
 
 ## Pin the output mtime for reproducibility.
-touch --date="@${SOURCE_DATE_EPOCH}" -- "${output}"
+touch --date="@${SOURCE_DATE_EPOCH}" -- "${output_iso}"
 
-printf '%s: done: %s\n' "${me}" "${output}" >&2
+printf '%s\n' "${me}: done: '${output_iso}'" >&2

@@ -82,7 +82,10 @@ case "${1:-}" in
       ;;
    seed-container)
       container="${2:-}"
-      [ -n "${container}" ] || { printf '%s\n' "${BASH_SOURCE[0]}: seed-container needs a container name" >&2; exit 64; }
+      if [ -z "${container}" ]; then
+         printf '%s\n' "${BASH_SOURCE[0]}: seed-container needs a container name" >&2
+         exit 64
+      fi
       ## Nothing to seed on a cache miss; skip an empty sidecar so 'docker cp' is
       ## not handed a no-content path.
       [ -d "${sidecar_dir}" ] || exit 0
@@ -96,7 +99,10 @@ case "${1:-}" in
       ;;
    snapshot-container)
       container="${2:-}"
-      [ -n "${container}" ] || { printf '%s\n' "${BASH_SOURCE[0]}: snapshot-container needs a container name" >&2; exit 64; }
+      if [ -z "${container}" ]; then
+         printf '%s\n' "${BASH_SOURCE[0]}: snapshot-container needs a container name" >&2
+         exit 64
+      fi
       ## The container may be gone if an earlier step failed before it started.
       docker inspect -- "${container}" >/dev/null 2>&1 || exit 0
       mkdir --parents -- "${sidecar_dir}"

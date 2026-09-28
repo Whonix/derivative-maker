@@ -1,0 +1,105 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sets variables related to signing and verification.
+## style-ok: no-strict -- sourced fragment.
+# shellcheck disable=SC2086
+
+## {{{ OpenPGP policy + cert paths
+
+default_if_empty openpgp_policy_filename 'openpgp-policy.toml'
+[ -n "${openpgp_cert_filename:-}" ] || openpgp_cert_filename='openpgp-cert.pem'
+
+## Shipped in-tree (upstream maintainer keys only, no local cert).
+default_if_empty openpgp_policy_file_project "${source_code_folder_dist}/buildconfig.d/${openpgp_policy_filename}"
+
+## signing-key-create writes to the highest-precedence (last) entry.
+[ -n "${openpgp_policy_dir_user:-}" ] || openpgp_policy_dir_user="${dist_build_config_dirs_list##* }"
+default_if_empty openpgp_policy_file_user "${openpgp_policy_dir_user}/${openpgp_policy_filename}"
+## FIXME: openpgp_cert_file_user isn't used by anything.
+default_if_empty openpgp_cert_file_user "${openpgp_policy_dir_user}/${openpgp_cert_filename}"
+
+## ${openpgp_policy_file_resolved} / ${openpgp_cert_file_resolved} = last
+## existing-and-readable file of each kind, or empty if none.
+if [ -z "${openpgp_policy_file_resolved:-}" ]; then
+   openpgp_policy_file_resolved=""
+   openpgp_cert_file_resolved=""
+   openpgp_policy_search_paths=()
+   openpgp_cert_search_paths=()
+   for openpgp_policy_dir in ${dist_build_config_dirs_list}; do
+      openpgp_policy_candidate="${openpgp_policy_dir}/${openpgp_policy_filename}"
+      openpgp_cert_candidate="${openpgp_policy_dir}/${openpgp_cert_filename}"
+      openpgp_policy_search_paths+=( "  ${openpgp_policy_candidate}" )
+      openpgp_cert_search_paths+=( "  ${openpgp_cert_candidate}" )
+      #printf '%s\n' "openpgp_policy_file_resolved: '$openpgp_policy_file_resolved'"
+      if [ -r "${openpgp_policy_candidate}" ]; then
+         openpgp_policy_file_resolved="${openpgp_policy_candidate}"
+      fi
+      #printf '%s\n' "openpgp_cert_candidate: '$openpgp_cert_candidate'"
+      if [ -r "${openpgp_cert_candidate}" ]; then
+         openpgp_cert_file_resolved="${openpgp_cert_candidate}"
+      fi
+   done
+   unset openpgp_policy_dir openpgp_policy_candidate openpgp_cert_candidate
+   ## openpgp_policy_file_resolved="" - in case:
+   # > openpgp_cert_candidate: '/home/user/derivative-maker/buildconfig.d/openpgp-cert.pem'
+   # > openpgp_cert_candidate: '/etc/buildconfig-dist.d/openpgp-cert.pem'
+   # > openpgp_cert_candidate: '/home/user/buildconfig.d/openpgp-cert.pem'
+fi
+
+## ${sq_git_policy_file} precedence:
+##   1. caller pre-set (env / parse-cmd)
+##   2. ${openpgp_policy_file_resolved}
+##   3. ${openpgp_policy_file_project}
+##
+## Redistributable builds must not pick up a contaminated override;
+## dm-build-official ensures no openpgp-policy.toml exists in any
+## dist_build_config_dirs_list entry above the shipped one, or
+## pins sq_git_policy_file explicitly.
+default_if_empty sq_git_policy_file "${openpgp_policy_file_resolved:-${openpgp_policy_file_project}}"
+export sq_git_policy_file
+
+## }}}
+
+default_if_empty signify_folder "${HOMEVAR}/.signify"
+default_if_empty signify_private_key "${signify_folder}/keyname.sec"
+default_if_empty signify_public_key "${signify_folder}/keyname.pub"
+
+## {{{ fallback variables for 'debchange' ('dch'), 'dpkg-buildpackage' and 'debuild'
+
+## see: 'man debchange'
+default_if_empty DEBFULLNAME "derivative distribution auto generated local APT signing key"
+export DEBFULLNAME
+default_if_empty DEBEMAIL "derivative-distribution@local-signing.key"
+export DEBEMAIL
+
+default_if_empty debsign_wrapper "${dist_source_help_steps_folder}/sq-debsign-wrapper"
+default_if_empty sq_git_wrapper "${dist_source_help_steps_folder}/sq-git-wrapper"
+[ -n "${git_verify_command_wrapper:-}" ] || git_verify_command_wrapper=( git -c "gpg.openpgp.program=${sq_git_wrapper}" )
+
+## Per-call 'git -c key=value' options that configure sq-git-wrapper
+## signing without writing to ~/.gitconfig. user.signingkey is set
+## to DEBEMAIL; sq-git-wrapper's case statement detects '@' and
+## dispatches to 'sq sign --signer-email'.
+git_signing_command_wrapper=(
+   git
+   -c "user.signingkey=${DEBEMAIL}"
+   -c gpg.format=openpgp
+   -c "gpg.openpgp.program=${sq_git_wrapper}"
+   -c commit.gpgsign=true
+   -c tag.gpgsign=true
+   -c "user.email=${DEBEMAIL}"
+   -c "user.name=${DEBFULLNAME}"
+)
+
+default_if_empty make_debsign_opts "-p ${debsign_wrapper}"
+export make_debsign_opts
+
+## For whatever it may be worth.
+## https://forums.whonix.org/t/end-to-end-signed-debs-debsign-debsig-and-dpkg-sig
+default_if_empty make_use_debsign "true"
+export make_use_debsign
+
+## }}}

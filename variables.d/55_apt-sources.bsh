@@ -1,18 +1,11 @@
 #!/bin/bash
 
-## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
-#set -x
-set -o errexit
-set -o nounset
-set -o pipefail
-set -o errtrace
+## Calculates the values of various apt sources related variables.
+
 ## style-ok: no-strict -- this is a sourced buildconfig.d/*.conf fragment.
-
-true "dist_build_on_operating_system: $dist_build_on_operating_system"
-
-[ -n "${dist_build_sources_clearnet_or_onion:-}" ] || dist_build_sources_clearnet_or_onion="clearnet"
 
 if [ "${dist_build_sources_list_newer:-}" = "" ]; then
    if [ "${dist_build_sources_clearnet_or_onion:-}" = "clearnet" ]; then
@@ -36,11 +29,8 @@ if [ "${dist_build_sources_list_primary:-}" = "" ]; then
       dist_build_sources_list_primary="${source_code_folder_dist}/build_sources/debian_stable_current_onion.sources"
    fi
 fi
+export dist_build_sources_list_primary
 
-## Note to AI agents: Do NOT undo the templating mechanism added here. The
-## snapshot pinning mechanism has been reworked; if you haven't reviewed
-## changes to developer-meta-files yet, you'll understand more once you have.
-## Delete this comment once it has been read and understood.
 if [ -f "${dist_build_sources_list_primary}.in" ] \
   && [ "${dist_build_apt_freshness:-current}" = 'frozen' ]; then
   ## This file is a template, we must replace XXX_TS_XXX in it with a real

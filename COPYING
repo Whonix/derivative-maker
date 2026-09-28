@@ -61,14 +61,12 @@ Files: iso-build-data/grub-config/config.cfg
        iso-build-data/grub-config/theme.cfg
        iso-build-data/grub-config/live-theme/theme.txt
        iso-build-data/grub-config/splash.svg
-Upstream-Name: live-build
-Upstream-Contact: Debian Live Project <debian-live@lists.debian.org>
-Source: https://salsa.debian.org/live-team/live-build
 Copyright: 2016 - 2020 The Debian Live team
            2006 - 2015 Daniel Baumann <mail@daniel-baumann.ch>
+           2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 License: GPL-3+
-Comment: Migrated from Debian live-build share/bootloaders/ (grub-pc GRUB menu,
- theme and splash); adapted for derivative-maker's hybrid-ISO build.
+Comment: Migrated from Debian live-build share/bootloaders, adapted for
+ derivative-maker's hybrid-ISO build.
 
 Files: help-steps/dm-raw-to-iso
        build-steps.d/4310_convert-raw-to-iso
@@ -76,8 +74,7 @@ Copyright: 2025 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
            2016 - 2020 The Debian Live team
            2006 - 2015 Daniel Baumann <mail@daniel-baumann.ch>
 License: GPL-3+
-Comment: Reimplements Debian live-build's hybrid-ISO packaging using only
- packages.debian.org tools; derived from and inspired by live-build.
+Comment: Derived from and inspired by live-build.
 
 License: GPL-3+
  This program is free software: you can redistribute it and/or modify

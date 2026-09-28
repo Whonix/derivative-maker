@@ -96,13 +96,9 @@ env:
   BASE_CACHE: "true"
   ## Parallel package builds, passed as '--package-jobs N'. 2100 falls back to
   ## serial with a reason when cowbuilder is not in use, so this needs no guard here.
-  ## 2100 advises capping around nproc-2; ubuntu-24.04 runners have 4 vCPU. Both
-  ## copies get the same value, so it cannot skew the a-vs-b comparison -- and
-  ## nondeterminism introduced by it is what this lane exists to report.
-  ##
-  ## CI does not need to stay responsive, so use all runner cores. ubuntu-24.04
-  ## runners have 4 vCPU. Both a/b copies get the same value, so it cannot skew
-  ## the comparison.
+  ## 2100 advises capping around nproc-2; ubuntu-24.04 runners have 4 vCPU. CI does
+  ## not need to stay responsive, so use all runner cores. Both a/b copies get the
+  ## same value, so it cannot skew the comparison.
   REPRO_PACKAGE_JOBS: "4"
 
 jobs:

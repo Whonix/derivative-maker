@@ -28,26 +28,18 @@ else
    parse_cmd_was_sourced='true'
 fi
 
-implicit_dist_type_vm() {
+implicit_dist_type() {
+   local implicit_type
+   implicit_type="$1"
    if printf '%s\n' "${args[@]}" | grep --fixed-strings --line-regexp -- "--type" &>/dev/null; then
       return 0
    fi
    if [ ! "${dist_build_type:-}" = "" ]; then
       return 0
    fi
-   printf '%s\n' "INFO: implicitly setting '--type vm' because using '${1:-}'."
-   dist_build_type="vm"
-}
-
-implicit_dist_type_host() {
-   if printf '%s\n' "${args[@]}" | grep --fixed-strings --line-regexp -- "--type" &>/dev/null; then
-      return 0
-   fi
-   if [ ! "${dist_build_type:-}" = "" ]; then
-      return 0
-   fi
-   printf '%s\n' "INFO: implicitly setting '--type host' because using '${1:-}'."
-   dist_build_type="host"
+   printf '%s\n' "INFO: implicitly setting '--type ${implicit_type}' because using '${1:-}'."
+   dist_build_type="${implicit_type}"
+   export dist_build_type
 }
 
 parse_cmd_type_error() {
@@ -203,7 +195,7 @@ Environment Variables:
 Advanced Options:
   --report [true|false]           : Enable or disable build reports (default: false).
   --serial-console-enable [true|false] : Install serial-console-enable and enable serial console on ISO builds (default: false).
-  --grub-bios-theme [true|false]  : Force the 4x3/BIOS grub theme and resolution in the built image regardless of build-host firmware, for reproducible builds (default: true). false lets grub-mkconfig probe the build host firmware.
+  --grub-bios-theme [true|false]  : Force the 4x3/BIOS grub theme and resolution in the built image regardless of build-host firmware for reproducible builds (default: true).
   --smbios-reader [true|false]    : DANGEROUS, DO NOT USE. Allow injecting kernel parameters via the SMBIOS serial number field. This will allow attackers with physical access to inject arbitrary kernel parameters into the boot process! Only useful for CI and AI agents.
   --sanity-tests [true|false]     : Enable or disable chroot script sanity tests for faster build speed (default: false).
   --only-packages 'p1 p2'         : Rebuild only listed packages into the persistent local repo, reuse the rest from the prior build.
@@ -356,41 +348,39 @@ dist_build_one_parse_cmd() {
                else
                   parse_cmd_type_error
                fi
+               export dist_build_type
                shift 2
                ;;
            --target)
                true "${cyan}INFO: --target ${2:-} chosen.${reset}"
-               ## dist_build_image_upload_supported aggregates across multiple
-               ## --target: dm-upload-images gates the WHOLE upload on this one
-               ## flag, so once any target sets it 'true' it must STAY 'true' -- a
-               ## later unsupported target (utm/raw/root) can never flip it back,
-               ## regardless of argument order.
+               ## dist_build_image_upload_supported must not be flipped back to
+               ## false if one target set it to true.
                if [ "${2:-}" = "virtualbox" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_virtualbox="true"
                   dist_build_image_upload_supported="true"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "qcow2" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_qcow2="true"
                   dist_build_image_upload_supported="true"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "utm" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_raw="true"
                   export dist_build_utm="true"
                   [ "${dist_build_image_upload_supported:-}" = "true" ] || dist_build_image_upload_supported="false"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "iso" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_iso="true"
                   dist_build_image_upload_supported="true"
-                  implicit_dist_type_host "--target ${2:-}"
+                  implicit_dist_type host "--target ${2:-}"
                elif [ "${2:-}" = "raw" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_raw="true"
                   [ "${dist_build_image_upload_supported:-}" = "true" ] || dist_build_image_upload_supported="false"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "root" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_install_to_root="true"
@@ -399,7 +389,7 @@ dist_build_one_parse_cmd() {
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_windows_installer="true"
                   dist_build_image_upload_supported="true"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "source" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_source_archive="true"
@@ -608,7 +598,7 @@ dist_build_one_parse_cmd() {
                if [ "${2:-}" = "true" ]; then
                   export dist_build_grub_bios_theme="true"
                elif [ "${2:-}" = "false" ]; then
-                  true "${cyan}INFO: 4x3/BIOS grub theme override disabled; grub-mkconfig probes firmware.${reset}"
+                  true "${cyan}INFO: 4x3/BIOS grub theme override disabled.${reset}"
                   export dist_build_grub_bios_theme="false"
                else
                   printf '%s\n' "${red}${bold}ERROR: supported options for --grub-bios-theme are 'true' or 'false'.${reset}"
@@ -1091,10 +1081,6 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
    ## If there are input files (for example) that follow the options, they
    ## will remain in the "$@" positional parameters.
 
-   ## Unconditional: a second --flavor is invalid even when one of them is
-   ## '--flavor source' (source_run must not exempt the guard, or
-   ## '--flavor source --flavor kicksecure-cli' slips through). A single
-   ## '--flavor source' keeps the counter at 1 and is fine.
    if [ "${build_machines_counter:-0}" -gt "1" ]; then
       printf '%s\n' "${red}${bold}You cannot use --flavor multiple times!${reset}"
       exit 1
@@ -1152,13 +1138,7 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
       fi
    fi
 
-   ## Accepted limitation: --target and --type compatibility is intentionally NOT
-   ## validated. An explicit --type conflicting with a target's implied type
-   ## (e.g. '--type host --target virtualbox', a vm-only target) is accepted, and
-   ## implicit type resolution across contradictory multiple --target is
-   ## argument-order-dependent. No real caller passes such a combination; the only
-   ## legitimate mixed iso+vm target set runs under '--flavor source', where this
-   ## type check is skipped anyway. Revisit only if a real failure appears.
+   ## --target and --type compatibility is intentionally not validated.
    if [ "${dist_build_type:-}" = "vm" ]; then
       true
    elif [ "${dist_build_type:-}" = "host" ]; then
@@ -1178,25 +1158,14 @@ ${reset}"
    fi
 
    if [ "${dist_build_iso:-}" = "true" ]; then
-      ## Align --arch with what help-steps/dm-raw-to-iso can actually build a
-      ## bootable, signed ISO for: amd64 (BIOS + UEFI + Secure Boot) and arm64
-      ## (signed aa64). i386 and armhf have no signed GRUB/shim in Debian Trixie
-      ## (the converter hard-errors on the missing gcd/shim for their supported EFI
-      ## platform), and ppc64el etc. are unsupported. Reject them here rather than
-      ## ~40 min into the build and then inside the converter. (i386 is already
-      ## rejected globally above.)
-      case "${dist_build_target_arch:-}" in
-         amd64|arm64) ;;
-         *)
-            error "\
-${red}${bold}Architecture '${dist_build_target_arch:-}' cannot build an ISO!${reset}
+      ## Make sure the target arch is something compatible with ISO boot.
+      if ! [[ "${dist_build_target_arch}" =~ ^(amd64|arm64)$ ]]; then
+         error "\
+${red}${bold}ISOs cannot be built for architecture '${dist_build_target_arch:-}'!${reset}
 
 Supported ISO architectures: amd64, arm64.
-(i386 and armhf have no signed GRUB/shim in Debian Trixie, so no bootable ISO
-can be produced for them.)
 Build '--target iso' with a supported arch, or choose a different '--target'.${reset}"
-            ;;
-      esac
+      fi
       if [ "${dist_build_target_arch:-}" = "amd64" ]; then
          parse_cmd_freedom_versus_nonfreedom_firmware_choice_check
       fi

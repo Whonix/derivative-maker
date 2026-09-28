@@ -143,12 +143,7 @@ fi
 ## parse-cmd still wins.
 args=()
 
-## Cleanup callbacks a build step registers via
-## 'exception_handler_register_cleanup'. Run exactly once on ANY exit path
-## (normal EXIT, ERR, INT/TERM) through the handlers below. Lets a step add
-## its own teardown (e.g. removing temp dirs it created) WITHOUT overwriting
-## the EXIT trap this file owns. Registered callbacks MUST be idempotent -
-## they can also run on a successful exit.
+## Cleanup callbacks registered via 'exception_handler_register_cleanup'.
 exception_handler_cleanup_functions=()
 
 ## Wrapper that runs a command as the init process of a private PID
@@ -461,17 +456,14 @@ exception_handler_general() {
    "${output_cmd[@]}" "${cyan}INFO: End of function ${FUNCNAME[0]} of $0.${reset}"
 }
 
-## Register a cleanup callback (a function name) to run once on script
-## exit via the handlers below. The callback MUST be idempotent: it can
-## run on a successful exit as well as on ERR / signal.
+## Register a cleanup callback to run once on script exit via the handlers
+## below.
 exception_handler_register_cleanup() {
    exception_handler_cleanup_functions+=( "$1" )
 }
 
 ## Run every registered cleanup callback exactly once, across all exit
-## paths (ERR / signal / normal EXIT). '$1' is the failure mode
-## ('tolerate-failure' | 'abort-on-failure'), matching
-## exception_handler_cleanup_run.
+## paths.
 exception_handler_run_registered_cleanups() {
    local failure_mode cleanup_function
    failure_mode="$1"
@@ -585,7 +577,6 @@ exception_handler_signal() {
    ## 'true': already exiting, so a failing cleanup step must not mask the
    ## signal.
    exception_handler_cleanup_run "${kind}" "tolerate-failure"
-   ## Step-registered cleanup callbacks (tolerate-failure: already exiting).
    exception_handler_run_registered_cleanups "tolerate-failure"
    "${output_cmd[@]}" "${red}${bold}INFO: Exiting $0 due to signal ${signal} with exit code ${exit_code}.${reset}"
    "${output_cmd[@]}" "${cyan}${bold}############################################################${reset}"
@@ -647,11 +638,7 @@ SECONDS=0
 exithandler() {
    local exit_code=$?
    local elapsed
-   ## Flush step-registered cleanup callbacks on the normal EXIT path (the
-   ## ERR / signal handlers remove this trap before exiting, so they flush
-   ## via exception_handler_cleanup_run instead). The run-once guard makes a
-   ## double flush harmless. 'tolerate-failure': already exiting, a failing
-   ## cleanup must not mask the real exit code.
+   ## Flush step-registered cleanup callbacks on the normal EXIT path.
    exception_handler_run_registered_cleanups "tolerate-failure" || true
    elapsed="$(benchmark_format "${SECONDS}")"
    output_cmd_set

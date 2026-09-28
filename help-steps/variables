@@ -3,18 +3,6 @@
 ## Copyright (C) 2012 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
-## Static-analysis waivers for this legacy, sourced build library:
-## - intentional word-splitting of command arguments;
-## - 'command -v' for dependency probing during early bootstrap, before the
-##   'has' helper is guaranteed present;
-## - 'rm' of specific, known files (not user-supplied paths);
-## - EMPTY_DIR="/tmp/empty" is a path INSIDE the build chroot
-##   (${CHROOT_FOLDER}/${EMPTY_DIR}), not a host temp dir, so ${TMP} is wrong.
-# shellcheck disable=SC2086
-## style-ok: no-has
-## style-ok: no-safe-rm
-## style-ok: no-tmp-hardcode
-
 #set -x
 set -o errexit
 set -o nounset
@@ -24,16 +12,12 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 export LC_ALL=C
 
-## Same-shell idempotency: a second 'source help-steps/variables' in THIS shell
-## returns immediately, so accumulators (DIST_APTGETOPT, dist_build_only_packages, SKIP_SCRIPTS,
-## ...) are not re-appended and side effects do not re-run. 'variables_finalized'
-## is set at the very end (after all modules) and is deliberately NOT exported --
-## it guards a same-shell re-source only; a fresh process (every build step) has
-## it unset and resolves normally. On a '--dump' run the dump hook exits before
-## the end-of-file set, so the flag never lands in a variable snapshot.
+## 'variables' should not be sourced twice in the same shell.
 if [ "${variables_finalized:-}" = "true" ]; then
    return 0
 fi
+
+true "${BASH_SOURCE[0]} INFO: begin"
 
 MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
 [ -n "${source_code_folder_dist:-}" ] || source_code_folder_dist="$(dirname -- "${MYDIR}")"
@@ -45,36 +29,102 @@ export HELPER_SCRIPTS_PATH
 # shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/strings.bsh
 source "${HELPER_SCRIPTS_PATH}"/usr/libexec/helper-scripts/strings.bsh
 
-## Load the in-tree variable-resolution modules from variables.d/ (a sibling of
-## help-steps/, = source_code_folder_dist), in filename order. variables.d holds
-## the LOGIC (derivation + the functions build steps call); it is in-tree only,
-## never a user-override tier -- that is buildconfig.d/, the SETTINGS dir, whose
-## *.conf snippets are sourced separately as the config layer (10_core.bsh loops
-## the user tiers early; 50_config-signing-pgp.bsh sources the shipped tier late).
-##
-## Numeric prefixes fix the order: 05_lib.bsh (derive_unified_image_paths +
-## dist_build_source_config_dir) sorts before its first caller (10_core.bsh); the
-## base path variables above were resolved from THIS file's own location, so the
-## modules inherit them rather than recomputing from their own BASH_SOURCE. The
-## fill-if-empty precedence primitive is default_if_empty from strings.bsh (sourced
-## just above), not a local reimplementation.
-shopt -s nullglob
-for variables_d_module in "${source_code_folder_dist}/variables.d/"*.bsh; do
-   ## Dynamic path: shellcheck cannot follow it; the modules are checked in CI on
-   ## their own. bash -n first so a syntax error names the module, not this loader.
-   bash -n -- "${variables_d_module}"
-   # shellcheck disable=SC1090
-   source -- "${variables_d_module}"
-done
-## Not exported (a loop-plumbing name, not build config); unset so it never lands
-## in a captured variable snapshot.
-unset variables_d_module
+# shellcheck source=./misc-helpers.bsh
+source "${MYDIR}/misc-helpers.bsh"
 
-## Mark this shell's variable resolution complete so a second 'source
-## help-steps/variables' in the SAME shell is a no-op (each module early-returns
-## on this flag) rather than re-appending accumulators. Deliberately NOT
-## exported: it guards a same-shell re-source only; an exported flag would make
-## child processes (build steps, recursive derivative-maker/genmkfile) skip
-## resolution entirely. On a '--dump' run the dump hook in the last module exits
-## before reaching this line, so the flag never appears in a variable snapshot.
+## All variables.d modules have to be sourced individually for shellcheck to
+## see them. To regenerate this list:
+##  * Run `ls -1` in `variables.d`
+##  * Delete all of the source stanzas below
+##  * Paste the list of files where the source stanzas used to be
+##  * Use visual line select in Vim to select them all
+##  * Use the following regex to expand them into source stanzas:
+##      s/^\(.*\)$/# shellcheck source=..\/variables.d\/\1\rbash -n -- "${variables_d_dir}\/\1"\rsource "${variables_d_dir}\/\1"\r/g
+variables_d_dir="${source_code_folder_dist}/variables.d"
+
+# shellcheck source=../variables.d/00_preamble.bsh
+bash -n -- "${variables_d_dir}/00_preamble.bsh"
+source "${variables_d_dir}/00_preamble.bsh"
+
+# shellcheck source=../variables.d/05_load-config.bsh
+bash -n -- "${variables_d_dir}/05_load-config.bsh"
+source "${variables_d_dir}/05_load-config.bsh"
+
+# shellcheck source=../variables.d/06_skip-scripts.bsh
+bash -n -- "${variables_d_dir}/06_skip-scripts.bsh"
+source "${variables_d_dir}/06_skip-scripts.bsh"
+
+# shellcheck source=../variables.d/10_misc.bsh
+bash -n -- "${variables_d_dir}/10_misc.bsh"
+source "${variables_d_dir}/10_misc.bsh"
+
+# shellcheck source=../variables.d/15_redistributable.bsh
+bash -n -- "${variables_d_dir}/15_redistributable.bsh"
+source "${variables_d_dir}/15_redistributable.bsh"
+
+# shellcheck source=../variables.d/20_flavor-resolve.bsh
+bash -n -- "${variables_d_dir}/20_flavor-resolve.bsh"
+source "${variables_d_dir}/20_flavor-resolve.bsh"
+
+# shellcheck source=../variables.d/25_initramfs.bsh
+bash -n -- "${variables_d_dir}/25_initramfs.bsh"
+source "${variables_d_dir}/25_initramfs.bsh"
+
+# shellcheck source=../variables.d/30_unsafe-io.bsh
+bash -n -- "${variables_d_dir}/30_unsafe-io.bsh"
+source "${variables_d_dir}/30_unsafe-io.bsh"
+
+# shellcheck source=../variables.d/35_rsync.bsh
+bash -n -- "${variables_d_dir}/35_rsync.bsh"
+source "${variables_d_dir}/35_rsync.bsh"
+
+# shellcheck source=../variables.d/40_version-paths.bsh
+bash -n -- "${variables_d_dir}/40_version-paths.bsh"
+source "${variables_d_dir}/40_version-paths.bsh"
+
+# shellcheck source=../variables.d/45_reproducible.bsh
+bash -n -- "${variables_d_dir}/45_reproducible.bsh"
+source "${variables_d_dir}/45_reproducible.bsh"
+
+# shellcheck source=../variables.d/50_upload.bsh
+bash -n -- "${variables_d_dir}/50_upload.bsh"
+source "${variables_d_dir}/50_upload.bsh"
+
+# shellcheck source=../variables.d/55_apt-sources.bsh
+bash -n -- "${variables_d_dir}/55_apt-sources.bsh"
+source "${variables_d_dir}/55_apt-sources.bsh"
+
+# shellcheck source=../variables.d/60_apt-opts.bsh
+bash -n -- "${variables_d_dir}/60_apt-opts.bsh"
+source "${variables_d_dir}/60_apt-opts.bsh"
+
+# shellcheck source=../variables.d/60_dependencies.bsh
+bash -n -- "${variables_d_dir}/60_dependencies.bsh"
+source "${variables_d_dir}/60_dependencies.bsh"
+
+# shellcheck source=../variables.d/60_pkg-list.bsh
+bash -n -- "${variables_d_dir}/60_pkg-list.bsh"
+source "${variables_d_dir}/60_pkg-list.bsh"
+
+# shellcheck source=../variables.d/65_signing.bsh
+bash -n -- "${variables_d_dir}/65_signing.bsh"
+source "${variables_d_dir}/65_signing.bsh"
+
+# shellcheck source=../variables.d/70_cowbuilder.bsh
+bash -n -- "${variables_d_dir}/70_cowbuilder.bsh"
+source "${variables_d_dir}/70_cowbuilder.bsh"
+
+# shellcheck source=../variables.d/95_env-vars-keep.bsh
+bash -n -- "${variables_d_dir}/95_env-vars-keep.bsh"
+source "${variables_d_dir}/95_env-vars-keep.bsh"
+
+# shellcheck source=../variables.d/98_epilogue.bsh
+bash -n -- "${variables_d_dir}/98_epilogue.bsh"
+source "${variables_d_dir}/98_epilogue.bsh"
+
+# shellcheck source=../variables.d/99_effects.bsh
+bash -n -- "${variables_d_dir}/99_effects.bsh"
+source "${variables_d_dir}/99_effects.bsh"
+
+unset 'variables_d_dir'
 variables_finalized="true"
