@@ -474,7 +474,7 @@ esp_block_count=$(( (esp_byte_count / 1024 + 55) / 32 * 32 ))
 efi_img="${binary_dir}/boot/grub/efi.img"
 ## 32-bit hex volume id derived from SOURCE_DATE_EPOCH for reproducibility.
 esp_volid="$(printf '%08x' $(( SOURCE_DATE_EPOCH % 4294967296 )) )"
-mkfs.msdos -F 32 -C "${efi_img}" "${esp_block_count}" -i "${esp_volid}" >/dev/null
+mkfs.msdos -C "${efi_img}" "${esp_block_count}" -i "${esp_volid}" >/dev/null
 mmd -i "${efi_img}" ::/EFI ::/EFI/boot ::/boot ::/boot/grub
 mcopy -m -o -i "${efi_img}" "${esp_stage_dir}/EFI/boot/"*.efi ::/EFI/boot
 mcopy -m -o -i "${efi_img}" "${esp_stage_dir}/boot/grub/grub.cfg" ::/boot/grub
