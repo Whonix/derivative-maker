@@ -1008,7 +1008,11 @@ dist_build_one_parse_cmd() {
                   printf '%s\n' "${red}${bold}ERROR: --function may not be empty.${reset}"
                   exit 1
                else
-                  FUNCTION="${2:-}"
+                  ## Export like every other parsed var: a parent that pre-exports
+                  ## dist_build_one_parsed=true (sign-and-tag, wrappers) skips the
+                  ## parse, and an unexported FUNCTION would then default empty ->
+                  ## create-debian-packages runs ALL packages instead of this one.
+                  export FUNCTION="${2:-}"
                   true "${cyan}INFO: --function set to ${FUNCTION}${reset}"
                fi
                shift 2
