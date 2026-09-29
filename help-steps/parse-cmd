@@ -21,7 +21,6 @@ export LC_ALL=C
 HELPER_SCRIPTS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../packages/kicksecure/helper-scripts"
 export HELPER_SCRIPTS_PATH
 source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/check_runtime.bsh"
-source "${HELPER_SCRIPTS_PATH}/usr/libexec/helper-scripts/strings.bsh"
 
 if was_executed "${BASH_SOURCE[0]}"; then
    parse_cmd_was_sourced='false'
@@ -414,28 +413,28 @@ dist_build_one_parse_cmd() {
                shift 2
                ;;
            --vmram)
-               if [ -z "${2:-}" ]; then
+               export VMRAM="${2:-}"
+               shift 2
+               if [ "${VMRAM:-}" = "" ]; then
                   printf '%s\n' "${red}${bold}ERROR: You forgot to specify how much MB to use for --vmram.${reset}"
                   exit 1
                fi
-               export VMRAM="${2}"
-               shift 2
                ;;
            --vram)
-               if [ -z "${2:-}" ]; then
+               export VRAM="${2:-}"
+               shift 2
+               if [ "${VRAM:-}" = "" ]; then
                   printf '%s\n' "${red}${bold}ERROR: You forgot to specify how much MB to use for --vram.${reset}"
                   exit 1
                fi
-               export VRAM="${2}"
-               shift 2
                ;;
            --vmsize)
-               if [ -z "${2:-}" ]; then
+               export VMSIZE="${2:-}"
+               shift 2
+               if [ "${VMSIZE:-}" = "" ]; then
                   printf '%s\n' "${red}${bold}ERROR: You forgot to specify how much GB to use for --vmsize.${reset}"
                   exit 1
                fi
-               export VMSIZE="${2}"
-               shift 2
                ;;
            --freshness)
                if [ "${2:-}" = "frozen" ]; then
@@ -538,13 +537,8 @@ dist_build_one_parse_cmd() {
                elif [ "${2:-}" = "none" ]; then
                   export BUILD_INITRAMFS_PKGS="none"
                   true "${cyan}BUILD_INITRAMFS_PKGS set to ${BUILD_INITRAMFS_PKGS}.${reset}"
-               elif [ "${BUILD_INITRAMFS_PKGS:-}" = "none" ]; then
-                  ## a real package clears a prior 'none' (exclusive sentinel);
-                  ## otherwise 3500 would try to install a package literally named 'none'
-                  export BUILD_INITRAMFS_PKGS="${2}"
-                  true "${cyan}BUILD_INITRAMFS_PKGS set to ${BUILD_INITRAMFS_PKGS}.${reset}"
                else
-                  export BUILD_INITRAMFS_PKGS="${BUILD_INITRAMFS_PKGS:+${BUILD_INITRAMFS_PKGS} }${2}"
+                  export BUILD_INITRAMFS_PKGS="${BUILD_INITRAMFS_PKGS:-} ${2:-}"
                   true "${cyan}BUILD_INITRAMFS_PKGS set to ${BUILD_INITRAMFS_PKGS}.${reset}"
                fi
                shift 2
@@ -556,13 +550,8 @@ dist_build_one_parse_cmd() {
                elif [ "${2:-}" = "none" ]; then
                   export BUILD_KERNEL_PKGS="none"
                   true "${cyan}BUILD_KERNEL_PKGS set to ${BUILD_KERNEL_PKGS}.${reset}"
-               elif [ "${BUILD_KERNEL_PKGS:-}" = "none" ]; then
-                  ## a real package clears a prior 'none' (exclusive sentinel);
-                  ## otherwise 3500 would try to install a package literally named 'none'
-                  export BUILD_KERNEL_PKGS="${2}"
-                  true "${cyan}BUILD_KERNEL_PKGS set to ${BUILD_KERNEL_PKGS}.${reset}"
                else
-                  export BUILD_KERNEL_PKGS="${BUILD_KERNEL_PKGS:+${BUILD_KERNEL_PKGS} }${2}"
+                  export BUILD_KERNEL_PKGS="${BUILD_KERNEL_PKGS:-} ${2:-}"
                   true "${cyan}BUILD_KERNEL_PKGS set to ${BUILD_KERNEL_PKGS}.${reset}"
                fi
                shift 2
@@ -574,13 +563,8 @@ dist_build_one_parse_cmd() {
                elif [ "${2:-}" = "none" ]; then
                   export BUILD_HEADER_PKGS="none"
                   true "${cyan}BUILD_HEADER_PKGS set to ${BUILD_HEADER_PKGS}.${reset}"
-               elif [ "${BUILD_HEADER_PKGS:-}" = "none" ]; then
-                  ## a real package clears a prior 'none' (exclusive sentinel);
-                  ## otherwise 3500 would try to install a package literally named 'none'
-                  export BUILD_HEADER_PKGS="${2}"
-                  true "${cyan}BUILD_HEADER_PKGS set to ${BUILD_HEADER_PKGS}.${reset}"
                else
-                  export BUILD_HEADER_PKGS="${BUILD_HEADER_PKGS:+${BUILD_HEADER_PKGS} }${2}"
+                  export BUILD_HEADER_PKGS="${BUILD_HEADER_PKGS:-} ${2:-}"
                   true "${cyan}BUILD_HEADER_PKGS set to ${BUILD_HEADER_PKGS}.${reset}"
                fi
                shift 2
@@ -644,11 +628,7 @@ dist_build_one_parse_cmd() {
                shift 2
                ;;
            --only-packages)
-               if [ -z "${2:-}" ]; then
-                  printf '%s\n' "${red}${bold}ERROR: --only-packages requires a package list.${reset}"
-                  exit 1
-               fi
-               export dist_build_only_packages="${2}"
+               export dist_build_only_packages="${2:-}"
                true "${cyan}INFO: --only-packages: rebuilding only '${dist_build_only_packages}', reusing the rest.${reset}"
                shift 2
                ;;
@@ -664,8 +644,8 @@ dist_build_one_parse_cmd() {
                ;;
            --package-jobs)
                export dist_build_package_jobs="${2:-}"
-               if ! is_positive_integer "${dist_build_package_jobs}"; then
-                  printf '%s\n' "${red}${bold}ERROR: --package-jobs must be passed a positive integer.${reset}"
+               if ! [[ "${dist_build_package_jobs}" =~ ^(0|[1-9][0-9]*)$ ]]; then
+                  printf '%s\n' "${red}${bold}ERROR: --package-jobs must be passed a whole integer.${reset}"
                   exit 1
                fi
                true "${cyan}INFO: --package-jobs: up to '${dist_build_package_jobs}' concurrent package build(s).${reset}"
@@ -724,51 +704,27 @@ dist_build_one_parse_cmd() {
                shift 2
                ;;
            --file-system)
-               if [ -z "${2:-}" ]; then
-                  printf '%s\n' "${red}${bold}ERROR: --file-system requires a filesystem type.${reset}"
-                  exit 1
-               fi
-               export dist_build_file_system="${2}"
+               export dist_build_file_system="${2:-}"
                shift 2
                ;;
            --hostname)
-               if [ -z "${2:-}" ]; then
-                  printf '%s\n' "${red}${bold}ERROR: --hostname requires a hostname.${reset}"
-                  exit 1
-               fi
-               export dist_build_hostname="${2}"
+               export dist_build_hostname="${2:-}"
                shift 2
                ;;
            --retry-max)
-               if [ -z "${2:-}" ]; then
-                  printf '%s\n' "${red}${bold}ERROR: --retry-max requires a value.${reset}"
-                  exit 1
-               fi
-               export dist_build_auto_retry="${2}"
+               export dist_build_auto_retry="${2:-}"
                shift 2
                ;;
            --retry-wait)
-               if [ -z "${2:-}" ]; then
-                  printf '%s\n' "${red}${bold}ERROR: --retry-wait requires a value.${reset}"
-                  exit 1
-               fi
-               export dist_build_wait_auto_retry="${2}"
+               export dist_build_wait_auto_retry="${2:-}"
                shift 2
                ;;
            --retry-before)
-               if [ -z "${2:-}" ]; then
-                  printf '%s\n' "${red}${bold}ERROR: --retry-before requires a command.${reset}"
-                  exit 1
-               fi
-               export dist_build_dispatch_before_retry="${2}"
+               export dist_build_dispatch_before_retry="${2:-}"
                shift 2
                ;;
            --retry-after)
-               if [ -z "${2:-}" ]; then
-                  printf '%s\n' "${red}${bold}ERROR: --retry-after requires a command.${reset}"
-                  exit 1
-               fi
-               export dist_build_dispatch_after_retry="${2}"
+               export dist_build_dispatch_after_retry="${2:-}"
                shift 2
                ;;
            --allow-untagged)
