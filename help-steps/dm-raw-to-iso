@@ -43,6 +43,8 @@ Options:
   --label <volid>          ISO volume label. Defaults to 'DM_LIVE'.
   --dist-pretty <name>     product name shown in the splash.
   --dist-version <ver>     product version shown in the splash.
+  --iso-pkg-repo           directory to embed in the ISO to provide a package
+                           repository.
   --serial-console         enable a serial console on ttyS0 at speed 115200 and boot
                            the default entry immediately, for headless boot testing.
   --smbios-reader          inline the SMBIOS cmdline reader into the menu (test builds).
@@ -93,6 +95,7 @@ volume_label="DM_LIVE"
 grub_config_dir=""
 dist_pretty=""
 dist_version=""
+iso_pkg_repo=""
 serial_console="false"
 smbios_reader="false"
 source_date_epoch="${SOURCE_DATE_EPOCH:-}"
@@ -133,6 +136,11 @@ while [ "$#" -gt 0 ] ; do
       --dist-version)
          [ "$#" -ge 2 ] || error "--dist-version requires a value"
          dist_version="$2"
+         shift 2
+         ;;
+      --iso-pkg-repo)
+         [ "$#" -ge 2 ] || error "--iso-pkg-repo requires a value"
+         iso_pkg_repo="$2"
          shift 2
          ;;
       --serial-console)
@@ -597,6 +605,11 @@ if [ -n "${memtest_bios_file}" ] && [ -e "${memtest_bios_file}" ]; then
    [ -f "${memtest_efi_file}" ] && cp -- "${memtest_efi_file}" "${binary_dir}/live/memtest.efi"
 elif [ -n "${memtest_bios_file}" ]; then
    printf '%s\n' "${me}: NOTE: memtest86+ binary '${memtest_bios_file}' not found." >&2
+fi
+
+## Add an on-ISO package repo if applicable.
+if [ -n "${iso_pkg_repo}" ]; then
+   cp -r -- "${iso_pkg_repo}" "${binary_dir}/pkg-repo"
 fi
 
 ## Pin every staged file's mtime to SOURCE_DATE_EPOCH so the ISO is reproducible.

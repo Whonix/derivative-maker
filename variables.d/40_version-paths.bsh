@@ -128,3 +128,5 @@ default_if_empty libvirt_target_network_file_internal "${dist_binary_build_folde
 # TODO: broken
 default_if_empty copy_vms_into_raw_file_one "${dist_binary_build_folder}/Whonix-Gateway-${dist_build_desktop}-${dist_build_version}.qcow2"
 default_if_empty copy_vms_into_raw_file_two "${dist_binary_build_folder}/Whonix-Workstation-${dist_build_desktop}-${dist_build_version}.qcow2"
+
+default_if_empty binary_iso_pkg_repo_dir "${dist_binary_build_folder}/iso-pkg-repo"

@@ -169,6 +169,36 @@ Trying to diagnose the problem using function apt_get_parse_unmet_dependency...$
    return 0
 }
 
+pkg-remove() {
+   exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
+
+   true "${cyan}INFO: Removing '$*'... This may take a while...${reset}"
+
+   local apt_get_exit_code="0"
+   chroot_run \
+      apt-get-noninteractive \
+         "${DIST_APTGETOPT[@]}" \
+            ${apt_sourcelist_empty} \
+            ${apt_sourceparts} \
+            ${apt_unattended_opts} \
+            --yes \
+            remove \
+            "$@" \
+            || { apt_get_exit_code="$?" ; true; };
+
+   chroot_run sync
+   ${SUDO_TO_ROOT} sync
+
+   if [ "${apt_get_exit_code:-}" = "0" ]; then
+      true "${cyan}INFO: Removed '$*', no error detected.${reset}"
+      return 0
+   fi
+
+   true "${bold}${red}ERROR: Failed to remove '$*'!${reset}"
+   error "See above!"
+   return 0
+}
+
 pkg-add-to-install-list() {
    exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
 
@@ -204,6 +234,34 @@ pkg-list-install() {
       return 0
    else
       pkg-install ${pkg_install_list}
+   fi
+}
+
+pkg-add-to-remove-list() {
+   exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
+
+   local pkg_remove_item
+   pkg_remove_item="$1"
+   if [ "${pkg_remove_item:-}" = 'none' ]; then
+      true "${bold}${byan}INFO: Skipping removing package package ${pkg_remove_item} (none).${reset}"
+      return 0
+   fi
+
+   if [ "${pkg_install_debug:-}" = 'true' ]; then
+      pkg-remove "${pkg_remove_item}"
+   else
+      pkg_remove_list+=" ${pkg_remove_item} "
+   fi
+}
+
+pkg-list-remove() {
+   exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
+
+   if [ "${pkg_remove_list:-}" = "" ]; then
+      true "INFO: pkg_remove_list still empty, ok."
+      return 0
+   else
+      pkg-remove ${pkg_remove_list}
    fi
 }
 
@@ -503,9 +561,28 @@ ${dist_build_script_skip_package_install}${reset}"
       pkg-add-to-install-list live-config-dist
       pkg-add-to-install-list dracut-live
       pkg-add-to-install-list isomd5sum
+      #pkg-add-to-install-list grub
+
+      case "${dist_build_target_arch:-}" in
+         amd64)
+            pkg-add-to-install-list grub-pc-bin
+            pkg-add-to-install-list grub-efi-amd64-bin
+            pkg-add-to-install-list grub-efi-ia32-bin
+            pkg-add-to-install-list grub-efi-amd64-signed
+            pkg-add-to-install-list shim-signed
+            pkg-add-to-remove-list grub-cloud-amd64
+            ;;
+         arm64)
+            pkg-add-to-install-list grub-efi-arm64-bin
+            pkg-add-to-install-list grub-efi-arm64-signed
+            pkg-add-to-install-list shim-signed
+            pkg-add-to-remove-list grub-cloud-arm64
+            ;;
+      esac
    fi
 
    pkg-list-install
+   pkg-list-remove
 
    ## repository-dist-initializer
    ## requires: variable CHROOT_FOLDER
@@ -616,6 +693,19 @@ ${dist_build_script_skip_package_install}${reset}"
         error '/boot/grub/grub.cfg contains root=/dev/mapper and cannot find boot device UUID - image most likely unbootable!'
       fi
       ${SUDO_TO_ROOT} sed -i "s;root=[^ ]\\+;root=UUID=${grub_probe_target_device};" "${CHROOT_FOLDER}/boot/grub/grub.cfg"
+   fi
+
+   ## Prepare the on-ISO apt repo if appropriate. Packages have to be
+   ## downloaded in the chroot to ensure they are the right packages.
+   if [ "${dist_build_iso}" = 'true' ]; then
+      mkdir -p "${binary_iso_pkg_repo_dir}"
+      ${SUDO_TO_ROOT} mkdir -p "${CHROOT_FOLDER}/tmp_iso_pkg_repo_dir"
+      for iso_pkg_repo_seed_item in ${iso_pkg_repo_seed_list} ; do
+         chroot_run bash -c "cd /tmp_iso_pkg_repo_dir; apt download ${iso_pkg_repo_seed_item}"
+      done
+      ${SUDO_TO_ROOT} mv -- "${CHROOT_FOLDER}/tmp_iso_pkg_repo_dir"/* "${binary_iso_pkg_repo_dir}/"
+      ${SUDO_TO_ROOT} rmdir "${CHROOT_FOLDER}/tmp_iso_pkg_repo_dir"
+      dpkg-scanpackages "${binary_iso_pkg_repo_dir}" /dev/null | tee -- "${binary_iso_pkg_repo_dir}/Packages" >/dev/null
    fi
 
    "${dist_source_help_steps_folder}/remove-local-temp-apt-repo" "$@"

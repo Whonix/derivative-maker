@@ -48,6 +48,7 @@ convert_raw_to_iso() {
       --grub-config-dir "${source_code_folder_dist}/iso-build-data/grub-config"
       --dist-pretty "${dist_build_type_short_pretty}"
       --dist-version "${dist_build_version}"
+      --iso-pkg-repo "${binary_iso_pkg_repo_dir}"
    )
    if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
       dm_raw_to_iso_args+=( --serial-console )

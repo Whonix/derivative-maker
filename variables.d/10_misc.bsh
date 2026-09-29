@@ -229,3 +229,5 @@ export dist_build_apt_codename
 ## export dist_build_apt_codename="trixie-developers"
 
 default_if_empty dist_build_file_system "ext4"
+
+default_if_empty iso_pkg_repo_seed_list "grub-efi grub-pc ucf grub-efi-${dist_build_target_arch:-}"
