@@ -1,0 +1,67 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Lint GRUB config templates for the x-prefix comparison MISMATCH bug class.
+##
+## GRUB's safe test idiom prefixes both operands with 'x' so an empty variable
+## cannot break the test:  [ "x${grub_platform}" = "xefi" ].  The bug is an
+## x-prefixed variable operand compared against a literal that DROPS the 'x'
+## (e.g.  [ "x${grub_platform}" = "efi" ]  -> "xefi" != "efi", ALWAYS false),
+## which silently disables the guarded branch. This actually shipped: the EFI
+## 'UEFI Firmware Settings' (fwsetup) menuentry never rendered.
+##
+## The x-idiom is identified by 'x' glued DIRECTLY to a '$' expansion, so a
+## legitimate literal like "xterm"/"x86_64" (no '$') and a consistent both-bare
+## test ("$grub_platform" = "efi") are NOT the idiom and are not flagged. The
+## reverse direction (bare variable vs x-prefixed literal) is intentionally NOT
+## flagged: it is indistinguishable from a genuine literal beginning with 'x'.
+##
+## Runs in CI as the 'grub' step of local-lint.yml.
+## Standalone-runnable via './ci/lint-grub'; auto-discovered by ci/local-checks.
+
+set -o errexit
+set -o nounset
+set -o errtrace
+set -o pipefail
+shopt -s inherit_errexit
+shopt -s shift_verbose
+export LC_ALL=C
+
+cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." || exit 2
+
+## GRUB menu templates tracked in THIS repo. live-build is a submodule (its own
+## repo, and its grub-pc templates use the consistent both-bare idiom). Extend
+## this glob if more grub templates land in the main tree.
+shopt -s nullglob
+grub_files=( iso-build-data/grub-config/*.cfg )
+shopt -u nullglob
+
+if (( ${#grub_files[@]} == 0 )); then
+  printf '::error::%s\n' 'no grub config templates in iso-build-data/grub-config/ - environment bug' >&2
+  exit 1
+fi
+
+## An x-idiom variable operand ("x${VAR}" / x$VAR, quoted or not) compared
+## =/==/!= against a RHS literal whose first significant char is not 'x'.
+mismatch_ere='x\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"?[[:space:]]*(==|!=|=)[[:space:]]*"?[^x[:space:]"=]'
+
+rc=0
+for grub_file in "${grub_files[@]}"; do
+  if hits="$(grep -nE -- "${mismatch_ere}" "${grub_file}")"; then
+    while IFS= read -r hit; do
+      printf '::error::%s:%s\n' "${grub_file}" "${hit}" >&2
+    done <<< "${hits}"
+    rc=1
+  else
+    printf '[ OK ] %s\n' "${grub_file}"
+  fi
+done
+
+if (( rc == 0 )); then
+  printf '\nPASSED: grub x-prefix lint on %d template(s)\n' "${#grub_files[@]}"
+else
+  printf '\n::error::%s\n' 'grub x-prefix MISMATCH found: an x-idiom variable is compared against a non-x literal (always false)' >&2
+fi
+exit "${rc}"
