@@ -1,0 +1,42 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sets variables related to the generation of initramfs files.
+
+## style-ok: no-strict -- sourced fragment.
+
+## binutils, dmsetup:
+##     https://packages.debian.org/bullseye/dracut-core lists 'Recommends:'
+##     which are actually required for a functional boot process.
+## pigz, zstd:
+##     not necessary, we use xz.
+## dracut-config-rescue:
+##     Not actually doing anything.
+##     https://www.kicksecure.com/wiki/Dev/todo#investigate_dracut-config-rescue
+## dracut-config-generic:
+##     Actively detrimental. Introduces a file at
+##     /usr/lib/dracut/dracut.conf.d/50-generic.conf which sets 'hostonly="no",
+##     overriding /etc/dracut.conf.d/30-dist-base-files.conf.
+default_if_empty BUILD_INITRAMFS_DRACUT "dracut dracut-live binutils dmsetup"
+
+default_if_empty BUILD_INITRAMFS_PKGS "${BUILD_INITRAMFS_DRACUT}"
+
+if printf "%s\n" "${BUILD_INITRAMFS_PKGS}" | grep -- "dracut" >/dev/null 2>&1; then
+   ## INITRD_GENERATOR_OPTS gets read by grml-debootstrap and passed to dracut and is also
+   ## read by build-steps.d/*_install-packages
+   ##
+   ## Worked but issue:
+   ## https://forums.kicksecure.com/t/iso-error-message-during-boot-mount-sysroot-special-device-liveos-rootfs-does-not-exist/418
+   default_if_empty INITRD_GENERATOR_OPTS '--add dmsquash-live --add overlayfs --add bash'
+   export INITRD_GENERATOR_OPTS
+fi
+
+source_dracut_disable_config_snippet="${source_code_folder_dist}/packages/kicksecure/initializer-dist/usr/share/initializer-dist/dracut/90-derivative-maker-build.conf"
+target_dracut_disable_config_snippet="${CHROOT_FOLDER}/etc/dracut.conf.d/90-derivative-maker-build.conf"
+
+true "${cyan}${BASH_SOURCE[0]} INFO: BUILD_INITRAMFS_PKGS (--initramfs): ${BUILD_INITRAMFS_PKGS}${reset}"
+
+default_if_empty XZ_OPT "--threads=8"
+export XZ_OPT

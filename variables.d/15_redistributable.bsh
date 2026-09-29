@@ -1,0 +1,82 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Adjusts settings for redistributable vs. non-redistributable builds.
+
+## style-ok: no-strict -- sourced fragment.
+
+## REMINDER: Variable 'dist_build_redistributable=true' is set in 'help-steps/dm-build-official'.
+if [ "${dist_build_redistributable:-}" = "true" ]; then
+   if [ "${CI:-}" = "true" ]; then
+      ## CI is untrusted, therefore we do not need a strong security proof,
+      ## just an internal consistency check. Compatible with shallow clone.
+      default_if_empty sq_git_trust_root "HEAD"
+   else
+      ## Ideally we would use an earlier, known-good commit here, but accidents
+      ## keep occurring that break the chain of trust mechanism sq-git uses.
+      ## This would also be incompatible with a shallow clone. Maintainers can
+      ## be trusted to ensure openpgp-policy.toml hasn't changed during a
+      ## merge, so HEAD is fine here.
+      ## See also: 'variables.d/45_30_signing_key.conf'
+      [ -v sq_git_trust_root ] || sq_git_trust_root="HEAD"
+   fi
+
+   ## Enable binary derivative repository by default for official builds.
+   ## Same as: '--repo true'
+   default_if_empty build_remote_repo_enable "true"
+
+   ## FIXME: The Tor Project doesn't offer Tor Browser archives indefinitely.
+   ## Once an old image vanishes, it will break the build. Possible solutions:
+   ##
+   ## - Omit Tor Browser from built images. Poor UX, doesn't require us to
+   ##   archive older Tor Browser versions though.
+   ## - Archive Tor Browser releases ourselves. Good UX, requires more disk
+   ##   space on our end.
+   if [ "${dist_build_target_arch:-}" = "amd64" ]; then
+      ## Make sure official builds for the Intel/AMD64 architecture
+      ## come with Tor Browser installed by default.
+      ## Fail closed by default in case of Tor Browser download issues.
+      ## Same as: '--tb closed'
+      default_if_empty anon_shared_inst_tb "closed"
+   else
+      ## Non-alpha Tor Browser is not yet available at time of writing for
+      ## ARM64 and other architecture.
+      ## TODO: reproducible builds
+      ## TODO: Alpha builds are available though, and we do offer those in
+      ## tb-updater. Can we automatically install that and fail closed if
+      ## needed?
+      default_if_empty anon_shared_inst_tb "open"
+   fi
+else
+   ## Compatible with git shallow clone.
+   ## Non-redistributable (personal) builds always use 'HEAD' as the trust
+   ## root. Compatible with git shallow clone.
+   [[ -v sq_git_trust_root ]] || sq_git_trust_root="HEAD"
+
+   ## Non-redistributable builds use '--tb open' by default.
+   default_if_empty anon_shared_inst_tb "open"
+
+   ## Disable derivative repository by default, the user might want to only
+   ## update from source code.
+   default_if_empty build_remote_repo_enable "false"
+fi
+export build_remote_repo_enable
+## Export sq_git_trust_root so 'help-steps/git_sanity_test' can read it.
+export sq_git_trust_root
+## Variable 'anon_shared_inst_tb' only has an effect if package 'tb-updater' is installed.
+export anon_shared_inst_tb
+
+if [ "${dist_build_redistributable:-}" = "true" ] \
+   && [ "${build_remote_repo_enable:-}" = "false" ] \
+   && [ ! "${dist_build_redistributable_allow_no_repo:-}" = "true" ]; then
+   error "\
+${red}${bold}'--repo false' (or build_remote_repo_enable=false) is incompatible with a
+redistributable build (dist_build_redistributable=true)!
+
+Redistributable images must point at the official APT repository so end users
+can receive updates. To override this guard for testing or special-purpose
+builds set dist_build_redistributable_allow_no_repo=true via the environment or
+a buildconfig.d/*.conf file.${reset}"
+fi

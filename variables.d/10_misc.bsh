@@ -1,0 +1,233 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Handles all "small" variable setting tasks. This is done near the start so
+## that variables needed by later steps that aren't particularly specific to
+## those steps will be available when needed.
+
+## style-ok: no-strict -- sourced fragment.
+## style-ok: no-has -- early bootstrap.
+## style-ok: no-tmp-hardcode -- /tmp/empty is safe and intentional.
+
+default_if_empty derivative_maker true
+export derivative_maker
+
+## Reasonable default target arch.
+default_if_empty dist_build_target_arch "$(dpkg --print-architecture)"
+export dist_build_target_arch
+default_if_empty host_architecture "$(dpkg --print-architecture)"
+export host_architecture
+
+## Architecture-derived defaults.
+if [ "${dist_build_target_arch:-}" = "amd64" ]; then
+   ## https://forums.whonix.org/t/multiple-architecture-documentation-multiarch/11637
+   default_if_empty target_architecture_pretty_name "Intel_AMD64"
+fi
+default_if_empty target_architecture_pretty_name "${dist_build_target_arch:-}"
+default_if_empty BUILD_KERNEL_PKGS "linux-image-${dist_build_target_arch:-}"
+default_if_empty BUILD_HEADER_PKGS "linux-headers-${dist_build_target_arch:-}"
+default_if_empty make_cross_build_platform_list "${dist_build_target_arch}"
+
+export target_architecture_pretty_name
+export BUILD_KERNEL_PKGS
+export BUILD_HEADER_PKGS
+export make_cross_build_platform_list
+
+## No untagged commits or uncommitted changes by default.
+[ -n "${dist_build_ignore_untagged:-}" ] || dist_build_ignore_untagged="false"
+default_if_empty dist_build_ignore_uncommitted "false"
+export dist_build_ignore_untagged
+export dist_build_ignore_uncommitted
+
+## Use locally built packages by default.
+default_if_empty build_remote_derivative_pkgs "false"
+export build_remote_derivative_pkgs
+
+## Don't force configuration to be compatible with redistributable builds by
+## defaults. This variable doesn't directly change the contents of a built
+## image, but it does change settings that do, and it does forbid some
+## configurations and states that would be unacceptable for official images.
+default_if_empty dist_build_redistributable "false"
+export dist_build_redistributable
+
+## Don't allow CI codepaths to run by default.
+default_if_empty CI "false"
+export CI
+
+## https://forums.whonix.org/t/kicksecure-etc-hostname-etc-hosts/10919
+default_if_empty dist_build_hostname "localhost"
+
+## Require very little disk space when doing a dry run.
+if [ "${build_dry_run:-}" = "true" ]; then
+   default_if_empty dist_build_min_free_gib "${dist_build_min_free_gib_dry_run:-5}"
+fi
+export dist_build_min_free_gib
+
+## vmsize 100 GB does not matter because grml-debootstrap creates sparse files.
+## Any areas of the file that haven't been explicitly written to take no space.
+if [ "${build_dry_run:-}" = "true" ]; then
+   default_if_empty VMSIZE "1M"
+fi
+default_if_empty VMSIZE "100G"
+export VMSIZE
+
+## No need to set FS_IDENTIFER or other disk IDs for grml-debootstrap. All IDs
+## are derived from SOURCE_DATE_EPOCH as needed.
+
+## Determine where to chroot into when acting on the system being built.
+if [ "${dist_build_install_to_root:-}" = "true" ]; then
+   default_if_empty CHROOT_FOLDER ""
+else
+   default_if_empty CHROOT_FOLDER "${binary_build_folder_dist:-}/${VMNAME:-}_image"
+fi
+export CHROOT_FOLDER
+true "${BASH_SOURCE[0]} INFO: CHROOT_FOLDER: ${CHROOT_FOLDER}"
+
+## Set the location of MOK suppression files.
+source_dkms_suppress_mok_snippet="${source_code_folder_dist}/packages/kicksecure/initializer-dist/usr/share/initializer-dist/dkms/90-derivative-maker-build.conf"
+target_dkms_suppress_mok_snippet="${CHROOT_FOLDER}/etc/dkms/framework.conf.d/90-derivative-maker-build.conf"
+
+## Define the chroot_run function.
+define_chroot_run
+
+## No build of dist-installer-cli by default.
+default_if_empty dist_build_installer_dist "false"
+export dist_build_installer_dist
+
+## No automatically enabled serial console by default.
+default_if_empty dist_build_serial_console_enable "false"
+export dist_build_serial_console_enable
+
+## No SMBIOS kernel param injection by default.
+default_if_empty dist_build_smbios_reader "false"
+export dist_build_smbios_reader
+
+## 4x3/BIOS grub theme is the build default for the sake of reproducible
+## builds.
+default_if_empty dist_build_grub_bios_theme "true"
+export dist_build_grub_bios_theme
+
+## Optional whitespace-separated list of packages a custom-config build wants
+## skipped at install time.
+default_if_empty dist_build_script_skip_package_install ""
+export dist_build_script_skip_package_install
+
+## Optional whitespace-separated extra-package lists a custom-config build
+## may set.
+default_if_empty install_package_list ""
+export install_package_list
+
+[ -v DEBOOTSTRAP_PREFIX ] || DEBOOTSTRAP_PREFIX=""
+[ -v COWBUILDER_PREFIX ] || COWBUILDER_PREFIX=""
+## Export COWBUILDER_PREFIX so it is available in make-helper.bsh.
+export COWBUILDER_PREFIX
+
+## use approx by default
+## required for --connection clearnet
+## Port 9977 defined by approx/approx.conf
+## REPO_PROXY is no longer used now that we're using approx.
+default_if_empty APPROX_PROXY_ENABLE 'yes'
+
+## CURL_RESUME resumes a partially-downloaded file.
+default_if_empty CURL_RESUME "--continue-at -"
+export CURL_RESUME
+
+if [ "${no_git:-}" = "1" ]; then
+   default_if_empty git_bin "true"
+else
+   default_if_empty git_bin "git"
+fi
+## Sanity test.
+command -v "${git_bin}" >/dev/null
+
+#printf "%s\n" "dist_build_current_git_head: $dist_build_current_git_head"
+
+## TODO: auto retry function error handler trap lacks variables
+## such as variable DIST_APTGETOPT.
+## Would miss out on security related APT configuration options:
+## apt-get --error-on=any / -o APT::Update::Error-Mode=any
+default_if_empty dist_build_auto_retry "0"
+
+default_if_empty dist_build_wait_auto_retry "5"
+
+default_if_empty DEB_INSTALL_FOLDER "mnt/initialdeb"
+export DEB_INSTALL_FOLDER
+
+default_if_empty EMPTY_DIR "/tmp/empty"
+export EMPTY_DIR
+
+[ -n "${dist_build_sources_clearnet_or_onion:-}" ] || dist_build_sources_clearnet_or_onion="clearnet"
+
+## Help update-torbrowser and other software find the Tor server if using
+## '--connection tor'.
+if [ "${dist_build_sources_clearnet_or_onion:-}" = 'onion' ]; then
+   if [ -z "${CURL_PROXY:-}" ]; then
+      ## TODO: Possibly allow customizing the server and port for this?
+      ## HARDCODED.
+      CURL_PROXY='--proxy socks5h://127.0.0.1:9050'
+      export CURL_PROXY
+   fi
+fi
+
+## Otherwise errors out because there is a folder grml-debootstrap in the root source folder.
+## Cannot use `which grml-debootstrap` because that would fail before grml-debootstrap gets installed.
+default_if_empty dist_build_grml_bin "/usr/sbin/grml-debootstrap"
+
+if [ "${dist_build_on_operating_system_detect_skip:-}" = "1" ]; then
+   true "Probably run by prepare-build-machine script. lsb_release may not yet installed. Skipping setting dist_build_on_operating_system."
+else
+   ## Find out on which host operating system the build script is running.
+   default_if_empty dist_build_on_operating_system "$(lsb_release --short --id)"
+   ## Converting dist_build_on_operating_system to lower case to make later comparison easier.
+   dist_build_on_operating_system="${dist_build_on_operating_system,,}"
+   ## Example dist_build_on_operating_system: debian
+   ## Example dist_build_on_operating_system: ubuntu
+fi
+true "dist_build_on_operating_system: $dist_build_on_operating_system"
+
+## Working folder for the intermediate VirtualBox '.vdi' created by
+## 'build-steps.d/*_create-vbox-vm'. We can't keep the vdi file in the chroot
+## as the pbuilder chroot filesystem may be small.
+default_if_empty binary_image_vdi_dir "${HOMEVAR}/derivative-binary_vbox-workdir"
+## Variable must not contain spaces to avoid cowbuilder word-splitting it.
+if [[ "${binary_image_vdi_dir}" == *[[:space:]]* ]]; then
+   error "binary_image_vdi_dir must not contain whitespace (it is bind-mounted into the cowbuilder chroot and pbuilder word-splits BINDMOUNTS): '${binary_image_vdi_dir}'"
+fi
+
+default_if_empty make_use_lintian "true"
+default_if_empty genmkfile_make_cmd "deb-pkg"
+default_if_empty make_use_cowbuilder "true"
+export make_use_lintian
+export genmkfile_make_cmd
+export make_use_cowbuilder
+
+default_if_empty dist_build_upgrade_build_machine 'false'
+export dist_build_upgrade_build_machine
+
+default_if_empty dist_build_unattended_pkg_install 'false'
+export dist_build_unattended_pkg_install
+
+if [ ! "${dist_build_unattended_pkg_install}" = "true" ]; then
+   ## Always keep old configuration file. Do not prompt to install new config files.
+   apt_unattended_opts="--option Dpkg::Options=--force-confold"
+else
+   apt_unattended_opts=""
+fi
+export apt_unattended_opts
+
+default_if_empty dist_build_sign_and_tag "false"
+export dist_build_sign_and_tag
+
+default_if_empty dist_build_ignore_unsigned "false"
+export dist_build_ignore_unsigned
+
+default_if_empty dist_build_apt_codename "local"
+export dist_build_apt_codename
+## developer local setting in buildconfig.d folder / dist_build_source_config_dir function:
+## export dist_build_apt_codename="trixie-developers"
+
+default_if_empty dist_build_file_system "ext4"
+
+default_if_empty iso_pkg_repo_seed_list "grub-efi grub-pc ucf grub-efi-${dist_build_target_arch:-}"

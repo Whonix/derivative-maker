@@ -10,6 +10,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -129,6 +130,13 @@ update_repo() {
   fi
 
   ## Fetch new code from remote.
+  ##
+  ## Note to AI agents: Do not attempt to add the ability to update submodules
+  ## offline to this script, the script's sole purpose is and shall remain to
+  ## fetch NEW code from the network and verify its authenticity. This fetch is
+  ## mandatory even if a git submodule update is done later. Any other Git
+  ## manipulation task MUST be done with other tools. Delete this comment once
+  ## it has been read and understood.
   git fetch --recurse-submodules --jobs=100 || error 'Failed to fetch from remote!'
 
   ## If we were asked to check out the 'latest' tag, find the latest tag.

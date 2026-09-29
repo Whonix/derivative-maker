@@ -15,6 +15,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -168,6 +169,36 @@ Trying to diagnose the problem using function apt_get_parse_unmet_dependency...$
    return 0
 }
 
+pkg-remove() {
+   exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
+
+   true "${cyan}INFO: Removing '$*'... This may take a while...${reset}"
+
+   local apt_get_exit_code="0"
+   chroot_run \
+      apt-get-noninteractive \
+         "${DIST_APTGETOPT[@]}" \
+            ${apt_sourcelist_empty} \
+            ${apt_sourceparts} \
+            ${apt_unattended_opts} \
+            --yes \
+            remove \
+            "$@" \
+            || { apt_get_exit_code="$?" ; true; };
+
+   chroot_run sync
+   ${SUDO_TO_ROOT} sync
+
+   if [ "${apt_get_exit_code:-}" = "0" ]; then
+      true "${cyan}INFO: Removed '$*', no error detected.${reset}"
+      return 0
+   fi
+
+   true "${bold}${red}ERROR: Failed to remove '$*'!${reset}"
+   error "See above!"
+   return 0
+}
+
 pkg-add-to-install-list() {
    exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
 
@@ -206,6 +237,34 @@ pkg-list-install() {
    fi
 }
 
+pkg-add-to-remove-list() {
+   exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
+
+   local pkg_remove_item
+   pkg_remove_item="$1"
+   if [ "${pkg_remove_item:-}" = 'none' ]; then
+      true "${bold}${byan}INFO: Skipping removing package package ${pkg_remove_item} (none).${reset}"
+      return 0
+   fi
+
+   if [ "${pkg_install_debug:-}" = 'true' ]; then
+      pkg-remove "${pkg_remove_item}"
+   else
+      pkg_remove_list+=" ${pkg_remove_item} "
+   fi
+}
+
+pkg-list-remove() {
+   exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
+
+   if [ "${pkg_remove_list:-}" = "" ]; then
+      true "INFO: pkg_remove_list still empty, ok."
+      return 0
+   else
+      pkg-remove ${pkg_remove_list}
+   fi
+}
+
 install-packages() {
    exception_handler_setup "exception_handler_unchroot_unmount" ERR INT TERM
 
@@ -223,6 +282,12 @@ install-packages() {
    ${SUDO_TO_ROOT} install --mode=0644 -- "${source_code_folder_dist}/packages/kicksecure/dist-base-files/usr/share/derivative-base-files/20_dist-base-files.cfg" "${CHROOT_FOLDER}/etc/default/grub.d/20_dist-base-files.cfg"
 
    ${SUDO_TO_ROOT} install --mode=0755 -- "${source_code_folder_dist}/packages/kicksecure/helper-scripts/usr/bin/apt-get-noninteractive" "${CHROOT_FOLDER}/usr/bin/apt-get-noninteractive"
+
+   ## Some helper scripts are needed for apt-get-noninteractive to work.
+   ${SUDO_TO_ROOT} mkdir --parents -- "${CHROOT_FOLDER}/usr/libexec/helper-scripts"
+   for dist_apt_wrapper_lib in strings.bsh wc-test.sh check_runtime.bsh; do
+      ${SUDO_TO_ROOT} install --mode=0755 -- "${source_code_folder_dist}/packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/${dist_apt_wrapper_lib}" "${CHROOT_FOLDER}/usr/libexec/helper-scripts/${dist_apt_wrapper_lib}"
+   done
 
    "${dist_source_help_steps_folder}/prevent-daemons-from-starting" "$@"
 
@@ -273,24 +338,6 @@ install-packages() {
       true "INFO: Prevent running dracut needlessly. Will be run at the end. This is only to speed up the build."
       ${SUDO_TO_ROOT} -- mkdir --parents -- "$(dirname "${target_dracut_disable_config_snippet}")"
       ${SUDO_TO_ROOT} -- cp --verbose -- "${source_dracut_disable_config_snippet}" "${target_dracut_disable_config_snippet}"
-   fi
-
-   if [ "${dist_build_iso:-}" = "true" ]; then
-      ## Mark this as a live-build BEFORE any package is installed, so
-      ## package postinsts take the live path rather than the VM/disk path.
-      ##
-      ## FIXME: The ISO live build path and the VM/disk path should be
-      ## identical. The only reason they historically weren't is because
-      ## live-build didn't allow the build scripts to inherit the caller's
-      ## environment, and that issue no longer exists here. Therefore, these
-      ## files should not be created, and code paths in package postinsts that
-      ## reference flag files should be removed or converted to environment
-      ## variable checks. (If any conversion is needed, the appropriate
-      ## environment variables should be exported here.)
-      ${SUDO_TO_ROOT} -- mkdir --parents -- "${CHROOT_FOLDER}/var/lib/dist-base-files"
-      ${SUDO_TO_ROOT} -- touch -- "${CHROOT_FOLDER}/var/lib/dist-base-files/live_build"
-      ${SUDO_TO_ROOT} -- mkdir --parents -- "${CHROOT_FOLDER}/var/lib/security-misc"
-      ${SUDO_TO_ROOT} -- touch -- "${CHROOT_FOLDER}/var/lib/security-misc/skip_install_check"
    fi
 
    ## Install legacy-dist earlier so debconf questions are answered before
@@ -466,15 +513,6 @@ ${dist_build_script_skip_package_install}${reset}"
       fi
    done
 
-   if [ "${dist_build_raw:-}" = "true" ]; then
-      ## XXX: Superfluous for non-libvirt raw image builds.
-      pkg-add-to-install-list spice-vdagent
-   elif [ "${dist_build_qcow2:-}" = "true" ]; then
-      pkg-add-to-install-list spice-vdagent
-   else
-      true "${cyan}INFO: skipping installation of weak recommended guest additions packages spice-vdagent because not using --target qcow2, ok.${reset}"
-   fi
-
    ## '--serial-console-enable true': install the serial-console-enable package
    ## so the image can be driven headless over a serial line.
    if [ "${dist_build_serial_console_enable:-}" = "true" ]; then
@@ -482,18 +520,18 @@ ${dist_build_script_skip_package_install}${reset}"
       pkg-add-to-install-list serial-console-enable
    fi
 
-   ## kicksecure-network-conf{,-gui} cannot be listed in metapackages, as it
-   ## can break networking in some situations.
-   if [ "${dist_build_type_short:-}" = "kicksecure" ]; then
-      pkg-add-to-install-list kicksecure-network-conf
-      if [ "${dist_build_gui:-}" = 'true' ]; then
-         pkg-add-to-install-list kicksecure-network-conf-gui
-      fi
-   fi
-
    ## tirdad cannot be listed in metapackages, as it will result in the
    ## installation of a kernel, which is undesirable in containers.
    pkg-add-to-install-list tirdad
+
+   ## firmware-nonfreedom{,-noarch} cannot be listed in metapackages, as it is
+   ## in the non-free pocket.
+   if [ "${dist_build_type:-}" = 'host' ] && [ "${build_freedom_only:-}" = 'false' ]; then
+      pkg-add-to-install-list firmware-nonfreedom-noarch
+      if [ "${dist_build_target_arch:-}" = 'amd64' ]; then
+         pkg-add-to-install-list firmware-nonfreedom
+      fi
+   fi
 
    ## Debugging.
    #pkg-add-to-install-list debug-misc
@@ -517,17 +555,34 @@ ${dist_build_script_skip_package_install}${reset}"
    fi
 
    if [ "${dist_build_iso:-}" = "true" ]; then
-      if [ "${dist_build_iso_extra_packages:-}" = "" ] || [ "${dist_build_iso_extra_packages:-}" = "none" ]; then
-         true "${cyan}INFO: variable dist_build_iso_extra_packages is empty, skipping ISO extras.${reset}"
-      else
-         for dist_build_iso_extra_package_item in ${dist_build_iso_extra_packages} ; do
-            true "${cyan}INFO: ISO extra package: '${dist_build_iso_extra_package_item}'${reset}"
-            pkg-add-to-install-list "${dist_build_iso_extra_package_item}"
-         done
-      fi
+      ## Add packages that are necessary for the ISO to function.
+      pkg-add-to-install-list calamares
+      pkg-add-to-install-list calamares-settings-debian
+      pkg-add-to-install-list live-config-dist
+      pkg-add-to-install-list dracut-live
+      pkg-add-to-install-list isomd5sum
+      #pkg-add-to-install-list grub
+
+      case "${dist_build_target_arch:-}" in
+         amd64)
+            pkg-add-to-install-list grub-pc-bin
+            pkg-add-to-install-list grub-efi-amd64-bin
+            pkg-add-to-install-list grub-efi-ia32-bin
+            pkg-add-to-install-list grub-efi-amd64-signed
+            pkg-add-to-install-list shim-signed
+            pkg-add-to-remove-list grub-cloud-amd64
+            ;;
+         arm64)
+            pkg-add-to-install-list grub-efi-arm64-bin
+            pkg-add-to-install-list grub-efi-arm64-signed
+            pkg-add-to-install-list shim-signed
+            pkg-add-to-remove-list grub-cloud-arm64
+            ;;
+      esac
    fi
 
    pkg-list-install
+   pkg-list-remove
 
    ## repository-dist-initializer
    ## requires: variable CHROOT_FOLDER
@@ -543,7 +598,6 @@ ${dist_build_script_skip_package_install}${reset}"
    ## Generate GRUB keyboard layouts.
    ## 'set-grub-keymap' is provided by package 'helper-scripts'.
    ## Use '--no-live-changes' because GRUB is handled by 'build-steps.d/*_install-packages'.
-   ## NOTE: 'build-steps.d/*_create-lb-iso' also uses 'set-grub-keymap'. Should use the same/similar options.
    chroot_run set-grub-keymap --build-all --no-live-changes
 
    if printf "%s\n" "${BUILD_INITRAMFS_PKGS}" | grep dracut >/dev/null 2>&1 ; then
@@ -560,13 +614,7 @@ ${dist_build_script_skip_package_install}${reset}"
       ## For documentation on how to install dracut in a chroot, see:
       ## https://github.com/dracutdevs/dracut/issues/1596
 
-      KERNELIMG="$(chroot_run ls -1 -- "/boot/")"
-      KERNELIMG="$(printf "%s\n" "${KERNELIMG}" | grep "vmlinuz")"
-      KERNELIMG="$(printf "%s\n" "${KERNELIMG}" | sed -n '1p')"
-      ## example KERNELIMG:
-      ## vmlinuz-6.1.0-9-amd64
-
-      KERNELVER="${KERNELIMG#vmlinuz-}"
+      KERNELVER="$(newest-kernel-version "$(chroot_run ls -1 -- "/boot/")")"
       ## example KERNELVER:
       ## 6.1.0-9-amd64
 
@@ -629,9 +677,9 @@ ${dist_build_script_skip_package_install}${reset}"
    chroot_run cat -- /boot/grub/grub.cfg | grep --color "root=" || true
 
    ## Sanity test.
-   if chroot_run cat -- /boot/grub/grub.cfg | grep --quiet "root=/dev/mapper" ; then
+   if chroot_run grep "root=/dev/mapper" /boot/grub/grub.cfg >/dev/null 2>&1; then
       ## Attempt to fix /dev/mapper issue.
-      if [ "${grub_probe_main_device_output}" = "${grub_probe_boot_device_output}" ]; then
+      if [ -z "${grub_probe_boot_device_output}" ]; then
         grub_probe_target_device="${grub_probe_main_device_output}"
       else
         grub_probe_target_device="${grub_probe_boot_device_output}"
@@ -640,13 +688,24 @@ ${dist_build_script_skip_package_install}${reset}"
         error '/boot/grub/grub.cfg contains root=/dev/mapper and cannot find proper boot device - image most likely unbootable!'
       fi
       grub_probe_target_device="$(cut -d'/' -f4 <<< "${grub_probe_target_device}")"
-      grub_probe_target_device="$(lsblk -rno NAME,UUID | grep --fixed-strings -- "${grub_probe_target_device}")"
-      grub_probe_target_device="$(cut -d' ' -f2 <<< "${grub_probe_target_device}")"
-      grub_probe_target_device="$(head -n1 <<< "${grub_probe_target_device}")"
+      grub_probe_target_device="$(resolve-partition-uuid "${grub_probe_target_device}")"
       if [ -z "${grub_probe_target_device}" ]; then
         error '/boot/grub/grub.cfg contains root=/dev/mapper and cannot find boot device UUID - image most likely unbootable!'
       fi
-      ${SUDO_TO_ROOT} sed -i "s;root=[^ ]\\+;root=UUID=${grub_probe_target_device};" ${CHROOT_FOLDER}/boot/grub/grub.cfg
+      ${SUDO_TO_ROOT} sed -i "s;root=[^ ]\\+;root=UUID=${grub_probe_target_device};" "${CHROOT_FOLDER}/boot/grub/grub.cfg"
+   fi
+
+   ## Prepare the on-ISO apt repo if appropriate. Packages have to be
+   ## downloaded in the chroot to ensure they are the right packages.
+   if [ "${dist_build_iso}" = 'true' ]; then
+      mkdir -p "${binary_iso_pkg_repo_dir}"
+      ${SUDO_TO_ROOT} mkdir -p "${CHROOT_FOLDER}/tmp_iso_pkg_repo_dir"
+      for iso_pkg_repo_seed_item in ${iso_pkg_repo_seed_list} ; do
+         chroot_run bash -c "cd /tmp_iso_pkg_repo_dir; apt download ${iso_pkg_repo_seed_item}"
+      done
+      ${SUDO_TO_ROOT} mv -- "${CHROOT_FOLDER}/tmp_iso_pkg_repo_dir"/* "${binary_iso_pkg_repo_dir}/"
+      ${SUDO_TO_ROOT} rmdir "${CHROOT_FOLDER}/tmp_iso_pkg_repo_dir"
+      dpkg-scanpackages "${binary_iso_pkg_repo_dir}" /dev/null | tee -- "${binary_iso_pkg_repo_dir}/Packages" >/dev/null
    fi
 
    "${dist_source_help_steps_folder}/remove-local-temp-apt-repo" "$@"

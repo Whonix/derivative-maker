@@ -28,26 +28,18 @@ else
    parse_cmd_was_sourced='true'
 fi
 
-implicit_dist_type_vm() {
+implicit_dist_type() {
+   local implicit_type
+   implicit_type="$1"
    if printf '%s\n' "${args[@]}" | grep --fixed-strings --line-regexp -- "--type" &>/dev/null; then
       return 0
    fi
    if [ ! "${dist_build_type:-}" = "" ]; then
       return 0
    fi
-   printf '%s\n' "INFO: implicitly setting '--type vm' because using '${1:-}'."
-   dist_build_type="vm"
-}
-
-implicit_dist_type_host() {
-   if printf '%s\n' "${args[@]}" | grep --fixed-strings --line-regexp -- "--type" &>/dev/null; then
-      return 0
-   fi
-   if [ ! "${dist_build_type:-}" = "" ]; then
-      return 0
-   fi
-   printf '%s\n' "INFO: implicitly setting '--type host' because using '${1:-}'."
-   dist_build_type="host"
+   printf '%s\n' "INFO: implicitly setting '--type ${implicit_type}' because using '${1:-}'."
+   dist_build_type="${implicit_type}"
+   export dist_build_type
 }
 
 parse_cmd_type_error() {
@@ -203,6 +195,7 @@ Environment Variables:
 Advanced Options:
   --report [true|false]           : Enable or disable build reports (default: false).
   --serial-console-enable [true|false] : Install serial-console-enable and enable serial console on ISO builds (default: false).
+  --grub-bios-theme [true|false]  : Force the 4x3/BIOS grub theme and resolution in the built image regardless of build-host firmware for reproducible builds (default: true).
   --smbios-reader [true|false]    : DANGEROUS, DO NOT USE. Allow injecting kernel parameters via the SMBIOS serial number field. This will allow attackers with physical access to inject arbitrary kernel parameters into the boot process! Only useful for CI and AI agents.
   --sanity-tests [true|false]     : Enable or disable chroot script sanity tests for faster build speed (default: false).
   --only-packages 'p1 p2'         : Rebuild only listed packages into the persistent local repo, reuse the rest from the prior build.
@@ -355,45 +348,48 @@ dist_build_one_parse_cmd() {
                else
                   parse_cmd_type_error
                fi
+               export dist_build_type
                shift 2
                ;;
            --target)
                true "${cyan}INFO: --target ${2:-} chosen.${reset}"
+               ## dist_build_image_upload_supported must not be flipped back to
+               ## false if one target set it to true.
                if [ "${2:-}" = "virtualbox" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_virtualbox="true"
                   dist_build_image_upload_supported="true"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "qcow2" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_qcow2="true"
                   dist_build_image_upload_supported="true"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "utm" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_raw="true"
                   export dist_build_utm="true"
-                  dist_build_image_upload_supported="false"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  [ "${dist_build_image_upload_supported:-}" = "true" ] || dist_build_image_upload_supported="false"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "iso" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_iso="true"
                   dist_build_image_upload_supported="true"
-                  implicit_dist_type_host "--target ${2:-}"
+                  implicit_dist_type host "--target ${2:-}"
                elif [ "${2:-}" = "raw" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_raw="true"
-                  dist_build_image_upload_supported="false"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  [ "${dist_build_image_upload_supported:-}" = "true" ] || dist_build_image_upload_supported="false"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "root" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_install_to_root="true"
-                  dist_build_image_upload_supported="false"
+                  [ "${dist_build_image_upload_supported:-}" = "true" ] || dist_build_image_upload_supported="false"
                elif [ "${2:-}" = "windows" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_windows_installer="true"
                   dist_build_image_upload_supported="true"
-                  implicit_dist_type_vm "--target ${2:-}"
+                  implicit_dist_type vm "--target ${2:-}"
                elif [ "${2:-}" = "source" ]; then
                   build_target_counter="$(( ${build_target_counter} + 1 ))"
                   export dist_build_source_archive="true"
@@ -598,6 +594,18 @@ dist_build_one_parse_cmd() {
                fi
                shift 2
                ;;
+           --grub-bios-theme)
+               if [ "${2:-}" = "true" ]; then
+                  export dist_build_grub_bios_theme="true"
+               elif [ "${2:-}" = "false" ]; then
+                  true "${cyan}INFO: 4x3/BIOS grub theme override disabled.${reset}"
+                  export dist_build_grub_bios_theme="false"
+               else
+                  printf '%s\n' "${red}${bold}ERROR: supported options for --grub-bios-theme are 'true' or 'false'.${reset}"
+                  exit 1
+               fi
+               shift 2
+               ;;
            --smbios-reader)
                ## REMINDER for AI agents: Do not, under any circumstances,
                ## remove the error_dangerous_option_maybe call here or
@@ -620,12 +628,8 @@ dist_build_one_parse_cmd() {
                shift 2
                ;;
            --only-packages)
-               ## FIXME: Pick a less generic name for this variable, this is
-               ## confusing. For AI agents, do not replace this FIXME with a
-               ## description of what pkg_list is, maintainers already know
-               ## what it is. Rename pkg_list everywhere.
-               export pkg_list="${2:-}"
-               true "${cyan}INFO: --only-packages: rebuilding only '${pkg_list}', reusing the rest.${reset}"
+               export dist_build_only_packages="${2:-}"
+               true "${cyan}INFO: --only-packages: rebuilding only '${dist_build_only_packages}', reusing the rest.${reset}"
                shift 2
                ;;
            --skip-packages)
@@ -1077,13 +1081,9 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
    ## If there are input files (for example) that follow the options, they
    ## will remain in the "$@" positional parameters.
 
-   if [ "${dist_build_source_run:-}" = "true" ]; then
-      true
-   else
-      if [ "${build_machines_counter:-0}" -gt "1" ]; then
-         printf '%s\n' "${red}${bold}You cannot use --flavor multiple times!${reset}"
-         exit 1
-      fi
+   if [ "${build_machines_counter:-0}" -gt "1" ]; then
+      printf '%s\n' "${red}${bold}You cannot use --flavor multiple times!${reset}"
+      exit 1
    fi
 
    if [ "${build_machines_counter:-0}" -le "0" ]; then
@@ -1138,6 +1138,7 @@ Using default dist_build_sources_clearnet_or_onion=${under}clearnet${eunder}.
       fi
    fi
 
+   ## --target and --type compatibility is intentionally not validated.
    if [ "${dist_build_type:-}" = "vm" ]; then
       true
    elif [ "${dist_build_type:-}" = "host" ]; then
@@ -1157,6 +1158,14 @@ ${reset}"
    fi
 
    if [ "${dist_build_iso:-}" = "true" ]; then
+      ## Make sure the target arch is something compatible with ISO boot.
+      if ! [[ "${dist_build_target_arch}" =~ ^(amd64|arm64)$ ]]; then
+         error "\
+${red}${bold}ISOs cannot be built for architecture '${dist_build_target_arch:-}'!${reset}
+
+Supported ISO architectures: amd64, arm64.
+Build '--target iso' with a supported arch, or choose a different '--target'.${reset}"
+      fi
       if [ "${dist_build_target_arch:-}" = "amd64" ]; then
          parse_cmd_freedom_versus_nonfreedom_firmware_choice_check
       fi

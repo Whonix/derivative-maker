@@ -92,7 +92,7 @@ build_machine_setup() {
          update
 
    true "dist_build_upgrade_build_machine: ${dist_build_upgrade_build_machine}"
-   if [ ! "${dist_build_upgrade_build_machine:-}" = "0" ]; then
+   if [ ! "${dist_build_upgrade_build_machine:-}" = "true" ]; then
       ## Update package lists and upgrade.
       retry_run --tries 4 --delay 15 -- \
       ${SUDO_TO_ROOT} \
@@ -126,38 +126,40 @@ build_machine_setup() {
       packages_to_be_installed+=" grub2-common "
       packages_to_be_installed+=" efibootmgr "
 
-      ## The following grub packages are (partially) build dependencies by Debian live-build.
-      ## Certainly required for amd64 ISO images booted with shim and grub.
-      if [ "${host_architecture}" = "amd64" ]; then
-         ## These packages are all available for the amd64 platform.
-         ## "grub-mkrescue will automatically include every platform it finds." [1]
-         ## [1] https://lists.gnu.org/archive/html/grub-devel/2014-03/msg00009.html
-         ## Install them all for best compatibility and reproducible builds.
-         ## Some might be unnecessary and waste a bit space.
-         ## Maybe this can be optimized later.
-         packages_to_be_installed+=" grub-efi-amd64-bin grub-pc-bin grub-coreboot-bin grub-efi-ia32-bin grub-xen-bin grub-ieee1275-bin "
-         packages_to_be_installed+=" grub-efi-amd64-signed "
-         packages_to_be_installed+=" shim-unsigned shim-signed shim-signed-common "
-         packages_to_be_installed+=" shim-helpers-amd64-signed "
-      elif [ "${host_architecture}" = "ppc64el" ]; then
-         packages_to_be_installed+=" grub-ieee1275-bin  "
-      elif [ "${host_architecture}" = "ppc64" ]; then
-         packages_to_be_installed+=" grub-ieee1275-bin  "
-      elif [ "${host_architecture}" = "sparc64" ]; then
-         packages_to_be_installed+=" grub-ieee1275-bin  "
-      elif [ "${host_architecture}" = "arm64" ]; then
-         packages_to_be_installed+=" grub-efi-arm64-bin "
-         packages_to_be_installed+=" shim-unsigned shim-signed shim-signed-common "
-      elif [ "${host_architecture}" = "riscv64" ]; then
-         packages_to_be_installed+=" grub-efi-riscv64-bin  "
-      else
-         true "${red}${bold}WARNING:${reset} ${under}The ISO to be build might be unbootable!${eunder}
-- This is because bootloader support is not implemented when building on this
-  systems's host_architecture.
-- Either the build script does not know how to install the required grub '-bin'
-  package for this architecture or the package is simply unavailable.
-- There is also a small chance that host_architecture detection failed. (Using multiarch, wine?)"
-      fi
+      ## The following grub packages are needed to build bootable ISO images
+      ## with features we deem essential.
+      #if [ "${host_architecture}" = "amd64" ]; then
+      #   ## These packages are all available for the amd64 platform.
+      #   ## "grub-mkrescue will automatically include every platform it finds." [1]
+      #   ## [1] https://lists.gnu.org/archive/html/grub-devel/2014-03/msg00009.html
+      #   ## Install them all for best compatibility and reproducible builds.
+      #   ## Some might be unnecessary and waste a bit space.
+      #   ## Maybe this can be optimized later.
+      #   packages_to_be_installed+=" grub-efi-amd64-bin grub-pc-bin grub-coreboot-bin grub-efi-ia32-bin grub-xen-bin grub-ieee1275-bin "
+      #   packages_to_be_installed+=" grub-efi-amd64-signed "
+      #   packages_to_be_installed+=" shim-unsigned shim-signed shim-signed-common "
+      #   packages_to_be_installed+=" shim-helpers-amd64-signed "
+      #   packages_to_be_installed+=" memtest86+ "
+      #elif [ "${host_architecture}" = "ppc64el" ]; then
+      #   packages_to_be_installed+=" grub-ieee1275-bin  "
+      #elif [ "${host_architecture}" = "ppc64" ]; then
+      #   packages_to_be_installed+=" grub-ieee1275-bin  "
+      #elif [ "${host_architecture}" = "sparc64" ]; then
+      #   packages_to_be_installed+=" grub-ieee1275-bin  "
+      #elif [ "${host_architecture}" = "arm64" ]; then
+      #   packages_to_be_installed+=" grub-efi-arm64-bin "
+      #   packages_to_be_installed+=" grub-efi-arm64-signed "
+      #   packages_to_be_installed+=" shim-unsigned shim-signed shim-signed-common "
+      #elif [ "${host_architecture}" = "riscv64" ]; then
+      #   packages_to_be_installed+=" grub-efi-riscv64-bin  "
+      #else
+      #   true "${red}${bold}WARNING:${reset} ${under}The ISO to be build might be unbootable!${eunder}
+#- This is because bootloader support is not implemented when building on this
+#  systems's host_architecture.
+#- Either the build script does not know how to install the required grub '-bin'
+#  package for this architecture or the package is simply unavailable.
+#- There is also a small chance that host_architecture detection failed. (Using multiarch, wine?)"
+      #fi
    fi
 
    if [ "${dist_build_install_to_root:-}" = "true" ]; then
@@ -439,6 +441,11 @@ sudo_setup() {
       return 0
    fi
 
+   if ! username-plain-for-sudoers "${USER}"; then
+      error "USER '${USER}' is not a valid account name or is the sudoers reserved word 'ALL'; refusing to write a sudoers rule."
+      return 0
+   fi
+
    ## Fix 'sudo' error:
    ## > sudo: you are not permitted to use the -D option
    ## When using '$SUDO_TO_VBOX_TEMP' because it uses
@@ -457,7 +464,7 @@ sudo_setup() {
 ## Avoid 'sudo: a password is required' errors during the build process.
 ${USER} ALL=(ALL:ALL) NOPASSWD:ALL
 
-Defaults:%${USER} runcwd=*
+Defaults:${USER} runcwd=*
 
 ## Does not work:
 #Defaults:%${USER} runcwd=${HOMEVAR_VBOX_TEMP}

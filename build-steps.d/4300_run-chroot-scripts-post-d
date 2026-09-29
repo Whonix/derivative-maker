@@ -8,6 +8,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+export LC_ALL=C
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -110,11 +113,6 @@ main() {
    if [ "${dist_build_fast2:-}" = "1" ]; then
       true "${bold}${cyan}INFO: run with '--fast 2' switch, skipping ${BASH_SOURCE[0]}. ${reset}"
       return 0
-   fi
-
-   if [ "${dist_build_iso:-}" = "true" ]; then
-       true "${green}INFO: Skipping ${BASH_SOURCE[0]}, because dist_build_iso is set to true.${reset}"
-       return 0
    fi
 
    if [ "${dist_build_type_long:-}" = "gateway" ]; then

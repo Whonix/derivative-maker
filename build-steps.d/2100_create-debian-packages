@@ -399,7 +399,7 @@ create_derivative_distribution_debian_packages() {
    local derivative_name_item item base_name control_file
    local -a package_build_list=()
    for derivative_name_item in ${derivative_name_list} ; do
-      for item in ${pkg_list} ; do
+      for item in ${dist_build_only_packages} ; do
          item="${source_code_folder_dist}/packages/${derivative_name_item}/${item}"
          if [ ! -d "${item}" ]; then
             true "INFO: Not a folder: ${item}"
@@ -463,12 +463,6 @@ create_derivative_distribution_debian_packages() {
       esac
       if [ ! "${make_use_cowbuilder:-}" = "true" ]; then
          true "${cyan}INFO: --package-jobs=${dist_build_package_jobs} requested, but cowbuilder is not in use; building serially.${reset}"
-      elif ! grep --fixed-strings -- 'make_cow_suffix' \
-         "${source_code_folder_dist}/packages/kicksecure/genmkfile/usr/share/genmkfile/make-helper-one.bsh" \
-         >/dev/null 2>&1; then
-         ## FIXME: Remove this check once the genmkfile submodule's gitlink
-         ## includes this feature.
-         true "${cyan}INFO: --package-jobs=${dist_build_package_jobs} requested, but this genmkfile has no 'make_cow_suffix' support (workers would share one cow snapshot); building serially.${reset}"
       else
          max_jobs="${dist_build_package_jobs}"
          if [ "${max_jobs}" -gt "${total_to_build}" ]; then

@@ -1,0 +1,23 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Set SOURCE_DATE_EPOCH to allow reproducible builds to work.
+
+## style-ok: no-strict -- sourced fragment.
+
+if [ "${dist_build_apt_freshness:-current}" = "frozen" ]; then
+   dist_frozen_snapshot_pin_file="${source_code_folder_dist}/build_sources/frozen-snapshot-timestamp"
+   if [ ! -r "${dist_frozen_snapshot_pin_file}" ]; then
+      error "Frozen build, but the snapshot pin file is missing: ${dist_frozen_snapshot_pin_file}"
+   fi
+   dist_frozen_snapshot_pin="$(< "${dist_frozen_snapshot_pin_file}")"
+   dist_frozen_snapshot_pin="${dist_frozen_snapshot_pin//[[:space:]]/}"
+   if ! source_date_epoch_valid "${dist_frozen_snapshot_pin}"; then
+      error "Malformed or out-of-range snapshot pin '${dist_frozen_snapshot_pin}' in ${dist_frozen_snapshot_pin_file}"
+   fi
+   SOURCE_DATE_EPOCH="${dist_frozen_snapshot_pin}"
+   export SOURCE_DATE_EPOCH
+   true "INFO: frozen build: SOURCE_DATE_EPOCH ${SOURCE_DATE_EPOCH}."
+fi

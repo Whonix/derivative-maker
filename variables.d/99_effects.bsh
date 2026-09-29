@@ -1,0 +1,26 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## All filesytsem modifications go here.
+## style-ok: no-strict -- sourced fragment.
+
+effects_atomic_write() {
+   local effects_dest effects_tmp
+   effects_dest="$1"
+   effects_tmp="$(mktemp -- "${effects_dest}.tmp.XXXXXX")"
+   printf '%s' "$2" > "${effects_tmp}"
+   mv -- "${effects_tmp}" "${effects_dest}"
+}
+
+## FIXME: Variable naming is confusing; binary_build_folder_dist is the path to
+## derivative-binary, dist_binary_build_folder is the folder under that where
+## the image build occurs. Perhaps rename the former to
+## dist_binary_work_folder?
+mkdir --parents -- "${binary_build_folder_dist}"
+mkdir --parents -- "${dist_binary_build_folder}"
+mkdir --parents -- "${make_cowbuilder_dist_folder}"
+
+effects_atomic_write "${dist_build_pbuilder_config_file}" "${dist_build_pbuilder_config_content}"
+effects_atomic_write "${dist_aptgetopt_file}" "${dist_aptgetopt_file_content}"

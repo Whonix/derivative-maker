@@ -1,0 +1,38 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sets variables related to rsync.
+
+## style-ok: no-strict -- sourced fragment.
+
+if [ -z "${rsync_cmd:-}" ]; then
+   if [ "${build_dry_run:-}" = "true" ]; then
+      ## Ensure dm-prepare-release doesn't upload mock artifacts.
+      rsync_cmd="echo simulate-only rsync"
+   else
+      rsync_cmd="rsync"
+   fi
+fi
+
+## TODO: hardlinks: rsync error Internal hashtable error: illegal key supplied
+## --hard-links \
+if [ "${rsync_opts:-}" = "" ]; then
+   rsync_opts="\
+   --links \
+   --safe-links \
+   --owner \
+   --group \
+   --chown=root:www-data \
+   --chmod=uog+r \
+   --times \
+   --sparse \
+   --partial \
+   --progress \
+   --verbose"
+fi
+
+if [ "${build_dry_run:-}" = "true" ]; then
+   rsync_opts="${rsync_opts} --dry-run"
+fi

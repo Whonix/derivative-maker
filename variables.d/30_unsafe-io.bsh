@@ -1,0 +1,45 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sets variables related to speeding up builds with eatmydata / unsafe I/O.
+
+## style-ok: no-strict -- sourced fragment.
+## style-ok: no-has -- early bootstrap.
+
+if [ "${dist_build_unsafe_io:-}" = "true" ]; then
+   eatmydata_install="true"
+   ## Don't glob /usr/lib/*-linux-gnu, it can return the wrong ABI if the host
+   ## is itself multiarch.
+   libeatmydata_multiarch=""
+   if command -v dpkg-architecture >/dev/null 2>&1 ; then
+      libeatmydata_multiarch="$(dpkg-architecture --query=DEB_HOST_MULTIARCH 2>/dev/null)"
+   fi
+   if [ -z "${libeatmydata_multiarch:-}" ] && command -v gcc >/dev/null 2>&1 ; then
+      libeatmydata_multiarch="$(gcc -print-multiarch 2>/dev/null)"
+   fi
+   libeatmydata_file=""
+   if [ -n "${libeatmydata_multiarch:-}" ] && test -f "/usr/lib/${libeatmydata_multiarch}/libeatmydata.so" ; then
+      libeatmydata_file="/usr/lib/${libeatmydata_multiarch}/libeatmydata.so"
+   fi
+   if [ -n "${libeatmydata_file:-}" ] && test -f "${libeatmydata_file}" ; then
+      true "INFO: eatmydata installed, preloading."
+      if [ -z "${LD_PRELOAD:-}" ]; then
+         LD_PRELOAD="${libeatmydata_file}"
+      else
+         LD_PRELOAD="${LD_PRELOAD}:${libeatmydata_file}"
+      fi
+      export LD_PRELOAD
+      ## sudo strips LD_PRELOAD by default, so inject it it into the command
+      ## itself.
+      SUDO_TO_ROOT="${SUDO_TO_ROOT} LD_PRELOAD=${LD_PRELOAD}"
+   else
+      true "INFO: eatmydata not yet installed, not yet preloading."
+   fi
+   ## Shadow the 'sync' command with a no-op function.
+   sync() {
+      true "${FUNCNAME[0]}: Not running ${FUNCNAME[0]}, because using '--unsafe-io true'."
+   }
+fi
+true "INFO: LD_PRELOAD: ${LD_PRELOAD:-}"

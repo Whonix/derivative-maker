@@ -43,63 +43,41 @@ reimage_raw() {
       return 1
    fi
 
-   local dev_mapper_device fs_uuid fs_hashseed fs_blocksize fs_inodes fs_isize fs_features
-   local reimage_parent sde_hex sde_cmd dd_err debugfs_err dumpe2fs_out
+   local dev_mapper_device fs_uuid fs_type mke2fs_config dumpe2fs_out fs_hashseed
+   local reimage_parent
    local loop_mapping_base esp_device esp_candidate
    export kpartx_only=true
    source "${dist_source_help_steps_folder}"/mount-raw
 
-   ## Arm the cleanup trap BEFORE mount_raw: mount_raw runs kpartx -a early and can fail afterwards,
-   ## so the mapping must be torn down even then.
-   ##
-   ## FIXME: This breaks the exithandler mechanism in help-steps/pre. Add a
-   ## mechanism to exithandler that can call cleanup functions that are
-   ## registered with it, then register reimage_cleanup with that mechanism.
-   ## Alternatively, if there is already a global cleanup mechanism, simply
-   ## extend that to be able to handle the cleanup reimage_cleanup does.
+   ## Register cleanup BEFORE mount_raw: mount_raw runs kpartx -a early and can
+   ## fail afterwards, so the mapping must be torn down even then.
    reimage_mnt=""
    reimage_tree=""
-   trap 'reimage_cleanup' EXIT
+   exception_handler_setup "exception_handler_unmount" ERR INT TERM
+   exception_handler_register_cleanup reimage_cleanup
 
    mount_raw
 
-   ## Preserve the pinned identifiers AND geometry of the current filesystem so the rebuilt filesystem
-   ## matches the one grml-debootstrap created.
+   ## UUID and hash seed will have been set to distinct deterministic values by
+   ## grml-debootstrap, preserve those through a reimage.
    dumpe2fs_out="$(${SUDO_TO_ROOT} dumpe2fs -h "${dev_mapper_device}" 2>/dev/null)"
-   fs_uuid="$(${SUDO_TO_ROOT} blkid --output value --match-tag UUID "${dev_mapper_device}")"
+   fs_uuid="$(${SUDO_TO_ROOT} blkid --output value --match-tag UUID "${dev_mapper_device}")" || true
    fs_hashseed="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Directory Hash Seed:[[:space:]]*//p')"
-   fs_blocksize="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Block size:[[:space:]]*//p')"
-   fs_inodes="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Inode count:[[:space:]]*//p')"
-   fs_isize="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Inode size:[[:space:]]*//p')"
-   ## FIXME: The features enabled in ext4 by default depend on the contents of
-   ## the host's /etc/mke2fs.conf and may also vary depending on host OS. We
-   ## should hardcode the features we want our images build with somewhere in
-   ## derivative-maker's configuration, and update that list as part of every
-   ## update to the next major Debian release. Then we should use that list
-   ## here instead of depending on what is recorded in the original filesystem.
-   fs_features="$(printf '%s\n' "${dumpe2fs_out}" | sed -n 's/^Filesystem features:[[:space:]]*//p' | tr ' ' ',')"
    if [ -z "${fs_uuid}" ]; then
       printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Filesystem UUID' of ${dev_mapper_device}." >&2
       return 1
    fi
-   if [ -z "${fs_hashseed}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Directory Hash Seed' of ${dev_mapper_device}." >&2
+
+   ## Fail closed on a non-ext4 root.
+   fs_type="$(${SUDO_TO_ROOT} blkid --output value --match-tag TYPE "${dev_mapper_device}")" || true
+   if [ "${fs_type}" != 'ext4' ]; then
+      printf '%s\n' "ERROR: ${dev_mapper_device} filesystem is '${fs_type:-unknown}', not ext4. Refusing to reformat." >&2
       return 1
    fi
-   if [ -z "${fs_blocksize}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Block size' of ${dev_mapper_device}." >&2
-      return 1
-   fi
-   if [ -z "${fs_inodes}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Inode count' of ${dev_mapper_device}." >&2
-      return 1
-   fi
-   if [ -z "${fs_isize}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Inode size' of ${dev_mapper_device}." >&2
-      return 1
-   fi
-   if [ -z "${fs_features}" ]; then
-      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: could not read 'Filesystem features' of ${dev_mapper_device}." >&2
+
+   mke2fs_config="${source_code_folder_dist}/build-data/mke2fs.conf"
+   if [ ! -f "${mke2fs_config}" ]; then
+      printf '%s\n' "ERROR: ${BASH_SOURCE[0]}: pinned mke2fs.conf not found at ${mke2fs_config}." >&2
       return 1
    fi
 
@@ -180,19 +158,7 @@ reimage_raw() {
    ${SUDO_TO_ROOT} blkdiscard -f -- "${dev_mapper_device}"
 
    ## Rebuild the root filesystem deterministically.
-   ##
-   ## TODO: Should we force the block size to always be 4096 here? That is the
-   ## largest supported block size on x86 systems, and it's the default block
-   ## size on Debian 13. Even if larger sizes work on some architectures with
-   ## some kernels, that would result in a filesystem that can't be opened on
-   ## most systems.
-   ##
-   ## TODO: "${fs_features}" probably needs prefixed by `none,`, otherwise the
-   ## provided feature list will be overlayed on top of the defaults, allowing
-   ## non-determinism to be introduced.
-   # shellcheck disable=SC2086
-   ${SUDO_TO_ROOT} mke2fs -F -q -t ext4 \
-      -b "${fs_blocksize}" -N "${fs_inodes}" -I "${fs_isize}" -O "${fs_features}" \
+   ${SUDO_TO_ROOT} env MKE2FS_CONFIG="${mke2fs_config}" mke2fs -F -q -t ext4 \
       -U "${fs_uuid}" -E hash_seed="${fs_hashseed}" \
       -d "${reimage_tree}" "${dev_mapper_device}"
 
@@ -226,9 +192,6 @@ reimage_raw() {
    fi
 
    "${dist_source_help_steps_folder}"/unmount-raw "$@"
-   ## FIXME: The below line needs removed once the exithandler breakage issue
-   ## mentioned above is fixed.
-   trap - EXIT
 }
 
 main() {

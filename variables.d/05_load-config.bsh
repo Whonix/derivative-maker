@@ -1,0 +1,34 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Parses command-line arguments and reads configuration files.
+
+## style-ok: no-strict -- sourced fragment.
+# shellcheck disable=SC1090,SC2086
+
+if [ ! "${dist_build_one_parsed:-}" = "true" ]; then
+   bash -n -- "${source_code_folder_dist}/help-steps/parse-cmd"
+   source "${source_code_folder_dist}/help-steps/parse-cmd"
+   dist_build_one_parse_cmd "$@"
+   dist_build_one_parsed="true"
+   export dist_build_one_parsed
+fi
+
+## All files can be sourced at once here, no need to handle the repo-local
+## config later.
+default_if_empty dist_build_config_dirs_list "${source_code_folder_dist}/buildconfig.d /etc/buildconfig-dist.d ${HOMEVAR}/buildconfig.d"
+for dist_build_config_dir_item in ${dist_build_config_dirs_list}; do
+   dist_build_source_config_dir "${dist_build_config_dir_item}"
+done
+unset dist_build_config_dir_item
+if [ ! "${dist_build_custom_config_dir:-}" = "" ]; then
+   dist_build_source_config_dir "${dist_build_custom_config_dir}"
+fi
+if [ ! "${dist_build_conf_file:-}" = "" ]; then
+   if [ -f "${dist_build_conf_file}" ]; then
+      bash -n -- "${dist_build_conf_file}"
+      source "${dist_build_conf_file}"
+   fi
+fi

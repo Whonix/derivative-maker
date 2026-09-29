@@ -1,0 +1,24 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Aborts the currently running script if its name is found in SKIP_SCRIPTS.
+## style-ok: no-strict -- sourced fragment.
+# shellcheck disable=SC2086
+
+## Would be nicer to have this in the 'pre' script, but the 'variables' script
+## runs after 'pre' to provide pretty color functions.
+##
+## NOTE: '$0' refers to the outer build-step script that sourced 'variables'.
+##
+## NOTE: 'exit 0' is intentional. This aborts the script that sources
+## 'variables'.
+own_filename="$(basename -- "$0")"
+for skip_script in ${SKIP_SCRIPTS}; do
+   if matched_word=$(printf "%s\n" "${own_filename}" | grep --fixed-strings -- "${skip_script}") ; then
+      printf "%s\n" "${bold}${green}${BASH_SOURCE[0]} INFO: Skipping ${own_filename}, because SKIP_SCRIPTS matches it. matched_word: '${matched_word}'${reset}"
+      exit 0
+   fi
+done
+unset skip_script matched_word

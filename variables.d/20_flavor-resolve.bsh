@@ -1,0 +1,344 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Sets variables that are derived from the value passed to --flavor.
+
+## style-ok: no-strict -- sourced fragment.
+
+if [ "${dist_build_flavor:-}" = "source" ]; then
+   default_if_empty dist_build_type_long "source"
+   default_if_empty dist_build_type_short "source"
+   default_if_empty dist_build_min_free_gib 2
+fi
+
+if [ "${dist_build_flavor:-}" = "dist-installer-cli" ]; then
+   default_if_empty dist_build_type_long "dist-installer-cli"
+   default_if_empty dist_build_type_short "dist-installer-cli"
+   default_if_empty dist_build_min_free_gib 2
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-gateway-lxqt" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Gateway"
+   default_if_empty VMNAME "Whonix-Gateway-LXQt"
+   default_if_empty VMRAM "1280"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_long "gateway"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "LXQt"
+   default_if_empty dist_build_gui "true"
+   #default_if_empty dist_build_hostname "host"
+   default_if_empty flavor_meta_packages_to_install " whonix-gateway-vm-gui-lxqt "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-gateway-rpi" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Gateway"
+   default_if_empty VMNAME "Whonix-Gateway-RPi"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_long "gateway"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "RPi"
+   ## TODO
+   default_if_empty dist_build_gui "true"
+   #default_if_empty dist_build_hostname "host"
+   #default_if_empty flavor_meta_packages_to_install " whonix-gateway-rpi "
+   default_if_empty dist_build_min_free_gib 20
+   error "${red}${bold}dist_build_flavor ${dist_build_flavor} is not implemented.${reset}"
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-gateway-cli" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Gateway"
+   default_if_empty VMNAME "Whonix-Gateway-CLI"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_long "gateway"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   #default_if_empty dist_build_hostname "host"
+   default_if_empty flavor_meta_packages_to_install " whonix-gateway-vm-server "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-workstation-lxqt" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Workstation"
+   default_if_empty VMNAME "Whonix-Workstation-LXQt"
+   default_if_empty VMRAM "2048"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_long "workstation"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "LXQt"
+   default_if_empty dist_build_gui "true"
+   #default_if_empty dist_build_hostname "host"
+   default_if_empty flavor_meta_packages_to_install " whonix-workstation-vm-gui-lxqt "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-workstation-cli" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Workstation"
+   default_if_empty VMNAME "Whonix-Workstation-CLI"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_long "workstation"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   #default_if_empty dist_build_hostname "host"
+   default_if_empty flavor_meta_packages_to_install " whonix-workstation-vm-server "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-custom-workstation" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Custom-Workstation"
+   default_if_empty VMNAME "Whonix-Custom-Workstation"
+   default_if_empty VMRAM "2048"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_long "custom-workstation"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "CUSTOM"
+   default_if_empty dist_build_gui "false"
+   #default_if_empty dist_build_hostname "host"
+   #default_if_empty flavor_meta_packages_to_install=" none "
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-host-cli" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Host"
+   default_if_empty VMNAME "Whonix-Host-CLI"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_long "whonix-host"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   default_if_empty dist_build_host_operating_system "true"
+   #default_if_empty dist_build_hostname "host"
+   default_if_empty dist_build_min_free_gib 20
+   error "${red}${bold}dist_build_flavor ${dist_build_flavor} is not implemented.${reset}"
+fi
+
+if [ "${dist_build_flavor:-}" = "whonix-host-lxqt" ]; then
+   default_if_empty SHORT_VMNAME "Whonix-Host"
+   default_if_empty VMNAME "Whonix-Host-LXQt"
+   default_if_empty VMRAM "2048"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_long "whonix-host"
+   default_if_empty dist_build_type_short "whonix"
+   default_if_empty dist_build_desktop "LXQt"
+   default_if_empty dist_build_gui "true"
+   default_if_empty dist_build_host_operating_system "true"
+   #default_if_empty dist_build_hostname "host"
+   ## TODO: Do not hardcode to VirtualBox.
+   #default_if_empty flavor_meta_packages_to_install " whonix-lxqt-host-virtualbox "
+   default_if_empty dist_build_min_free_gib 20
+   error "${red}${bold}dist_build_flavor ${dist_build_flavor} is not implemented.${reset}"
+fi
+
+if [ "${dist_build_flavor:-}" = "kicksecure-cli" ]; then
+   default_if_empty SHORT_VMNAME "Kicksecure"
+   default_if_empty VMNAME "Kicksecure-CLI"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_short "kicksecure"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   #default_if_empty dist_build_hostname "localhost"
+   if [ "${dist_build_type:-}" = "vm" ]; then
+      default_if_empty dist_build_host_operating_system "false"
+      default_if_empty dist_build_type_long "kicksecure"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-vm-server "
+   elif [ "${dist_build_type:-}" = "host" ]; then
+      default_if_empty dist_build_host_operating_system "true"
+      default_if_empty dist_build_type_long "kicksecure-host"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-baremetal-server "
+   fi
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "kicksecure-lxqt" ]; then
+   default_if_empty SHORT_VMNAME "Kicksecure"
+   default_if_empty VMNAME "Kicksecure-LXQt"
+   default_if_empty VMRAM "2048"
+   default_if_empty VRAM "128"
+   default_if_empty dist_build_type_short "kicksecure"
+   default_if_empty dist_build_desktop "LXQt"
+   default_if_empty dist_build_gui "true"
+   #default_if_empty dist_build_hostname "localhost"
+   if [ "${dist_build_type:-}" = "vm" ]; then
+      default_if_empty dist_build_host_operating_system "false"
+      default_if_empty dist_build_type_long "kicksecure"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-vm-gui-lxqt "
+   elif [ "${dist_build_type:-}" = "host" ]; then
+      default_if_empty dist_build_host_operating_system "true"
+      default_if_empty dist_build_type_long "kicksecure-host"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-baremetal-gui-lxqt "
+   fi
+   default_if_empty dist_build_min_free_gib 20
+fi
+
+if [ "${dist_build_flavor:-}" = "kicksecure-ci-tiny-do-not-use" ]; then
+   default_if_empty SHORT_VMNAME "Kicksecure"
+   default_if_empty VMNAME "Kicksecure-CI-Tiny-Do-Not-Use"
+   default_if_empty VMRAM "768"
+   default_if_empty VRAM "16"
+   default_if_empty dist_build_type_short "kicksecure"
+   default_if_empty dist_build_desktop "CLI"
+   default_if_empty dist_build_gui "false"
+   if [ "${dist_build_type:-}" = "vm" ]; then
+      default_if_empty dist_build_host_operating_system "false"
+      default_if_empty dist_build_type_long "kicksecure"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-ci-tiny-do-not-use "
+   elif [ "${dist_build_type:-}" = "host" ]; then
+      default_if_empty dist_build_host_operating_system "true"
+      default_if_empty dist_build_type_long "kicksecure-host"
+      default_if_empty flavor_meta_packages_to_install " kicksecure-ci-tiny-do-not-use "
+   fi
+   default_if_empty dist_build_min_free_gib 5
+fi
+
+[ -v flavor_meta_packages_to_install ] || flavor_meta_packages_to_install=""
+export flavor_meta_packages_to_install
+
+## derivative_name_list is used by:
+## - help-steps/variables to identify valid derivative names.
+## - help-steps/create-local-temp-apt-repo to create one or multiple local APT repositories.
+## - help-steps/cleanup-files to clean one or multiple folders.
+## - help-steps/unchroot-raw to unmount one or multiple local APT repositories.
+## - buildconfig.d/30_pkg_list.conf to create a list of packages to be built.
+## - buildconfig.d/25_apt_sources.conf to create a APT URIs.
+## - build-steps.d/*_create-debian-packages to iterate through one or multiple package folders.
+
+## "--flavor source" will set dist_build_source_run="true".
+if [ "${dist_build_source_run:-}" = "true" ]; then
+   default_if_empty VMNAME "source"
+   default_if_empty SHORT_VMNAME "source"
+   default_if_empty derivative_name_list "kicksecure whonix"
+   default_if_empty dist_build_type_long "source"
+   default_if_empty dist_build_type_short "source"
+   default_if_empty dist_build_desktop "none"
+   default_if_empty dist_build_min_free_gib 2
+fi
+
+## Not all of the flavor/target combinations above set 'dist_build_type_long'.
+default_if_empty dist_build_type_long "${dist_build_type_short:-}"
+
+export dist_build_type_long
+
+export VMNAME VMRAM VRAM
+
+## Used by: developer-meta-files /usr/bin/dm-prepare-release
+vm_multiple=false
+if [ "${dist_build_type_long:-}" = "workstation" ]; then
+   vm_multiple=true
+   ## dist_build_desktop could be KDE, CLI, Xfce, LXQt, RPi or CUSTOM
+   default_if_empty vm_names_to_be_exported "Whonix-Gateway-${dist_build_desktop:-} Whonix-Workstation-${dist_build_desktop:-}"
+fi
+if [ "${dist_build_type_long:-}" = "custom-workstation" ]; then
+   default_if_empty vm_names_to_be_exported "${VMNAME:-}"
+fi
+if [ "${dist_build_type_short:-}" = "kicksecure" ]; then
+   default_if_empty vm_names_to_be_exported "${VMNAME:-}"
+fi
+## --flavor source fallback
+default_if_empty vm_names_to_be_exported "none"
+
+maybe_disable_dist_build_windows_installer() {
+   if [ "${dist_build_source_run:-}" = "true" ]; then
+      true "${BASH_SOURCE[0]} INFO: dist_build_source_run set to true, skipping ${FUNCNAME[0]}, ok."
+   else
+      true "${BASH_SOURCE[0]} INFO: dist_build_source_run is not set to true, therefore: dist_build_windows_installer=false"
+      dist_build_windows_installer=false
+   fi
+}
+
+if [ "${dist_build_type_short:-}" = "kicksecure" ]; then
+   default_if_empty derivative_name_list "kicksecure"
+   default_if_empty dist_build_type_short_pretty "Kicksecure"
+   [ -n "${dist_server_upload_location_list:-}" ] || dist_server_upload_location_list=( "kicksecure.com" )
+   default_if_empty project_clearnet "kicksecure.com"
+   true "${BASH_SOURCE[0]} INFO: dist_build_type_short is 'kicksecure'. Build Whonix Windows Installer only for Whonix LXQt for VirtualBox. Therefore: maybe_disable_dist_build_windows_installer"
+   maybe_disable_dist_build_windows_installer
+elif [ "${dist_build_type_short:-}" = "whonix" ]; then
+   default_if_empty derivative_name_list "kicksecure whonix"
+   default_if_empty dist_build_type_short_pretty "Whonix"
+   [ -n "${dist_server_upload_location_list:-}" ] || dist_server_upload_location_list=( "whonix.org" )
+   default_if_empty project_clearnet "whonix.org"
+elif [ "${dist_build_type_short:-}" = "dist-installer-cli" ]; then
+   default_if_empty derivative_name_list "kicksecure whonix"
+   default_if_empty dist_build_type_short_pretty "dist-installer-cli"
+   [ -n "${dist_server_upload_location_list:-}" ] || dist_server_upload_location_list=( "kicksecure.com" "whonix.org" )
+   default_if_empty project_clearnet "kicksecure.com"
+   true "${BASH_SOURCE[0]} INFO: dist_build_type_short is 'dist-installer-cli'. Build Whonix Windows Installer only for Whonix LXQt for VirtualBox. Therefore: maybe_disable_dist_build_windows_installer"
+   maybe_disable_dist_build_windows_installer
+   ## Hardcoded.
+   VMNAME=dist-installer-cli
+   default_if_empty SHORT_VMNAME "dist-installer-cli"
+   default_if_empty dist_build_desktop "none"
+elif [ "${dist_build_type_short:-}" = "source" ]; then
+   ## Values match dist-installer-cli, which is also a non-flavor-specific
+   ## multi-derivative build.
+   default_if_empty derivative_name_list "kicksecure whonix"
+   default_if_empty dist_build_type_short_pretty "source"
+   [ -n "${dist_server_upload_location_list:-}" ] || dist_server_upload_location_list=( "kicksecure.com" "whonix.org" )
+   default_if_empty project_clearnet "kicksecure.com"
+else
+   error "unknown dist_build_type_short!"
+fi
+
+if [ "${VMNAME:-}" = "unknown" ]; then
+   true "variables ERROR: VMNAME is unknown. Please report this bug!"
+   exit 1
+fi
+
+if [ "${VMNAME:-}" = "" ]; then
+   MSG="${red}${bold}variables ERROR: VMNAME is empty! Please report this bug!${reset}"
+   error "${MSG}"
+fi
+
+if [ "${dist_build_source_run:-}" = "true" ]; then
+   true "${BASH_SOURCE[0]} INFO: Internal run."
+else
+   true "${BASH_SOURCE[0]} INFO: VMNAME is ${VMNAME:-}"
+fi
+
+## dm-reproducible-buildinfo needs this.
+export project_clearnet
+
+## help-steps/dm-raw-to-iso inserts these values into the ISO GRUB menu
+## unquoted, therefore they must not contain special characters.
+## dist_build_type_short is used as an ISO volume label and so must
+## additionally not be longer than 32 characters.
+value_charset_ok "${dist_build_hostname}" 'A-Za-z0-9.-' || error "dist_build_hostname must be non-empty and [A-Za-z0-9.-]."
+value_charset_ok "${dist_build_type_short}" 'A-Za-z0-9._-' || error "dist_build_type_short must be non-empty and [A-Za-z0-9._-] with no spaces."
+[ "${#dist_build_type_short}" -le 32 ] || error "dist_build_type_short must be less than 32 characters long, but it is ${#dist_build_type_short} characters long."
+value_charset_ok "${dist_build_type_short_pretty}" 'A-Za-z0-9 ._-' || error "dist_build_type_short_pretty must be non-empty and [A-Za-z0-9 ._-]."
+
+## example dist_build_desktop_lowercase:
+## lxqt
+## Bash's lowercase expansion ',,' refuses an unset var under
+## nounset.
+dist_build_desktop_safe="${dist_build_desktop:-}"
+default_if_empty dist_build_desktop_lowercase "${dist_build_desktop_safe,,}"
+unset dist_build_desktop_safe
+
+if [ ! "${dist_build_desktop_lowercase:-}" = "lxqt" ] ; then
+   true "${BASH_SOURCE[0]} INFO: dist_build_desktop_lowercase is '${dist_build_desktop_lowercase}'. Not 'lxqt'. Build Whonix Windows Installer only for Whonix LXQt for VirtualBox. Therefore: maybe_disable_dist_build_windows_installer"
+   maybe_disable_dist_build_windows_installer
+fi
+
+if [ "${dist_build_source_archive:-}" = "true" ]; then
+    default_if_empty dist_unified_name "derivative-maker-source"
+elif [ "${dist_build_type_short:-}" = "kicksecure" ]; then
+    default_if_empty dist_unified_name "Kicksecure-${dist_build_desktop}"
+elif [ "${dist_build_type_short:-}" = "whonix" ]; then
+    default_if_empty dist_unified_name "Whonix-${dist_build_desktop}"
+elif [ "${dist_build_type_short:-}" = "dist-installer-cli" ]; then
+    default_if_empty dist_unified_name "dist-installer-cli"
+elif [ "${dist_build_type_short:-}" = "source" ]; then
+    default_if_empty dist_unified_name "source"
+else
+    error "dist_unified_name: unhandled dist_build_type_short '${dist_build_type_short}'"
+fi

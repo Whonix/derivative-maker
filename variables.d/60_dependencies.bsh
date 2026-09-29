@@ -1,0 +1,238 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Build dependencies for derivative-maker.
+
+#dist_build_script_build_dependency_debian_backports+=" currently-none "
+
+## required signing official images
+dist_build_script_build_dependency+=" signify-openbsd "
+
+if [ "$(uname --machine)" = "x86_64" ]; then
+  if [ "${dist_build_windows_installer:-}" = "true" ]; then
+    ## required to build Windows-Installer and Windows-Starter
+    ## lazbuild
+    ## freepascal
+    dist_build_script_build_dependency+=" fp-units-win-base "
+    dist_build_script_build_dependency+=" fp-units-win-rtl  "
+    dist_build_script_build_dependency+=" fp-units-win-fcl "
+    dist_build_script_build_dependency+=" fp-units-win-misc "
+    ## libxml2-utils: /usr/bin/xmllint
+    ## libfile-mimeinfo-perl: mimeinfo
+    dist_build_script_build_dependency+=" wixl fpc lazarus libxml2-utils libfile-mimeinfo-perl nsis "
+  else
+    true "INFO: No packages from testing are currently required if not building Windows Installer."
+  fi
+fi
+
+## required to sign Windows-Installer and Windows-Starter
+dist_build_script_build_dependency+=" osslsigncode "
+
+## required for systemd-nspawn
+dist_build_script_build_dependency+=" systemd-container "
+
+## required for sudo -u user
+dist_build_script_build_dependency+=" sudo "
+
+## developer-meta-files
+dist_build_script_build_dependency+=" bc jq "
+
+## dm-normalize-fat-partition
+dist_build_script_build_dependency+=" dosfstools mtools "
+
+## for creating valid man pages in roff format from man folder (ronn format)
+dist_build_script_build_dependency+=" ronn "
+
+## required for build step "verify files"
+dist_build_script_build_dependency+=" diffutils "
+
+## required for creating .deb packages
+dist_build_script_build_dependency+=" debhelper "
+
+## contains grep-status
+dist_build_script_build_dependency+=" dctrl-tools "
+
+## required for some dialog based upstream (Debian) postinst scripts
+dist_build_script_build_dependency+=" dialog "
+
+## faster creation of local OpenPGP APT repository signing key
+## and better entropy during build
+dist_build_script_build_dependency+=" haveged "
+
+## required for creating .deb packages, contains debchange (dch),
+## used for automatically bumping the version number in debian/changelog
+## required for building python setup.py packages
+dist_build_script_build_dependency+=" devscripts "
+
+## required for creating an upstream tarball (git archive), for
+## creating a version number (git describe), and for 'git clean'
+dist_build_script_build_dependency+=" git "
+
+## required for creating (local) APT repository
+dist_build_script_build_dependency+=" reprepro "
+
+## required to silence dpkg-gencontrol:
+## warning: File::FcntlLock not available; using flock which is not NFS-safe
+## http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=677865
+dist_build_script_build_dependency+=" libfile-fcntllock-perl "
+
+## required for modifying configuration files owned by other .deb packages
+dist_build_script_build_dependency+=" config-package-dev "
+
+## required for creating .deb packages
+dist_build_script_build_dependency+=" dh-apparmor "
+
+## required for creating .deb packages
+dist_build_script_build_dependency+=" dh-python "
+
+## required for creating .deb packages
+dist_build_script_build_dependency+=" build-essential "
+
+## required for creating .deb packages
+dist_build_script_build_dependency+=" lintian "
+
+## required for "make clean"
+dist_build_script_build_dependency+=" gawk "
+
+## bash-completion
+dist_build_script_build_dependency+=" bash-completion "
+
+## grep
+dist_build_script_build_dependency+=" grep "
+
+## Debian APT repository archive keyring.
+dist_build_script_build_dependency+=" debian-archive-keyring "
+
+## manual verification of reproducible builds
+dist_build_script_build_dependency+=" vbindiff "
+
+## contains lsb_release, required for detecting host operating system (Ubuntu (CI) or Debian)
+dist_build_script_build_dependency+=" lsb-release "
+
+## used progress meter for console (currently only for qcow2
+## compression in developer-meta-files)
+dist_build_script_build_dependency+=" pv "
+
+## verifiable builds
+#dist_build_script_build_dependency+=" sleuthkit "
+
+## for building python setup.py packages
+dist_build_script_build_dependency+=" python3-all-dev "
+dist_build_script_build_dependency+=" python3-stdeb "
+
+## required for sanity tests
+dist_build_script_build_dependency+=" time "
+
+## clean package builds and reproducible builds
+dist_build_script_build_dependency+=" cowbuilder "
+dist_build_script_build_dependency+=" strip-nondeterminism "
+
+## torrent file creation
+dist_build_script_build_dependency+=" mktorrent "
+dist_build_script_build_dependency+=" transmission-cli "
+
+## required for onion build_sources
+dist_build_script_build_dependency+=" apt-transport-tor "
+
+## required for apt-get-wrapper
+dist_build_script_build_dependency+=" python3 "
+
+## 'gpg' required by build-steps.d/*_create-debian-packages
+#dist_build_script_build_dependency+=" gnupg "
+## sequoia-pgp
+## NOTE: 'reprepro'
+##        * internally uses the 'gpgme' library which uses hardcoded '/usr/bin/gpg'.
+##        * there is no option to use '/usr/bin/gpg-sq'
+##        * https://github.com/QubesOS/qubes-issues/issues/3326
+##        * still required something like:
+## gpg --import /usr/share/keyrings/derivative.asc
+## /usr/bin/gpg --fingerprint
+# /home/user/.gnupg/pubring.kbx
+# -----------------------------
+# pub   rsa4096 2014-01-16 [SC]
+#       916B 8D99 C38E AF5E 8ADC  7A2A 8D66 066A 2EEA CCDA
+## Therefore using 'gpg-from-sq'. Roughly the equivalent of:
+## (Useful manual testing commands.)
+# sudo cp --no-clobber --verbose -- /usr/bin/gpg /usr/bin/gpg-backup
+# sudo cp --verbose -- /usr/bin/gpg-sq /usr/bin/gpg
+# sudo cp --no-clobber -- /usr/bin/gpgv /usr/bin/gpgv-backup
+# sudo cp --verbose -- /usr/bin/gpgv-sq /usr/bin/gpgv
+## TODO: Debian forky: gpg-from-sq gpgv-from-sq
+dist_build_script_build_dependency+=" sq sqv sqop sequoia-git sequoia-chameleon-gnupg gpg-agent "
+
+## required for --connection clearnet
+dist_build_script_build_dependency+=" approx "
+
+## required by genmkfile
+dist_build_script_build_dependency+=" fakeroot "
+
+## required by build-steps.d/*_create-raw-image
+dist_build_script_build_dependency+=" mmdebstrap "
+
+## https://gitlab.mister-muffin.de/josch/mmdebstrap/issues/5
+## 'Recommends:' of mmdebstrap
+dist_build_script_build_dependency+=" arch-test fakechroot fakeroot libdistro-info-perl mount uidmap "
+## 'Suggests:' of mmdebstrap
+## 'proot' is intentionally omitted: it is only an mmdebstrap 'Suggests' (used
+## by mmdebstrap's '--mode=proot', which derivative-maker never selects because
+## it bootstraps as root), and it is not built for every Debian release
+## architecture (e.g. 'proot' has no installation candidate on ppc64el),
+## which would otherwise abort dependency installation on those hosts.
+dist_build_script_build_dependency+=" apt-transport-tor apt-utils binfmt-support ca-certificates debootstrap distro-info-data dpkg-dev perl-doc qemu-user qemu-user-static squashfs-tools-ng "
+
+## required for ISO creation
+dist_build_script_build_dependency+=" squashfs-tools xorriso mtools isomd5sum "
+## rsvg-convert
+dist_build_script_build_dependency+=" librsvg2-bin "
+
+## Build Dependencies for creating Virtual Machine Images (.raw)
+## for grml-debootstrap
+## for converting images (qemu-img): qemu-utils
+dist_build_script_build_dependency+=" grml-debootstrap kpartx mksh parted qemu-utils dosfstools "
+## for 'modprobe', so we can enable the nbd driver
+dist_build_script_build_dependency+=" kmod "
+## sgdisk
+dist_build_script_build_dependency+=" gdisk "
+
+## required by:
+## ~/derivative-maker/packages/kicksecure/developer-meta-files/release/prepare_release
+dist_build_script_build_dependency+=" signify-openbsd "
+dist_build_script_build_dependency+=" codecrypt "
+
+## required by approx proxy
+dist_build_script_build_dependency+=" curl "
+
+## build dependency for isutf8
+dist_build_script_build_dependency+=" moreutils "
+
+## for canary update script
+dist_build_script_build_dependency+=" rsstail "
+
+## for upload scripts
+dist_build_script_build_dependency+=" rsync  "
+dist_build_script_build_dependency+=" stunnel4 "
+dist_build_script_build_dependency+=" socat "
+## contains nslookup
+dist_build_script_build_dependency+=" bind9-dnsutils "
+
+## download of VirtualBox from Debian fasttrack repository
+dist_build_script_build_dependency+=" fasttrack-archive-keyring "
+
+## previously required by help-steps/mount-cleanup, but no longer needed.
+#dist_build_script_build_dependency+=" lsof "
+
+## required by basically everything
+dist_build_script_build_dependency+=" coreutils "
+
+dist_build_script_build_dependency+=" safe-rm "
+
+## required for virtualbox download for Whonix Windows Installer
+dist_build_script_build_dependency+=" curl "
+
+## required for deb-cleanup for tirdad
+dist_build_script_build_dependency+=" dh-dkms "
+
+## required for deb-cleanup for kloak
+dist_build_script_build_dependency+=" pkgconf "

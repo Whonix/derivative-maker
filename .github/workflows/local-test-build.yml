@@ -5,7 +5,7 @@
 ## should see its status first.
 ##
 ## Scope: the build DRY-RUN only. Real image builds belong to
-## local-build.yml (reproducibility: builds twice + diffoscope) and
+## local-reproducible-build-test.yml (reproducibility: builds twice + diffoscope) and
 ## local-boot-test.yml (build + boot). Both drive
 ## help-steps/dm-build-official directly and need no secrets, so they
 ## run on forks; keeping the heavy build out of this per-PR gate also
@@ -21,7 +21,7 @@ on:
   push:
     tags:
       ## '**' not '*': '*' does not match a slash, so a slash-delimited tag
-      ## would silently skip this gate while local-build.yml still builds it --
+      ## would silently skip this gate while local-reproducible-build-test.yml still builds it --
       ## the expensive lane running on a commit the cheap one never checked.
       - '**'
   workflow_dispatch:

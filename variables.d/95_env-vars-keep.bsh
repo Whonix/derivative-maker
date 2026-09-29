@@ -1,0 +1,137 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Ensures that critical environment variables survive SUDO_TO_ROOT calls.
+## style-ok: no-strict -- sourced fragment.
+# shellcheck disable=SC2086
+
+env_vars_keep_list="
+   DIST_APTGETOPT_SERIALIZED
+   tbb_version
+   tb_onion
+   tpo_downloader_debug
+   tb_disable_anon_ws_dns_conf
+   anon_shared_inst_tb
+   CURL_PROXY
+   CURL_RESUME
+   SKIP_SCRIPTS
+   SOURCE_DATE_EPOCH
+   dist_aptgetopt_file
+   dist_build_sources_list_primary
+   dist_mmdebstrap_build_sources_list_primary
+   dist_build_sources_list_primary_contents
+   dist_build_apt_sources_mirror
+   dist_build_apt_stable_release
+   dist_build_target_arch
+   dist_grml_mount_point
+   dist_source_help_steps_folder
+   dist_build_multiarch_package_item
+   dist_build_unsafe_io
+   dist_build_version
+   derivative_maker
+   user_name
+   LD_PRELOAD
+   LC_ALL
+   LANG
+   LANGUAGE
+   TZ
+   DEBDEBUG
+   XZ_OPT
+   apt_unattended_opts
+   DERIVATIVE_APT_REPOSITORY_OPTS
+   DEBOOTSTRAP
+   http_proxy
+   https_proxy
+   REPO_PROXY
+   ALL_PROXY
+   DEBIAN_FRONTEND DEBIAN_PRIORITY DEBCONF_NOWARNINGS APT_LISTCHANGES_FRONTEND
+   INITRD
+   HOMEVAR
+   HOMEVAR_VBOX_TEMP
+   SUDO_TO_ROOT
+   SUDO_TO_VBOX_TEMP
+   build_dry_run
+   dist_build_flavor
+   dist_build_type_long
+   dist_build_type_short
+   dist_build_desktop
+   dist_build_virtualbox
+   dist_build_qcow2
+   dist_build_raw
+   dist_build_iso
+   dist_build_serial_console_enable
+   dist_build_smbios_reader
+   dist_build_grub_bios_theme
+   dist_build_slot
+   dist_build_utm
+   dist_build_install_to_root
+   dist_build_source_run
+   dist_build_fast1
+   dist_build_redistributable
+   VMNAME
+   SHORT_VMNAME
+   VMRAM
+   VRAM
+   dist_unified_name
+   vm_names_to_be_exported
+   target_architecture_pretty_name
+   binary_build_folder_dist
+   dist_binary_build_folder
+   binary_image_raw_file
+   binary_image_raw_file_for_unified
+   binary_image_qcow2_file
+   binary_image_qcow2_file_for_unified
+   binary_image_ova_file
+   binary_image_vdi_dir
+   cowbuilder_cache_dir
+   source_code_folder_dist
+   dist_developer_meta_files_folder
+   HELPER_SCRIPTS_PATH
+"
+## TODO:
+## UWT_DEV_PASSTHROUGH
+
+true "INFO: Environment variables that will be passed..."
+
+## Don't append duplicate info to SUDO_TO_ROOT if the script it sourced
+## multiple times in the same shell.
+if [ ! "${variables_sudo_to_root_finalized:-}" = "true" ]; then
+   sudo_preserve_env_list=""
+   for env_vars_var_keep_item in ${env_vars_keep_list} ; do
+      if [ -z "${env_vars_var_keep_item:-}" ]; then
+        error "env_vars_var_keep_item ${env_vars_var_keep_item} is empty!"
+      fi
+      if [ "${sudo_preserve_env_list:-}" = "" ]; then
+         sudo_preserve_env_list="${env_vars_var_keep_item}"
+      else
+         sudo_preserve_env_list+=",${env_vars_var_keep_item}"
+      fi
+      if [ "${env_vars_var_keep_item}" = "DIST_APTGETOPT_SERIALIZED" ]; then
+         if [ -z "${env_vars_var_keep_item}" ]; then
+            error "env_vars_var_keep_item variable DIST_APTGETOPT_SERIALIZED is empty!"
+         fi
+         found=true
+      fi
+   done
+
+   if ! [ "${found:-}" = "true" ]; then
+      error "env_vars_var_keep_item variable DIST_APTGETOPT_SERIALIZED not found!"
+   fi
+   unset found
+
+   SUDO_TO_ROOT+=" "
+   SUDO_TO_ROOT+="--preserve-env=${sudo_preserve_env_list}"
+
+   ## Not exported on purpose, as this only guards against the same shell
+   ## sourcing this file multiple times.
+   variables_sudo_to_root_finalized="true"
+fi
+
+## XXX: Not possible because some scripts use extra sudo arguments such as "--preserve-env".
+#SUDO_TO_ROOT+=" "
+#SUDO_TO_ROOT+="--"
+
+#printf "%s\n" "INFO: SUDO_TO_ROOT:"
+#printf "%s\n" "${cyan}$SUDO_TO_ROOT${reset}"

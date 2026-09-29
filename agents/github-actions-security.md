@@ -36,13 +36,13 @@ cross-repo file cannot do -- a Dependabot bump here would silently desync it.
 - Source: https://github.com/actions/download-artifact/releases/tag/v8.0.1
 - Verbatim quote: `"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"` (release target commit).
 - Verified: 2026-07-14 by git-api tag resolution (`git/ref/tags/v8.0.1`, lightweight tag -> commit).
-- Used by `local-build.yml` (compare job downloads both independent build images). Reads artifacts written by `upload-artifact` v7.
+- Used by `local-reproducible-build-test.yml` (compare job downloads both independent build images). Reads artifacts written by `upload-artifact` v7.
 
 **`actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5`**
 - Source: https://github.com/actions/cache/releases/tag/v5.0.5
 - Verbatim quote: `"27d5ce7f107fe9357f9df03efb73ab90386fccae"`.
 - Verified: 2026-07-08 by git-api tag resolution; matches the pin in developer-meta-files' apt-install-with-cache action.
-- Used by `local-build.yml` (approx package-cache sidecar). No `restore-keys` on the paired step (G-A-007).
+- Used by `local-reproducible-build-test.yml` (approx package-cache sidecar). No `restore-keys` on the paired step (G-A-007).
 
 **`github/codeql-action/{init,analyze,upload-sarif}@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4.35.2`**
 - Source: https://github.com/github/codeql-action/releases/tag/v4.35.2

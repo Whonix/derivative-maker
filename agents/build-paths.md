@@ -30,7 +30,7 @@ help-steps/dm-build-official
                      ...
                      1100_sanity-tests
                      1600_export-libvirt-xml           (raw/qcow2 only)
-                     3600_convert-raw-to-iso           (iso only)
+                     4310_convert-raw-to-iso           (iso only)
                      5200_prepare-release -> dm-prepare-release
                           -> dm-reproducible-buildinfo   # per-image .dm-buildinfo
                      ...
@@ -54,7 +54,7 @@ Two things that read like gaps and are not:
 ## 1. CI reproducibility lane
 
 ```
-.github/workflows/local-build.yml     # dispatch-only + release tags + weekly
+.github/workflows/local-reproducible-build-test.yml     # dispatch-only + release tags + weekly
   -> job build (matrix: copy = a, b)          # two SEPARATE runners
        flavor kicksecure-ci-tiny-do-not-use -- the SAME flavor the boot-test
        lane builds, so the two lanes can share one image instead of building
@@ -132,7 +132,7 @@ so this is not about cost -- the free plan allows 20 concurrent jobs ORG-WIDE an
 one push fanned out 17 of them.
 
 ```
-dm-ci-dispatch --workflow local-build.yml    --ref ai
+dm-ci-dispatch --workflow local-reproducible-build-test.yml --ref ai
 dm-ci-dispatch --workflow local-boot-test.yml --ref ai
 ```
 
@@ -140,7 +140,7 @@ It runs `dm-preflight` first and refuses a tree whose submodule work is
 uncommitted, or whose local ref does not match the remote. `--dry-run` shows what
 would be dispatched without starting jobs.
 
-Release tags still build `local-build.yml` automatically. The cheap lanes -- lint,
+Release tags still build `local-reproducible-build-test.yml` automatically. The cheap lanes -- lint,
 dry-run, dist-ai tests, CodeQL, all under a minute -- still run on every PR.
 
 ## 5. dry-run YES vs NO
@@ -167,8 +167,8 @@ step                            under dry-run              gate
                                 grml-debootstrap            :258 -> create-empty-raw-image
 3400_copy-vms-into-raw          SKIPPED ENTIRELY            :79  -> return 0
 3500_install-packages           SKIPPED ENTIRELY            :665 -> return 0
-3600_convert-raw-to-iso         stops after 'lb config';
-                                writes a placeholder ISO    :346 -> return 0
+4310_convert-raw-to-iso         writes a placeholder ISO
+                                (build_dry_run)             :172 -> return 0
 4300_run-chroot-scripts-post-d  SKIPPED ENTIRELY            :105 -> return 0
 4350_reimage-raw-reproducible   SKIPPED ENTIRELY            :221 -> return 0
 4400_convert-raw-to-qcow2       runs (on the 1M raw)        -
@@ -226,7 +226,7 @@ env CI=true dist_build_target_arch=amd64 flavors_list=... ./help-steps/dm-build-
 
 `dist_build_target_arch=amd64` comes with it: under `CI=true`,
 `dm-build-official-one:92` selects arm64, and the runners are amd64.
-`local-build.yml` pins the same value.
+`local-reproducible-build-test.yml` pins the same value.
 
 The real lane gets `CI` from the container instead:
 `docker/derivative-maker-docker-run:369` injects `--env CI=true` and `:394` hands

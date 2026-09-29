@@ -1,0 +1,222 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Calculates the values of various apt sources related variables.
+
+## style-ok: no-strict -- this is a sourced buildconfig.d/*.conf fragment.
+
+if [ "${dist_build_sources_list_newer:-}" = "" ]; then
+   if [ "${dist_build_sources_clearnet_or_onion:-}" = "clearnet" ]; then
+      dist_build_sources_list_newer="${source_code_folder_dist}/build_sources/debian_testing_current_clearnet.sources"
+   else
+      dist_build_sources_list_newer="${source_code_folder_dist}/build_sources/debian_testing_current_onion.sources"
+   fi
+fi
+if [ "${dist_build_sources_list_primary:-}" = "" ]; then
+   ## Freshness selects the Debian stable sources file: 'frozen' pins a
+   ## snapshot.debian.org timestamp (reproducible builds), 'current' tracks
+   ## the live mirror.
+   dist_build_apt_freshness_selected="${dist_build_apt_freshness:-current}"
+   if [ "${dist_build_sources_clearnet_or_onion:-}" = "clearnet" ]; then
+      dist_build_sources_list_primary="${source_code_folder_dist}/build_sources/debian_stable_${dist_build_apt_freshness_selected}_clearnet.sources"
+   else ## onion sources requested
+      if [ "${dist_build_apt_freshness_selected}" = "frozen" ]; then
+         ## snapshot.debian.org doesn't have an onion repo.
+         error "onion + frozen sources is not supported; use --connection clearnet for a frozen/reproducible build"
+      fi
+      dist_build_sources_list_primary="${source_code_folder_dist}/build_sources/debian_stable_current_onion.sources"
+   fi
+fi
+export dist_build_sources_list_primary
+
+if [ -f "${dist_build_sources_list_primary}.in" ] \
+  && [ "${dist_build_apt_freshness:-current}" = 'frozen' ]; then
+  ## This file is a template, we must replace XXX_TS_XXX in it with a real
+  ## timestamp calculates from frozen-snapshot-timestamp.
+  if [ -z "${dist_frozen_snapshot_pin:-}" ]; then
+    error 'No frozen snapshot pin timestamp, but frozen build requested. Please report this bug!'
+  fi
+
+  sed "s/XXX_TS_XXX/$(date --utc --date="@${dist_frozen_snapshot_pin:-no_frozen_timestamp}" '+%Y%m%dT%H%M%SZ')/g" \
+    < "${dist_build_sources_list_primary}.in" \
+    | tee "${dist_build_sources_list_primary}" >/dev/null
+fi
+
+dist_base_name_build_sources_list_primary="$(basename "$dist_build_sources_list_primary")"
+## example dist_base_name_build_sources_list_primary:
+## debian_stable_current_clearnet.sources
+
+## mmdebstrap created a sources list file starting with path: /etc/apt/sources.list.d/0000
+## ('0000' is part of the file name.)
+dist_mmdebstrap_build_sources_list_primary="/etc/apt/sources.list.d/0000${dist_base_name_build_sources_list_primary}"
+## example dist_mmdebstrap_build_sources_list_primary:
+## /etc/apt/sources.list.d/0000debian_stable_current_clearnet.sources
+
+export dist_mmdebstrap_build_sources_list_primary
+
+true "dist_build_sources_list_primary      : $dist_build_sources_list_primary"
+true "dist_build_sources_list_newer        : $dist_build_sources_list_newer"
+
+if [ "${dist_build_apt_stable_release:-}" = "" ]; then
+   test -r "$dist_build_sources_list_primary"
+   temp_="$(grep --invert-match "#" "$dist_build_sources_list_primary")"
+   temp_="$(grep -- "^Suites:" <<< "$temp_")"
+   temp_="$(head -n1 <<< "$temp_")"
+   distri_="$(cut -d' ' -f2 <<< "$temp_")"
+   dist_build_apt_stable_release="$distri_"
+   ## example dist_build_apt_stable_release
+   ## trixie
+   export dist_build_apt_stable_release
+fi
+
+true "dist_build_apt_stable_release        : $dist_build_apt_stable_release"
+
+if [ "${dist_build_apt_sources_mirror:-}" = "" ]; then
+   test -r "$dist_build_sources_list_primary"
+   temp_="$(grep --invert-match -- "#" "$dist_build_sources_list_primary")"
+   temp_="$(grep -- "^URIs:" <<< "$temp_")"
+   temp_="$(head -n1 <<< "$temp_")"
+   uri_="$(cut -d' ' -f2 <<< "$temp_")"
+   ## Used for:
+   ## cowbuilder (debootstrap)
+   ## grml-debootstrap (debootstrap) (VM builds only)
+   ## debootstrap does not work with 'tor+', therefore removed.
+   dist_build_apt_sources_mirror="${uri_//tor+/}"
+   ## examples dist_build_apt_sources_mirror:
+   ## http://ftp.us.debian.org/debian
+   ## http://HTTPS///deb.debian.org/debian
+   ## http://2s4yqjx5ul6okpp3f2gaunr2syex5jgbfpfvhxxbbjwnrsvbk5v3qbid.onion/debian
+fi
+
+## export so it can be read by genmkfile.
+export dist_build_apt_sources_mirror
+
+true "dist_build_apt_sources_mirror        : $dist_build_apt_sources_mirror"
+
+if [ "${dist_build_apt_sources_security_mirror:-}" = "" ]; then
+   test -r "$dist_build_sources_list_primary"
+   temp_="$(grep --invert-match -- "#" "$dist_build_sources_list_primary")"
+   temp_="$(grep -- "^URIs:" <<< "$temp_")"
+   temp_="$(head -n2 <<< "$temp_")"
+   temp_="$(tail -n1 <<< "$temp_")"
+   uri_="$(cut -d' ' -f2 <<< "$temp_")"
+   ## Used for:
+   ## cowbuilder (debootstrap)
+   ## grml-debootstrap (debootstrap) (VM builds only)
+   ## debootstrap does not work with 'tor+', therefore removed.
+   dist_build_apt_sources_security_mirror="${uri_//tor+/}"
+   ## examples dist_build_apt_sources_security_mirror:
+   ## http://ftp.us.debian.org/debian
+   ## http://HTTPS///deb.debian.org/debian
+   ## http://2s4yqjx5ul6okpp3f2gaunr2syex5jgbfpfvhxxbbjwnrsvbk5v3qbid.onion/debian
+fi
+
+true "dist_build_apt_sources_security_mirror        : $dist_build_apt_sources_security_mirror"
+
+## export so it can be read by genmkfile.
+make_cowbuilder_mirror="$dist_build_apt_sources_mirror"
+export make_cowbuilder_mirror
+
+if [ "${dist_build_apt_newer_release_codename:-}" = "" ]; then
+   test -r "$dist_build_sources_list_newer"
+   temp_="$(grep --invert-match -- "#" "$dist_build_sources_list_newer")"
+   temp_="$(grep -- "^Suites:" <<< "$temp_")"
+   temp_="$(head -n1 <<< "$temp_")"
+   distri_="$(cut -d' ' -f2 <<< "$temp_")"
+   dist_build_apt_newer_release_codename="$distri_"
+   ## example dist_build_apt_newer_release_codename:
+   ## sid
+fi
+
+true "dist_build_apt_newer_release_codename: $dist_build_apt_newer_release_codename"
+
+if [ "${dist_build_sources_list_torproject:-}" = "" ]; then
+   if [ "${dist_build_sources_clearnet_or_onion:-}" = "clearnet" ]; then
+      dist_build_sources_list_torproject="${source_code_folder_dist}/build_sources/torproject_stable_current_clearnet.sources"
+   else
+      dist_build_sources_list_torproject="${source_code_folder_dist}/build_sources/torproject_stable_current_onion.sources"
+   fi
+fi
+
+if [ "${dist_build_sources_list_oracle:-}" = "" ]; then
+  ## No onion repository for Oracle.
+  dist_build_sources_list_oracle="${source_code_folder_dist}/build_sources/oracle_trixie_clearnet.sources"
+fi
+
+if [ "${dist_build_sources_list_debian_sid:-}" = "" ]; then
+   if [ "${dist_build_sources_clearnet_or_onion:-}" = "clearnet" ]; then
+      dist_build_sources_list_debian_sid="${source_code_folder_dist}/build_sources/debian_sid_current_clearnet.sources"
+   else
+      dist_build_sources_list_debian_sid="${source_code_folder_dist}/build_sources/debian_sid_current_onion.sources"
+   fi
+fi
+
+if [ "${dist_build_sources_list_debian_forky_backports:-}" = "" ]; then
+   if [ "${dist_build_sources_clearnet_or_onion:-}" = "clearnet" ]; then
+      dist_build_sources_list_debian_forky_backports="${source_code_folder_dist}/build_sources/debian_forky_backports_current_clearnet.sources"
+   else
+      dist_build_sources_list_debian_forky_backports="${source_code_folder_dist}/build_sources/debian_forky_backports_current_onion.sources"
+   fi
+fi
+
+if [ "${build_remote_repo_enable:-}" = "true" ]; then
+   DERIVATIVE_APT_REPOSITORY_OPTS="--enable --codename $dist_build_apt_stable_release"
+fi
+
+dist_sources_list_temp_apt_key_folder="/var/lib/derivative-maker/key-temp"
+dist_sources_list_temp_build_folder="/var/lib/derivative-maker/sources-temp-list.d"
+dist_sources_list_temp_build_file="$dist_sources_list_temp_build_folder/temp-initialdeb.sources"
+dist_sources_list_temp_initial_deb_sources_list="$CHROOT_FOLDER/$dist_sources_list_temp_build_file"
+
+if [ "${build_remote_derivative_pkgs:-}" = "true" ]; then
+   ## 'repo-add-dist' default uses by default variable:
+   ## apt_target_key_derivative="/usr/share/keyrings/derivative.asc"
+   ## but this is incompatible with 'live-build'.
+   if [ "${apt_target_key_derivative:-}" = "" ]; then
+      apt_target_key_derivative="/etc/apt/trusted.gpg.d/derivative-temp.asc"
+   fi
+
+   if [ "${sources_list_target_build_remote_derivative:-}" = "" ]; then
+      sources_list_target_build_remote_derivative="$dist_sources_list_temp_build_file"
+   fi
+
+   if [ "${codename_build_remote_derivative:-}" = "" ]; then
+      codename_build_remote_derivative="${dist_build_apt_stable_release}-developers"
+   fi
+
+   if [ "${sources_list_build_remote_derivative:-}" = "" ]; then
+      ## '[signed-by=/usr/share/keyrings/derivative.asc]' is incompatible with build-step create-lb-iso.
+      if printf '%s\n' "$derivative_name_list" | grep -i -- "Whonix" >/dev/null 2>&1; then
+         [ -n "${sources_list_build_remote_derivative:-}" ] || sources_list_build_remote_derivative="
+Types: deb
+URIs: http://127.0.0.1:9977/kicksecure/
+Suites: $codename_build_remote_derivative
+Components: main contrib non-free
+Enabled: yes
+
+Types: deb
+URIs: http://127.0.0.1:9977/whonix/
+Suites: $codename_build_remote_derivative
+Components: main contrib non-free
+Enabled: yes
+"
+      else
+         [ -n "${sources_list_build_remote_derivative:-}" ] || sources_list_build_remote_derivative="
+Types: deb
+URIs: http://127.0.0.1:9977/kicksecure/
+Suites: $codename_build_remote_derivative
+Components: main contrib non-free
+Enabled: yes
+"
+      fi
+   fi
+fi
+
+## derivative-maker/packages/kicksecure/usability-misc/usr/bin/repo-add-dist parses this.
+export apt_target_key_derivative
+export sources_list_build_remote_derivative
+export sources_list_target_build_remote_derivative
+
+unset uri_ distri_ _ temp_

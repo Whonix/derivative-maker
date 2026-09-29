@@ -231,7 +231,8 @@ create-debian-raw-image() {
                   --packages "${grml_packages_file}" \
                   --mntpoint "${dist_grml_mount_point}" \
                   --target "${binary_image_raw_file}" \
-                  --no-reimage
+                  --no-reimage \
+                  --defaultinterfaces
 }
 
 create-empty-raw-image() {

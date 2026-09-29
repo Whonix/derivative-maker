@@ -6,7 +6,7 @@
 ## AI-Assisted
 
 ## Install diffoscope and the format-descent helpers the reproducibility lane
-## (.github/workflows/local-build.yml) needs to compare two build images.
+## (.github/workflows/local-reproducible-build-test.yml) needs to compare two build images.
 ## Kept as a ci/ script (github-actions-security.md rule 7) so this post-checkout
 ## shell is shellcheck / 'bash -n' covered and runnable locally, rather than an
 ## inline workflow 'run:' block.
@@ -33,6 +33,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 true "INFO: Currently running script: ${BASH_SOURCE[0]} $*"
 
@@ -43,8 +44,8 @@ MYDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
 ## are untouched) rather than generating it inline.
 ## 'has' rather than 'command -v' (R-090): it verifies the hit is executable and
 ## is not an alias or shell function.
-# shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/has.sh
-source "${MYDIR}/../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/has.sh"
+# shellcheck source=../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/has.bsh
+source "${MYDIR}/../packages/kicksecure/helper-scripts/usr/libexec/helper-scripts/has.bsh"
 
 sudo cp -- "${MYDIR}/trixie-backports.sources" /etc/apt/sources.list.d/trixie-backports.sources
 

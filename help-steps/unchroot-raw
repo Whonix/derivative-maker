@@ -34,13 +34,13 @@ unmount_install_to_root_binds() {
 
    for derivative_name_item in ${derivative_name_list} ; do
       ${SUDO_TO_ROOT} "${dist_source_help_steps_folder}/mount-cleanup" -- "${CHROOT_FOLDER}/${DEB_INSTALL_FOLDER}/${derivative_name_item}"
-      "${dist_source_help_steps_folder}/unmount-helper" -- "${CHROOT_FOLDER}/${DEB_INSTALL_FOLDER}/${derivative_name_item}"
+      unmount_if_mounted "${CHROOT_FOLDER}/${DEB_INSTALL_FOLDER}/${derivative_name_item}"
    done
 
    ## Also possibly unmount '.backup' file for bare metal builds.
-   "${dist_source_help_steps_folder}/unmount-helper" -- "${CHROOT_FOLDER}/etc/resolv.conf"
-   "${dist_source_help_steps_folder}/unmount-helper" -- "${CHROOT_FOLDER}/etc/hosts"
-   "${dist_source_help_steps_folder}/unmount-helper" -- "${CHROOT_FOLDER}/etc/hostname"
+   unmount_if_mounted "${CHROOT_FOLDER}/etc/resolv.conf"
+   unmount_if_mounted "${CHROOT_FOLDER}/etc/hosts"
+   unmount_if_mounted "${CHROOT_FOLDER}/etc/hostname"
 }
 
 main() {

@@ -1,8 +1,0 @@
-dracut
-dracut-live
-live-config
-live-config-systemd
-systemd-sysv
-sudo
-efibootmgr
-isomd5sum

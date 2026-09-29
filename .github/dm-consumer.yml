@@ -8,9 +8,18 @@
 ## dist-ai/ci/dist-ai-tests-ci-config.sh.
 
 dist-ai-tests:
-  ## Default stack plus: procps (mount-cleanup 'ps' kill-report) and
-  ## safe-rm (dm-help-steps-tests scratch cleanup).
-  apt-packages: "python3 python3-pytest python3-hypothesis procps safe-rm"
+  ## Default stack plus: procps (mount-cleanup 'ps' kill-report), safe-rm
+  ## (dm-help-steps-tests scratch cleanup), xz-utils + strip-nondeterminism
+  ## (source_tarball_reproducible builds/compares the .tar.xz source tarball),
+  ## xkb-data (keyboard_preseed_model validates against /usr/share/X11/xkb/rules/*.lst),
+  ## passwd + sudo: the resolver tests re-exec as a non-root build user (real dm
+  ## builds start non-root and sudo internally) -- useradd (passwd) creates it and
+  ## sudo grants it the internal privilege escalation; and lsb-release: the resolver
+  ## calls 'lsb_release --short --id' for the distro id (via genmkfile / dist-base
+  ## detection), which exits 127 without it and aborts the whole source -- none of
+  ## which ship in debian:trixie-slim; and e2fsprogs, which
+  ## mke2fs_reimage_host_independent drives (mke2fs/e2fsck/debugfs on image files).
+  apt-packages: "python3 python3-pytest python3-hypothesis procps safe-rm xz-utils strip-nondeterminism xkb-data passwd sudo lsb-release e2fsprogs"
 
   ## dm-grub-smbios-tests compares the disk-side SMBIOS reader, which lives in
   ## the vm-config-dist SUBMODULE, against the ISO-side copy in the main tree.

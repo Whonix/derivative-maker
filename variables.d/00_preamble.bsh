@@ -1,0 +1,222 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Does basic setup and sanity checking. There will likely be no good reason to
+## override these options.
+
+## style-ok: no-strict -- sourced fragment.
+## style-ok: no-has -- early bootstrap.
+# shellcheck disable=SC2086
+
+## Deterministic umask for the build. security-misc sets the same umask for
+## commands run with sudo.
+umask 0022
+
+## Silence xtrace while sourcing parse-cmd and running the parser, to
+## avoid flooding output with irrelevant parser trace lines.
+xtrace_off
+
+## {{ Sanity Tests.
+
+dist_build_missing_dependency() {
+   error "dist_build_missing_dependency
+programs_to_check_installed_item: $1
+
+Did you install dependencies as mentioned in build documentation chapter
+Host Preparation
+?"
+   true
+}
+
+variables_script_sanity_test() {
+   local dist_build_programs_to_check_installed_list programs_to_check_installed_item
+   dist_build_programs_to_check_installed_list="logname whoami dirname basename awk grep"
+
+   for programs_to_check_installed_item in ${dist_build_programs_to_check_installed_list} ; do
+      command -v "${programs_to_check_installed_item}" >/dev/null || dist_build_missing_dependency "${programs_to_check_installed_item}"
+   done
+}
+
+variables_script_sanity_test
+
+## }}
+
+path_variable_adjustments() {
+   local path_part path_array local_sbin_found standard_sbin_found old_path new_path
+
+   ## Manual testing.
+   ## CI has the following and lacks any mention of 'sbin' in the PATH variable.
+   #PATH="/usr/local/bin:/usr/bin:/bin:/usr/games"
+
+   old_path="${PATH}"
+   true "INFO: old_path: ${old_path}"
+   ## Example PATH:
+   ## /home/user/derivative-maker/help-steps:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+   ## Example PATH on CI:
+   #PATH="/usr/local/bin:/usr/bin:/bin:/usr/games"
+
+   IFS=':' read -ra path_array <<< "${PATH}"
+
+   new_path="${PATH}"
+   for path_part in "${path_array[@]}"; do
+      if [ "${path_part:-}" = "/usr/local/sbin" ]; then
+         local_sbin_found=yes
+      fi
+      if [ "${path_part:-}" = "/usr/sbin" ]; then
+         standard_sbin_found=yes
+      fi
+   done
+
+   if [ ! "${local_sbin_found:-}" = "yes" ]; then
+      new_path="/usr/local/sbin:${new_path}"
+   fi
+
+   if [ ! "${standard_sbin_found:-}" = "yes" ]; then
+      new_path="${new_path}:/usr/sbin"
+   fi
+
+   export PATH="${new_path}"
+   true "INFO: new_path: ${PATH}"
+}
+
+path_variable_adjustments
+## Example PATH:
+## /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+## Determine the invoking (non-root) user.
+default_if_empty user_name "${SUDO_USER:-}"
+default_if_empty user_name "$(logname 2>/dev/null)" || true
+if [ -z "${user_name:-}" ] && [ "${EUID}" != "0" ]; then
+   user_name="$(whoami)" || true
+   default_if_empty user_name "${USER:-}"
+fi
+if [ "${user_name:-}" = "" ]; then
+   error "Variable user_name is empty."
+fi
+export user_name
+
+default_if_empty SUDO_TO_ROOT "sudo --non-interactive"
+default_if_empty HOMEVAR_VBOX_TEMP "/home/dm-vbox-temp"
+export HOMEVAR_VBOX_TEMP
+
+## Use 'sudo' with '-D $HOMEVAR_VBOX_TEMP' ('--chdir') to avoid 'VBoxManage' error.
+#> VBoxManage: error: Could not create the directory '.' (VERR_ACCESS_DENIED)
+default_if_empty SUDO_TO_VBOX_TEMP "sudo --non-interactive -D ${HOMEVAR_VBOX_TEMP} -u dm-vbox-temp"
+
+default_if_empty HOMEVAR "/home/${user_name}"
+export HOMEVAR
+export dist_build_slot="${dist_build_slot:-}"
+if [ -n "${binary_build_folder_dist:-}" ]; then
+   true "INFO: using explicitly set binary_build_folder_dist='${binary_build_folder_dist}'"
+elif [ -n "${dist_build_slot:-}" ]; then
+   binary_build_folder_dist="${HOMEVAR}/derivative-binary/${dist_build_slot}"
+else
+   binary_build_folder_dist="${HOMEVAR}/derivative-binary"
+fi
+export binary_build_folder_dist
+
+## pbuilder word-splits paths given to it to bind-mount. Check those paths and
+## variables those paths are derived from for internal spaces.
+for space_check_var in HOMEVAR binary_build_folder_dist source_code_folder_dist ; do
+   if [[ "${!space_check_var}" == *[[:space:]]* ]]; then
+      error "${space_check_var} must not contain whitespace, as pbuilder will word-split it. Variable contents: '${!space_check_var}'"
+   fi
+done
+unset space_check_var
+
+default_if_empty dist_parent_folder "$(dirname -- "${source_code_folder_dist}")"
+default_if_empty dist_developer_meta_files_folder "${source_code_folder_dist}/packages/kicksecure/developer-meta-files"
+
+source "${dist_developer_meta_files_folder}/usr/libexec/developer-meta-files/arch-to-qemu-machine.bsh"
+
+default_if_empty dist_source_parentdir "$(dirname -- "${source_code_folder_dist}")"
+export dist_source_parentdir
+
+default_if_empty dist_source_help_steps_folder "${source_code_folder_dist}/help-steps"
+export dist_source_help_steps_folder
+
+default_if_empty str_replace_tool "${HELPER_SCRIPTS_PATH}/usr/bin/str_replace"
+default_if_empty str_replace_many_tool "${HELPER_SCRIPTS_PATH}/usr/bin/str-replace-many"
+
+## All Debian architectures plus the literal 'source'. 'source' is a
+## valid Debian "architecture" value referring to source packages.
+[ -n "${architecture_all_list:-}" ] || architecture_all_list=( amd64 arm64 armel armhf hurd-i386 hurd-amd64 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc ppc64 ppc64el s390x sparc source )
+
+default_if_empty dist_aptgetopt_file "${binary_build_folder_dist}/30_derivative-maker.conf"
+export dist_aptgetopt_file
+dist_aptgetopt_file_content=""
+
+## DIST_ prefix avoids a name collision with pbuilder/cowbuilder, which use
+## their own array variable 'APTGETOPT' that gets sourced inside the cowbuilder
+## chroot scripts (help-steps/pbuilder-chroot-script-*).
+[ -v DIST_APTGETOPT ] || DIST_APTGETOPT=()
+## Cannot export bash array.
+#export DIST_APTGETOPT
+export DIST_APTGETOPT_SERIALIZED
+
+## Debugging.
+#declare -p DIST_APTGETOPT
+#printf "%s\n" "$DIST_APTGETOPT_SERIALIZED"
+
+## Avoiding "perl: warning: Setting locale failed." as suggested on
+## https://wiki.ubuntu.com/DebootstrapChroot and
+## https://lists.debian.org/debian-amd64/2005/08/msg00249.html.
+## The "C.UTF-8" locale was considered and rejected. It has some odd behaviors
+## (like making LC_ALL no longer override LANGUAGE as it should, causing
+## different byte sequences to be recognized as identical if invalid UTF-8 is
+## involved, and triggering Unicode parsing) that are undesirable.
+LANG="C"
+export LANG
+LC_ALL="C"
+export LC_ALL
+LANGUAGE="C"
+export LANGUAGE
+
+## Deterministic.
+TZ=UTC
+export TZ
+
+## Disable uwt while building Whonix,
+## because it is not functional while building Whonix from source code.
+default_if_empty UWT_DEV_PASSTHROUGH "1"
+export UWT_DEV_PASSTHROUGH
+
+default_if_empty tpo_downloader_debug "1"
+export tpo_downloader_debug
+
+## Under non-Qubes, resolv.conf is bind-mounted from the host and must not be
+## changed for tb-updater to be able to download Tor Browser successfully.
+##
+## Under Qubes, resolv.conf is provided as part of the template and is
+## overridden by Whonix's network config, so resolv.conf.whonix-orig needs to
+## be moved back to resolv.conf temporarily to be able to download Tor Browser
+## successfully.
+##
+## Therefore, set tb_disable_anon_ws_dns_conf to false so that
+## derivative-maker Whonix builds can download Tor Browser. Qubes builds will
+## have this variable set to true, and will therefore also be able to download
+## Tor Browser.
+tb_disable_anon_ws_dns_conf=false
+export tb_disable_anon_ws_dns_conf
+
+## REMINDER: Sourcing 'variables' intentionally changes the caller's working
+## directory to 'source_code_folder_dist'. Both the 'variables' scripts and
+## consumers expect this.
+cd -- "${source_code_folder_dist}" || exit 1
+
+## used by mmdebstrap
+## dpkg-parsechangelog (from package dpkg-dev) is not available before dependencies are installed.
+if command -v dpkg-parsechangelog &>/dev/null ; then
+   SOURCE_DATE_EPOCH="$(dpkg-parsechangelog --show-field=Timestamp)"
+   if [ -n "${SOURCE_DATE_EPOCH}" ] && ! source_date_epoch_valid "${SOURCE_DATE_EPOCH}" ; then
+      error "SOURCE_DATE_EPOCH '${SOURCE_DATE_EPOCH}' (dpkg-parsechangelog Timestamp) is not a valid non-negative 64-bit integer."
+   fi
+else
+   true "INFO: SOURCE_DATE_EPOCH not available yet because dpkg-parsechangelog has not been installed yet."
+fi
+
+export SOURCE_DATE_EPOCH
+
+#[ -n "${DEBDEBUG:-}" ] || export DEBDEBUG="1"

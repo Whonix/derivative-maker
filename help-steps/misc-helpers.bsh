@@ -1,0 +1,222 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Miscellaneous helper functions that don't warrent their own library. Some of
+## these are shared between multiple scripts, some have only been split out for
+## testing purposes. Not all of them are pure functions, by design.
+## help-steps/variables sources this.
+##
+## style-ok: no-strict -- sourced library.
+
+resolve-partition-uuid() {
+   ## Print the UUID of a partition specified by device name.
+   local partition_name lsblk_output name uuid
+   partition_name="$1"
+   lsblk_output="$(lsblk --raw --noheadings --output NAME,UUID)"
+   while read -r name uuid; do
+      if [ "${name}" = "${partition_name}" ]; then
+         printf '%s\n' "${uuid}"
+         return 0
+      fi
+   done <<< "${lsblk_output}"
+}
+
+newest-kernel-version() {
+   ## Print the version of the NEWEST kernel from a newline-separated /boot
+   ## listing.
+   local listing newest
+   listing="$1"
+   newest="$(printf '%s\n' "${listing}" | grep '^vmlinuz-' | sort --version-sort | tail --lines=1)" || true
+   printf '%s\n' "${newest#vmlinuz-}"
+}
+
+username-plain-for-sudoers() {
+   ## True when NAME is safe to interpolate verbatim into a sudoers rule. Names
+   ## that are not valid user account names or that sudo will treat as an alias
+   ## are rejected.
+   local candidate LC_ALL=C
+   candidate="$1"
+   if [[ "${candidate}" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+      return 1
+   fi
+   check_valid_linux_user_account_name "${candidate}"
+}
+
+derive_unified_image_paths() {
+   ## Derive the single "other VM" image path for a multi-VM build. Note that
+   ## when used with a Whonix build, the Gateway build is not considered
+   ## multi-VM but the Workstation build is.
+   local vm_name_item_to_be_exported vm_name_item_lower dist_build_type_long_lower
+
+   if [ "${vm_names_to_be_exported:-}" = "none" ]; then
+      return 0
+   fi
+
+   # shellcheck disable=SC2086
+   for vm_name_item_to_be_exported in ${vm_names_to_be_exported} ; do
+      vm_name_item_lower="${vm_name_item_to_be_exported,,}"
+      dist_build_type_long_lower="${dist_build_type_long,,}"
+      if [[ "${vm_name_item_lower}" == *"${dist_build_type_long_lower}"* ]]; then
+         continue
+      fi
+      default_if_empty binary_image_raw_file_for_unified "${dist_binary_build_folder}/${vm_name_item_to_be_exported}-${dist_build_version}.${target_architecture_pretty_name}.raw"
+      default_if_empty binary_image_qcow2_file_for_unified "${dist_binary_build_folder}/${vm_name_item_to_be_exported}-${dist_build_version}.${target_architecture_pretty_name}.qcow2"
+   done
+}
+
+dist_build_source_config_dir() {
+   ## Source every '*.conf' file in a directory.
+   local config_dir
+   config_dir="${1:-}"
+   true "${cyan}INFO: Checking if config dir '${config_dir}' exists...${reset}"
+   if [ -d "${config_dir}" ]; then
+      true "${cyan}INFO: Parsing '${config_dir}'...${reset}"
+      shopt -s nullglob
+      local dist_build_config_conf_item
+      for dist_build_config_conf_item in "${config_dir}/"*".conf"; do
+         bash -n -- "${dist_build_config_conf_item}"
+         source "${dist_build_config_conf_item}"
+      done
+   else
+      true "${cyan}INFO: Skipping '${config_dir}' because it does not exist.${reset}"
+   fi
+}
+
+source_date_epoch_valid() {
+   ## Ensure that the given number is valid for SOURCE_DATE_EPOCH.
+   local value
+   value="$1"
+   is_whole_number "${value}" || return 1
+   [ "$(( 10#${value} ))" -ge 0 ] && [ "$(( 10#${value} ))" = "${value}" ]
+}
+
+value_charset_ok() {
+   ## Return 0 if $1 is both non-empty and contains no characters outside of
+   ## the charset specified by $2.
+   ## shellcheck disable=SC2053
+   if [ -z "${1:-}" ] || [[ "${1:-}" == *[!${2:-}]* ]]; then
+      return 1
+   fi
+   return 0
+}
+
+unmount_if_mounted() {
+   ## Unmount the specified path if it is a mountpoint.
+   ${SUDO_TO_ROOT} mountpoint --quiet -- "$1" || return 0
+   ${SUDO_TO_ROOT} umount --verbose -- "$1"
+}
+
+repository_dist_initializer_setup() {
+   ## Sets up repository-dist so it is set up properly when the built system
+   ## first boots.
+   [ -n "${binary_build_folder_dist}" ] || error "repository_dist_initializer_setup: variable binary_build_folder_dist missing!"
+   [ -n "${CHROOT_FOLDER}" ] || error "repository_dist_initializer_setup: variable CHROOT_FOLDER missing!"
+
+   ## Enable generation of repository-dist config file
+   true "INFO: build_remote_repo_enable: ${build_remote_repo_enable}"
+   if [ "${build_remote_repo_enable}" = 'true' ]; then
+      printf "%s\n" "${DERIVATIVE_APT_REPOSITORY_OPTS}" | sponge -- "${binary_build_folder_dist}/derivative_apt_repository_opts"
+
+      ## Debugging.
+      true "INFO: sudo test"
+      ${SUDO_TO_ROOT} test -d /usr
+
+      ${SUDO_TO_ROOT} mkdir --parents -- "${CHROOT_FOLDER}/var/lib/repository-dist/"
+      ${SUDO_TO_ROOT} cp -- "${binary_build_folder_dist}/derivative_apt_repository_opts" "${CHROOT_FOLDER}/var/lib/repository-dist/derivative_apt_repository_opts"
+   else
+      safe-rm --force -- "${binary_build_folder_dist}/derivative_apt_repository_opts"
+   fi
+}
+
+define_chroot_run() {
+   ## Builds the chroot_run function.
+   local chroot_env_vars_var_remove_list chroot_env_vars_var_remove_item \
+      chroot_env_vars_var_remove_list
+
+   ## Variables removed from the environment before entering a target chroot.
+   ## These name host-only state that must not leak into the built image.
+   chroot_env_vars_var_remove_list="
+      TEMP
+      TEMPDIR
+      TMP
+      TMPDIR
+      HELPER_SCRIPTS_PATH
+   "
+
+   ## Intentionally not local.
+   chroot_remove_env_list=""
+
+   for chroot_env_vars_var_remove_item in ${chroot_env_vars_var_remove_list} ; do
+      if [ "${chroot_remove_env_list:-}" = "" ]; then
+         chroot_remove_env_list="--unset ${chroot_env_vars_var_remove_item}"
+      else
+         chroot_remove_env_list+=" --unset ${chroot_env_vars_var_remove_item}"
+      fi
+   done
+
+   if [ "${dist_build_install_to_root:-}" = "true" ]; then
+       chroot_run() {
+         ## Not truly unreachable.
+         # shellcheck disable=SC2317,SC2086
+         ${SUDO_TO_ROOT} "$@"
+      }
+   else
+      chroot_run() {
+         ## Not truly unreachable. Word splitting is intentional.
+         # shellcheck disable=SC2317,SC2086
+         ${SUDO_TO_ROOT} env ${chroot_remove_env_list} -- chroot -- "${CHROOT_FOLDER}" "$@"
+
+         #$SUDO_TO_ROOT env $chroot_remove_env_list systemd-nspawn --directory="$CHROOT_FOLDER"
+      }
+   fi
+}
+
+set_dist_build_reprepro_folder_options() {
+   ## Calculates variables related to reprepro when necessary.
+   ## TODO: Can we make this a variables.d script that runs unconditionally?
+
+   ## derivative_repository_name gets set by packages/kicksecure/genmkfile/usr/share/genmkfile/make-helper-one.bsh
+   local derivative_name_item valid_repository_name
+   valid_repository_name=false
+
+   if [ "${derivative_repository_name:-}" = "" ]; then
+      error "derivative_repository_name is empty!"
+   fi
+   true "derivative_repository_name: ${derivative_repository_name}"
+
+   for derivative_name_item in ${derivative_name_list} ; do
+      if [ "${derivative_repository_name:-}" = "${derivative_name_item}" ]; then
+         valid_repository_name=true
+         break
+      fi
+   done
+
+   if [ ! "${valid_repository_name:-}" = "true" ]; then
+      error "derivative_repository_name '${derivative_repository_name}' is invalid! (not in derivative_name_list)"
+   fi
+
+   [[ -v make_reprepro_codename_item ]] || make_reprepro_codename_item="${dist_build_apt_codename}"
+   true "make_reprepro_codename_item: ${make_reprepro_codename_item}"
+
+   if [ "${make_reprepro_codename_item:-}" = "local" ]; then
+      apt_repo_sub_folder="aptrepo_local/${derivative_repository_name}"
+   else
+      apt_repo_sub_folder="aptrepo_remote/${derivative_repository_name}"
+   fi
+
+   dist_apt_repository_folder="${binary_build_folder_dist}/${apt_repo_sub_folder}"
+   export dist_apt_repository_folder
+
+   ## Use an array so path components containing whitespace are preserved
+   ## correctly.
+   dist_build_reprepro_folder_options=(
+      --basedir "${source_code_folder_dist}/${apt_repo_sub_folder}"
+      --outdir  "${binary_build_folder_dist}/${apt_repo_sub_folder}"
+      --dbdir   "${binary_build_folder_dist}/${apt_repo_sub_folder}/db"
+      --logdir  "${binary_build_folder_dist}/${apt_repo_sub_folder}/log"
+   )
+}

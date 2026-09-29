@@ -1,0 +1,27 @@
+#!/bin/bash
+
+## Copyright (C) 2012 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## Takes care of misc tasks that need to be done at the end of variable
+## resolution, before filesystem changes are made. "epilogue" was chosen as a
+## script name because "postfix" is too easy to confuse with the mail server of
+## the same name.
+## style-ok: no-strict -- sourced fragment.
+
+## If 'dist_build_dump_varnames' is set, print the full variable state
+## (name=value) and exit.
+if [ -n "${dist_build_dump_varnames:-}" ]; then
+   declare -p | LC_ALL=C sort
+   exit 0
+fi
+
+## Same as above, but for functions.
+if [ -n "${dist_build_dump_funcnames:-}" ]; then
+   declare -f
+   exit 0
+fi
+
+xtrace_restore
+
+true "${BASH_SOURCE[0]} INFO: End of script, ok."
