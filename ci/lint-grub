@@ -43,20 +43,35 @@ if (( ${#grub_files[@]} == 0 )); then
   exit 1
 fi
 
-## An x-idiom variable operand ("x${VAR}" / x$VAR, quoted or not) compared
-## =/==/!= against a RHS literal whose first significant char is not 'x'.
-mismatch_ere='x\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"?[[:space:]]*(==|!=|=)[[:space:]]*"?[^x[:space:]"=]'
+## An x-idiom variable operand ("x${VAR}" / x$VAR) compared =/==/!= against a
+## RHS literal whose first significant char is not 'x'. Either operand may be
+## wrapped in single OR double quotes ('xefi', "xefi") -- the quote is skipped,
+## so a correct single-quoted idiom is not a false positive.
+qc="[\"']"
+mismatch_ere="x\\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?${qc}?[[:space:]]*(==|!=|=)[[:space:]]*${qc}?[^x[:space:]\"'=]"
 
 rc=0
 for grub_file in "${grub_files[@]}"; do
-  if hits="$(grep -nE -- "${mismatch_ere}" "${grub_file}")"; then
-    while IFS= read -r hit; do
-      printf '::error::%s:%s\n' "${grub_file}" "${hit}" >&2
-    done <<< "${hits}"
-    rc=1
-  else
-    printf '[ OK ] %s\n' "${grub_file}"
-  fi
+  ## grep: 0 = match (a mismatch), 1 = clean, >=2 = ERROR (e.g. unreadable).
+  ## A gate whose job is to catch a silently-disabled branch must not itself go
+  ## silently green on an unscanned file, so an error is a loud failure.
+  grep_rc=0
+  hits="$(grep -nE -- "${mismatch_ere}" "${grub_file}")" || grep_rc=$?
+  case "${grep_rc}" in
+    0)
+      while IFS= read -r hit; do
+        printf '::error::%s:%s\n' "${grub_file}" "${hit}" >&2
+      done <<< "${hits}"
+      rc=1
+      ;;
+    1)
+      printf '[ OK ] %s\n' "${grub_file}"
+      ;;
+    *)
+      printf '::error::%s: grep failed (rc=%s); file not scanned\n' "${grub_file}" "${grep_rc}" >&2
+      rc=1
+      ;;
+  esac
 done
 
 if (( rc == 0 )); then
