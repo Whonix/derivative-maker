@@ -3,11 +3,6 @@
 
 ## BEGIN hardcoded part BEGIN ##
 
-[submodule "live-build"]
-        path = live-build
-        url  = https://github.com/Kicksecure/live-build.git
-        #url = https://gitlab.com/Kicksecure/live-build.git
-
 [submodule "grml-debootstrap"]
         path = grml-debootstrap
         url  = https://github.com/Kicksecure/grml-debootstrap.git
