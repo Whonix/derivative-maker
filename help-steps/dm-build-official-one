@@ -259,7 +259,7 @@ run_cmd ./build-steps.d/*_local-dependencies "${build_args[@]}" --target iso --t
 
 ## '--flavor source' would lead to variable dist_build_hostname being unset.
 ## Therefore using '--flavor kicksecure-cli' to create a raw base image.
-run_cmd ./build-steps.d/*_create-raw-image "${build_args[@]}" "${multi_target_args[@]}" --flavor kicksecure-cli --base-image-role create "$@"
+run_cmd ./build-steps.d/*_create-raw-image "${build_args[@]}" --target iso "${multi_target_args[@]}" --flavor kicksecure-cli --base-image-role create "$@"
 
 ## '--target iso' is required to download calamares from backports.
 run_cmd ./build-steps.d/*_create-debian-packages "${build_args[@]}" --target iso "${multi_target_args[@]}" --flavor source --skip-published-packages "$@"
