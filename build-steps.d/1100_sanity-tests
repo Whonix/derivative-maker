@@ -446,17 +446,8 @@ Recommendation:
 }
 
 mount-test() {
-   ## Fail fast if the host's device-mapper / loop-partition stack is broken or
-   ## wedged. Otherwise the failure surfaces deep in the build (3200/3500) as a
-   ## confusing "kpartx -d: loopNpM is in use. Not removing" or "mke2fs: apparently
-   ## in use by the system" -- usually a red herring for stale/zombie dm state left
-   ## by a prior aborted build (a reboot clears it), a container without host /dev,
-   ## or a libdevmapper/kernel mismatch. Mirrors the real attach/mkfs/mount/teardown
-   ## cycle (help-steps/mount-raw + help-steps/unmount-raw) on a tiny throwaway image.
-
    local test_img="" test_dir="" part_dev="" part_name kpartx_out loop_assoc mt_loop
 
-   ## Idempotent cleanup for every exit path.
    _mt_cleanup() {
       if [ -n "${test_dir}" ]; then
          ${SUDO_TO_ROOT} umount -- "${test_dir}" 2>/dev/null || true
@@ -464,11 +455,14 @@ mount-test() {
          test_dir=""
       fi
       if [ -n "${test_img}" ]; then
-         ${SUDO_TO_ROOT} kpartx -d -s -- "${test_img}" 2>/dev/null || true
+         ${SUDO_TO_ROOT} kpartx -d -s -v -- "${test_img}" 2>/dev/null || true
+         ## kpartx is supposed to remove the loop device too, but try manually
+         ## removing too it just in case.
          while read -r mt_loop; do
             [ -n "${mt_loop}" ] || continue
             ${SUDO_TO_ROOT} losetup --detach -- "${mt_loop}" 2>/dev/null || true
          done < <(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null)
+         ## safe-rm is only installed later in this step; use rm here.
          ${SUDO_TO_ROOT} rm --force -- "${test_img}" 2>/dev/null || true
          test_img=""
       fi
@@ -476,52 +470,38 @@ mount-test() {
 
    true "INFO: device-mapper / loop-partition self-test..."
 
-   ## 1. device-mapper driver reachable? 1100 runs BEFORE the build sets up the dm
-   ##    stack, and in some build containers (e.g. the CI docker image) dm is not
-   ##    reachable yet at this stage even though loop is. A reachable driver is a
-   ##    precondition for the self-test, not something to fail on here -- so SKIP
-   ##    (not error) when it is absent. A merely-WEDGED device still has a reachable
-   ##    driver, so the wedge scan + self-test below still run where they matter.
+   ## Ensure device-mapper is available.
    if ! ${SUDO_TO_ROOT} dmsetup version >/dev/null 2>&1; then
-      true "${bold}${cyan}INFO: ${BASH_SOURCE[0]}: device-mapper not reachable at this \
-stage (set up later in the build); skipping dm/loop self-test.${reset}"
-      return 0
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: device-mapper unusable! 'dmsetup version' failed.${reset}"
    fi
 
-   ## 1b. no stale loop-partition device-mapper mapping may pre-exist. A wedged
-   ##     zombie mapping left by a prior aborted build (often unremovable without a
-   ##     reboot) collides with this build and surfaces MUCH later as an opaque
-   ##     "kpartx -d: loopNpM is in use" / "mke2fs: apparently in use". Fail here
-   ##     with the real cause instead.
+   ## Check for stale loop partition device-mapper devices.
    local stale_dm
    stale_dm="$(${SUDO_TO_ROOT} dmsetup ls 2>/dev/null | grep -E '^loop[0-9]+p[0-9]+' || true)"
    if [ -n "${stale_dm}" ]; then
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: stale device-mapper loop-partition mapping(s) present \
-before the build:
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: stale device-mapper loop partition mapping(s) present:
 ${stale_dm}
-These are usually wedged remnants of a prior aborted build and collide with this build. \
 Recommendation: reboot the build host to clear them, then retry.${reset}"
    fi
 
-   ## 2. tiny partitioned throwaway image. mktemp as root: security-misc sets
-   ##    fs.protected_regular=2 (see check-build-primitives).
+   ## Create a minimal, partitioned test image.
    test_img="$(${SUDO_TO_ROOT} mktemp)"
    if ! ${SUDO_TO_ROOT} truncate --size=32M -- "${test_img}"; then
       _mt_cleanup
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: could not size the self-test image (truncate).${reset}"
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: could not size the test image.${reset}"
    fi
    if ! ${SUDO_TO_ROOT} parted --script -- "${test_img}" mklabel msdos mkpart primary ext2 1MiB 100% >/dev/null 2>&1; then
       _mt_cleanup
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: could not partition the self-test image (parted).${reset}"
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: could not partition the test image.${reset}"
    fi
 
-   ## 3. kpartx -a -s -v : create /dev/mapper/loopNpM (mirrors help-steps/mount-raw).
+   ## Attach the image's partition via device-mapper.
    if ! kpartx_out="$(${SUDO_TO_ROOT} kpartx -a -s -v -- "${test_img}" 2>&1)" ; then
       _mt_cleanup
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: kpartx -a failed on the self-test image. \
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: kpartx -a failed on the test image. \
 Output: ${kpartx_out}${reset}"
    fi
-   part_name="$(printf '%s\n' "${kpartx_out}" | grep -o -E 'loop[0-9]+p[0-9]+' | head -1 || true)"
+   part_name="$(printf '%s\n' "${kpartx_out}" | grep -o -E 'loop[0-9]+p[0-9]+' | head -n 1 || true)"
    if [ -z "${part_name}" ]; then
       _mt_cleanup
       error "${bold}${red}ERROR ${BASH_SOURCE[0]}: kpartx -a mapped no partition. Output: ${kpartx_out}${reset}"
@@ -529,42 +509,35 @@ Output: ${kpartx_out}${reset}"
    part_dev="/dev/mapper/${part_name}"
    if [ ! -b "${part_dev}" ]; then
       _mt_cleanup
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: partition node '${part_dev}' missing after kpartx -a \
-(isolated /dev or wedged dm state). In a container the build needs '--privileged --volume /dev:/dev'.${reset}"
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: partition node '${part_dev}' missing after kpartx -a.${reset}"
    fi
 
-   ## 4. mke2fs : the direct catch for "apparently in use by the system" -- a
-   ##    stale/zombie dm mapping (typically from a prior aborted build).
+   ## Create an ext4 filesystem on the test image.
    if ! ${SUDO_TO_ROOT} mke2fs -F -q -- "${part_dev}" 2>/dev/null; then
       _mt_cleanup
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mke2fs failed on a freshly-mapped partition \
-('apparently in use by the system' = stale/wedged device-mapper state, usually from a prior aborted \
-build). Recommendation: reboot the build host to clear it, then retry.${reset}"
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mke2fs failed on a freshly-mapped partition. Recommendation: reboot the build host, then retry.${reset}"
    fi
 
-   ## 5. mount + umount.
+   ## Mount and unmount the filesystem.
    test_dir="$(${SUDO_TO_ROOT} mktemp --directory)"
    if ! ${SUDO_TO_ROOT} mount -- "${part_dev}" "${test_dir}" 2>/dev/null; then
       _mt_cleanup
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mounting the self-test partition failed.${reset}"
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mounting the test partition failed.${reset}"
    fi
    ${SUDO_TO_ROOT} umount -- "${test_dir}" 2>/dev/null || true
    ${SUDO_TO_ROOT} rmdir -- "${test_dir}" 2>/dev/null || true
    test_dir=""
 
-   ## 6. teardown must FULLY release (mirrors unmount-raw's authoritative check):
-   ##    no loop device may remain associated with the image after kpartx -d.
-   ${SUDO_TO_ROOT} kpartx -d -s -- "${test_img}" 2>/dev/null || true
+   ## Detach the test image and clean up.
+   ${SUDO_TO_ROOT} kpartx -d -s -v -- "${test_img}" 2>/dev/null || true
    loop_assoc="$(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null || true)"
    if [ -n "${loop_assoc}" ]; then
       _mt_cleanup
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: device-mapper/loop teardown did not release cleanly \
-(loop still attached: '${loop_assoc}') -- wedged dm state, usually from a prior aborted build. \
-Recommendation: reboot the build host, then retry.${reset}"
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: device-mapper/loop teardown did not release cleanly, loop device '${loop_assoc}' still attached. Recommendation: reboot the build host, then retry.${reset}"
    fi
 
    _mt_cleanup
-   true "${bold}${cyan}INFO: device-mapper / loop-partition self-test OK.${reset}"
+   true "${bold}${cyan}INFO: device-mapper / loop partition self-test OK.${reset}"
 }
 
 check-build-primitives() {
