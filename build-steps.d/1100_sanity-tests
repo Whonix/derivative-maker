@@ -520,11 +520,25 @@ Output: ${kpartx_out}${reset}"
       error "${bold}${red}ERROR ${BASH_SOURCE[0]}: partition node '${part_dev}' missing after kpartx -a.${reset}"
    fi
 
-   ## Create an ext4 filesystem on the test image.
-   if ! ${SUDO_TO_ROOT} mke2fs -F -q -- "${part_dev}" 2>/dev/null; then
-      _mt_cleanup
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mke2fs failed on a freshly-mapped partition. Recommendation: reboot the build host, then retry.${reset}"
-   fi
+   ## Create an ext4 filesystem on the test image. kpartx -s waits for udev, but
+   ## udevd may not run in a build container, so the dm partition node can exist
+   ## (the -b check passed above) while the target is not yet ready for I/O and
+   ## mke2fs races it. Best-effort settle, then a short bounded retry; on final
+   ## failure surface mke2fs's OWN error instead of swallowing it, so the cause is
+   ## diagnosable rather than a bare "mke2fs failed".
+   ${SUDO_TO_ROOT} udevadm settle 2>/dev/null || true
+   local mke2fs_out="" mke2fs_try=0
+   while true; do
+      if mke2fs_out="$(${SUDO_TO_ROOT} mke2fs -F -q -- "${part_dev}" 2>&1)"; then
+         break
+      fi
+      mke2fs_try="$(( mke2fs_try + 1 ))"
+      if [ "${mke2fs_try}" -ge 5 ]; then
+         _mt_cleanup
+         error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mke2fs failed on a freshly-mapped partition after ${mke2fs_try} tries (mke2fs: ${mke2fs_out}). Recommendation: reboot the build host, then retry.${reset}"
+      fi
+      sleep 0.5
+   done
 
    ## Mount and unmount the filesystem.
    test_dir="$(${SUDO_TO_ROOT} mktemp --directory)"
