@@ -1,3 +1,215 @@
+commit ea8591ba73c7b03b1ceef960f37404eed6fad018
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 04:37:07 2026 -0400
+
+    .
+
+commit f71b1e11e6483421c13c3c12812a727aa0a80593
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 04:27:06 2026 -0400
+
+    .
+
+commit fe254790658392d93de239bc854752bc9b7029e6
+Merge: c85c017a4 6a09a727d
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 04:26:18 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit 6a09a727d2f12e2e85e2703806b842d246abb771
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Wed Sep 30 01:14:37 2026 -0400
+
+    Polish
+
+commit 15f74ace6d681eb5775426a6a7faebd71b14ae88
+Merge: f4336d350 bf5580a08
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Tue Sep 29 23:57:28 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master' into arraybolt3/trixie
+
+commit bf5580a0858820a54938078affaa2e41bbd3fe85
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Tue Sep 29 17:05:52 2026 -0400
+
+    1100_sanity-tests: add device-mapper/loop self-test
+
+    - implements the no-op mount-test() TODO stub as a real preflight
+    - fails fast with the real cause (wedged/zombie dm mapping from a prior
+      aborted build, libdevmapper/kernel mismatch, isolated /dev) instead of
+      a later opaque "kpartx -d: in use" / "mke2fs: apparently in use"
+    - mirrors mount-raw+unmount-raw: kpartx -a, mke2fs, mount, kpartx -d,
+      authoritative losetup --associated release check
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 9c4ff88f3a3cb8b2b750d5566009cf400b4c2fd1
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Tue Sep 29 15:40:37 2026 -0400
+
+    unmount-raw: tolerate transient kpartx in-use on first pass
+
+    - first kpartx -d ran under errexit/ERR trap, so a transient
+      "loopNpM is in use. Not removing" aborted the whole build before the
+      per-device fallback loop (built for exactly that case) could run
+    - final losetup --associated check stays the authoritative teardown gate,
+      so best-effort first pass cannot mask a real failure
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit a241b3f92624e0bc12c1ff9ce123ce9453744062
+Author: claude (dev751 bbc3ade8-c0a6-40b9-b860-95daf1e49650) <noreply@anthropic.com>
+Date:   Tue Sep 29 13:19:43 2026 -0400
+
+    dm parent: sync residual non-gitlink files from ai
+
+commit 1bfdb04594d756e184753f4b1baf679bf759297b
+Author: claude (dev751 bbc3ade8-c0a6-40b9-b860-95daf1e49650) <noreply@anthropic.com>
+Date:   Tue Sep 29 13:19:43 2026 -0400
+
+    Move grub x-prefix lint to the dist-ai suite
+
+    ci/lint-grub is folded into dist-ai dm-iso-grub-menu-tests (which already reads the grub-config); drop the dm-side script and its local-lint step.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit c85c017a4f663a50aeff33f1e54d730800c2a55c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 12:52:03 2026 -0400
+
+    .
+
+commit f4336d350a1f123d2e51d4fd27379f13c656e269
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 10:16:55 2026 -0400
+
+    update VirtualBox download links for Whonix Windows Installer
+
+commit d9e1e63cdca519fc052492e47bb6d8acc09be841
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 10:16:19 2026 -0400
+
+    .
+
+commit 0abf4eec4f9d2713f546cbfb790d26a7915445a0
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 10:13:14 2026 -0400
+
+    .
+
+commit 3065b2155e5a8392ab9dcaa1cbce1dd459b32906
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 10:12:55 2026 -0400
+
+    .
+
+commit dd839834efa78be8f85d5853b32c935cbcaa4e29
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 04:12:40 2026 -0400
+
+    .
+
+commit de363a460dd4ca378955d1b6d4b951ea6be1d67b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 03:46:03 2026 -0400
+
+    remove live-build
+
+commit 5f4ac7146ab717f3e48b73306a10426e92859528
+Merge: ec1707537 7c458ca65
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 03:45:41 2026 -0400
+
+    Merge remote-tracking branch 'ArrayBolt3/arraybolt3/trixie'
+
+commit ec1707537a53ae2ea59303cf87d0bc3b3cf94ecf
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 02:19:32 2026 -0400
+
+    .
+
+commit f616911b52dcb49650adbbfa9bc0c6004d14c9af
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 29 02:16:02 2026 -0400
+
+    .
+
+commit 7c458ca656bbea1df63d56103a548f438f72541b
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Mon Sep 28 22:59:10 2026 -0400
+
+    Add an on-ISO repo for bootloader metapackages and dependencies, disable some obsolete code, remove grub-cloud from ISO builds
+
+commit caad7aa8682a97958cd46d662c8e49eb86ff22ee
+Merge: 4367980a9 3a5d0fc33
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Mon Sep 28 20:21:35 2026 -0400
+
+    Merge branch 'master' into arraybolt3/trixie
+
+commit 01c380f9630a29f82d01769ddedb4a881a48fd72
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Mon Sep 28 02:53:18 2026 -0400
+
+    .
+
+commit 4367980a957b1c0108b1df7069f5be9fa103ef3e
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Sep 27 23:52:05 2026 -0400
+
+    Go back to using smaller FATs on the ISO, possibly dangerous but changing to fat32 is possibly dangerous too
+
+commit dec0ceb6f14ba4efb34abd0d9c1116c35120ac12
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Sep 27 23:14:22 2026 -0400
+
+    fix
+
+commit 860c6fbc2faf574c3ba6afabc2b6638ca50ee533
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Sep 27 22:36:30 2026 -0400
+
+    fix
+
+commit 231eef9eca50c2a89ab5ba40dbf1254e837696c7
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Sep 27 20:15:34 2026 -0400
+
+    Overhaul, mainly to refactor variables.d into logical pieces
+
+commit ec4ce167cc08c7bef99e3aa76675493db7179ae6
+Author: claude (dev651 634d00b5-7189-458b-ab09-5aa46e29e604) <noreply@anthropic.com>
+Date:   Wed Sep 23 12:44:17 2026 -0400
+
+    parse-cmd: no leading space in package-list accumulation
+
+    - the else-branch concat prepended the separator even when the prior
+      list was empty, giving a leading space on the first package for
+      --initramfs / --kernel / --header; use ${VAR:+${VAR} } so the
+      separator appears only when a prior list exists
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit d894bb9c6544cd9c8eac4cc12d5c6c88677fd724
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 23 11:46:13 2026 -0400
+
+    .
+
+commit 5e6490b755496ee38cccdd43cf9bbc8713b0fcad
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 23 11:40:41 2026 -0400
+
+    .
+
+commit 3a5d0fc33d545c37176db177e52454c23d804288
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Tue Sep 22 05:54:19 2026 +0000
+
+    bumped changelog version
+
 commit d919935c42c09f842095d79e27749b41ae300c67
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Tue Sep 22 01:06:59 2026 -0400
@@ -28,11 +240,244 @@ Date:   Mon Sep 21 23:04:57 2026 -0400
 
     .
 
+commit 954613ab6adce128e631f41f7cdf4c96b89c98d0
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Mon Sep 21 06:11:10 2026 -0400
+
+    unmount_if_mounted: propagate a real mountpoint error
+
+    - 'mountpoint --quiet || return 0' swallowed exit 1 (bad invocation / system
+      error) as "not mounted", skipping umount and returning success, so a caller
+      could delete across a mount whose state was undetermined. Now exit 0 umounts,
+      32 no-ops, other propagates; a missing path no-ops via a 'test -e' pre-check.
+
 commit 33c5990b936d4e3def31e318bb53033334593798
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Mon Sep 21 05:27:01 2026 -0400
 
     .
+
+commit e82918d95e5ad4cc92caf84ce3df793af46415ad
+Merge: 945b966e5 bee199df5
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Sun Sep 20 16:13:37 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master' into arraybolt3/trixie
+
+commit ff4982e066437d01fed9d89d85b43c978725fdd0
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 21:45:55 2026 -0400
+
+    Make --kernel/--headers/--initramfs none sentinel coherent
+
+    - a real package after 'none' now clears the exclusive sentinel; repeated
+      'none <pkg>' previously left 'none <pkg>', which 3500 tried to install as
+      a package literally named 'none'
+
+commit 4b10944c2807a1cc3f3311531c01110d7a29eb19
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 21:38:37 2026 -0400
+
+    Declare unified-image paths for a real unified build
+
+    - derive_unified_image_paths left binary_image_*_for_unified UNSET when the
+      vm_names_to_be_exported loop matched no other VM (misconfigured self-matching
+      list), so a consumer crashed under nounset instead of emitting the actionable
+      "missing other VM" error
+
+commit ef9166d9b6ac4a93e552a5618830f0ed04c0eb25
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 11:36:16 2026 -0400
+
+    Guard remaining value-taking parse-cmd options before shift
+
+    - --only-packages/--file-system/--hostname/--retry-{max,wait,before,after}
+      hit a raw 'shift count out of range' on a trailing bare flag instead of
+      an actionable message (same class as the --vmram fix)
+
+commit 840e928b0efe17f16a7f633df6926f52bd715be1
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 11:09:50 2026 -0400
+
+    Refuse empty charset in value_charset_ok
+
+    - an empty class matches nothing; guard so a non-empty value is refused
+      rather than misparsed as an unterminated '*[!]*' bracket
+
+commit 57815472b7551f782bbd8974c9aadda4744148ec
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 11:09:34 2026 -0400
+
+    Validate --vmram/--package-jobs args before acting
+
+    - --vmram/--vram/--vmsize: check empty value BEFORE 'shift 2', so a
+      trailing bare flag gives the actionable error not a shift crash
+    - --package-jobs: refuse 0 at parse time via is_positive_integer
+      (2100 caught it only later); source strings.bsh for the helper
+
+commit 9c92b5c7ce348f5ea4d06aa5eddf392fc92aa18a
+Author: claude (dev735 a9815679-58af-4230-b97a-27a9e8ef15e8) <noreply@anthropic.com>
+Date:   Tue Sep 29 12:40:35 2026 -0400
+
+    dm parent: sync residual non-gitlink files from ai
+
+commit d7d39b06d6563fbc9ff67b015ec33b89e6ad5ddf
+Author: claude (dev751 bbc3ade8-c0a6-40b9-b860-95daf1e49650) <noreply@anthropic.com>
+Date:   Tue Sep 29 11:44:16 2026 -0400
+
+    Make grub lint quote-agnostic; fail on grep error
+
+    Single-quoted RHS such as 'xefi' was a false positive; skip either quote style on both operands.
+
+    grep exit >=2 (unreadable file) now fails loudly instead of reporting a silent pass on an unscanned file.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit e6599bbff343517f630a055c600a5ae8facaea23
+Author: claude (dev751 bbc3ade8-c0a6-40b9-b860-95daf1e49650) <noreply@anthropic.com>
+Date:   Tue Sep 29 11:19:39 2026 -0400
+
+    Fix EFI grub x-prefix typo; guard the class
+
+    RHS "efi" mismatched the x-prefixed LHS "xefi", so the test was always false and the "UEFI Firmware Settings" menuentry never rendered on EFI.
+
+    ci/lint-grub fails on any x-idiom variable compared to a non-x literal.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 6a7f040d2abf6ef76e99575a40b9ea0e8fc16b77
+Author: claude (dev735 a9815679-58af-4230-b97a-27a9e8ef15e8) <noreply@anthropic.com>
+Date:   Tue Sep 29 09:01:23 2026 -0400
+
+    dist_build_one_parsed: same-shell guard, no export
+
+    - exporting leaked the parse-skip into child build-step PROCESSES: they
+      skipped validating their own argv, so an unknown flag was silently
+      ignored and --function was dropped (ALL packages built, not the named one)
+    - config loader + sign-and-tag + sign-tag-head now set it non-exported;
+      every process re-parses its own complete argv (main flow forwards full args)
+    - sign-and-tag: add missing export LC_ALL=C (R-010)
+
+commit 61b3467e141cfbcdc3e5f1d9cb4bedc93546691b
+Author: claude (dev735 a9815679-58af-4230-b97a-27a9e8ef15e8) <noreply@anthropic.com>
+Date:   Tue Sep 29 05:55:43 2026 -0400
+
+    Export FUNCTION so --function scope survives parse-skip
+
+commit 691a99378e593dd6ae362535d86c13a7a78b0e9b
+Author: claude (dev735 a9815679-58af-4230-b97a-27a9e8ef15e8) <noreply@anthropic.com>
+Date:   Tue Sep 29 05:32:42 2026 -0400
+
+    Gate postmortem job on CI_ENABLED_ORG_AI_ASSISTED
+
+commit 7493a4e28cf246683fcf2c4a1ee05741fc2eccde
+Author: claude (dev692 9411e4ee-e940-416c-aba7-370ec7356789) <noreply@anthropic.com>
+Date:   Fri Sep 25 04:17:02 2026 -0400
+
+    dm-consumer: helper-scripts + shellcheck for dm-help-steps tests
+
+    - raw_to_iso_no_unbound_var needs shellcheck and /usr/libexec/helper-scripts/has.bsh;
+      frozen_snapshot_pin needs HELPER_SCRIPTS_PATH -- helper-scripts: true + shellcheck
+      supply all three so the dist-ai-tests job passes.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 7c00a779f48add58bad2cc28d31058cdb72cd60a
+Author: claude (dev692 9411e4ee-e940-416c-aba7-370ec7356789) <noreply@anthropic.com>
+Date:   Fri Sep 25 04:16:53 2026 -0400
+
+    dm-build-official-one: honor target override in shared prep
+
+    - multi_target_args now applies dist_build_multi_target_list to the shared PREP
+      steps (not only the build/upload), so a qcow2-only build does not prep (and
+      apt-install) VirtualBox in the cowbuilder chroot -- the --dry-run VirtualBox
+      failure. VirtualBox still preps when requested or on an unset override.
+    - add the missing export LC_ALL=C (R-010).
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit bc94059c7a5ad9628bcff7e84c330adfe9bc8bf5
+Author: claude (dev671 1d258c81-5ff7-4267-90a8-c4790c9d6837) <noreply@anthropic.com>
+Date:   Thu Sep 24 07:58:07 2026 -0400
+
+    ci: gate postmortem job on CI-enabled variable
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit b6ccae0e6c56bee6a7b406c49810e6e4f7029f7a
+Author: claude (dev651 634d00b5-7189-458b-ab09-5aa46e29e604) <noreply@anthropic.com>
+Date:   Wed Sep 23 12:44:17 2026 -0400
+
+    parse-cmd: no leading space in package-list accumulation
+
+    - the else-branch concat prepended the separator even when the prior
+      list was empty, giving a leading space on the first package for
+      --initramfs / --kernel / --header; use ${VAR:+${VAR} } so the
+      separator appears only when a prior list exists
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 09275372699c665a629effb0f660ff1f542a31c9
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Mon Sep 21 06:11:10 2026 -0400
+
+    unmount_if_mounted: propagate a real mountpoint error
+
+    - 'mountpoint --quiet || return 0' swallowed exit 1 (bad invocation / system
+      error) as "not mounted", skipping umount and returning success, so a caller
+      could delete across a mount whose state was undetermined. Now exit 0 umounts,
+      32 no-ops, other propagates; a missing path no-ops via a 'test -e' pre-check.
+
+commit 42fbb1ee73568892f1a961fba2aa8b57440e5aff
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 21:45:55 2026 -0400
+
+    Make --kernel/--headers/--initramfs none sentinel coherent
+
+    - a real package after 'none' now clears the exclusive sentinel; repeated
+      'none <pkg>' previously left 'none <pkg>', which 3500 tried to install as
+      a package literally named 'none'
+
+commit cbc73bcf2362fddf56c7830c29a48a8796d02f08
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 21:38:37 2026 -0400
+
+    Declare unified-image paths for a real unified build
+
+    - derive_unified_image_paths left binary_image_*_for_unified UNSET when the
+      vm_names_to_be_exported loop matched no other VM (misconfigured self-matching
+      list), so a consumer crashed under nounset instead of emitting the actionable
+      "missing other VM" error
+
+commit 8b0013dc7e5c40c26600935b0568c88b1e2fc27d
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 11:36:16 2026 -0400
+
+    Guard remaining value-taking parse-cmd options before shift
+
+    - --only-packages/--file-system/--hostname/--retry-{max,wait,before,after}
+      hit a raw 'shift count out of range' on a trailing bare flag instead of
+      an actionable message (same class as the --vmram fix)
+
+commit c86a17004e9f23e635ed6e22ec0b377454b89166
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 11:09:50 2026 -0400
+
+    Refuse empty charset in value_charset_ok
+
+    - an empty class matches nothing; guard so a non-empty value is refused
+      rather than misparsed as an unterminated '*[!]*' bracket
+
+commit d4e5d2e9112b8896b7eb34667b34bdd7585322e7
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 11:09:34 2026 -0400
+
+    Validate --vmram/--package-jobs args before acting
+
+    - --vmram/--vram/--vmsize: check empty value BEFORE 'shift 2', so a
+      trailing bare flag gives the actionable error not a shift crash
+    - --package-jobs: refuse 0 at parse time via is_positive_integer
+      (2100 caught it only later); source strings.bsh for the helper
 
 commit eb360a0056c35c3628dcb8d8e688df1dba63f2e5
 Author: Patrick Schleizer <adrelanos@whonix.org>
@@ -46,11 +491,447 @@ Date:   Sat Sep 19 10:01:45 2026 -0400
 
     .
 
+commit bee199df58a41b573f3844d6f187d7d5199be512
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 09:29:03 2026 -0400
+
+    Decommission unmount-helper
+
+    - its umount/kernel-bug workarounds are long dead; callers use a
+      guarded umount (unmount_if_mounted) instead
+
+commit b61dd6538f4a3e42751f3f8149c8ecc677778752
+Author: claude (dev614 ceeeaf03-ae20-48df-90d6-29164130b0b3) <noreply@anthropic.com>
+Date:   Sat Sep 19 09:28:13 2026 -0400
+
+    Rename pkg_list to dist_build_only_packages
+
+    - align the --only-packages var with the dist_build_* convention
+    - complete 30_pkg_list.conf strict-mode block (R-010) + brace vars
+
 commit ddf266cf3005b725f4d7db58090e46acfe648e32
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Sat Sep 19 07:40:43 2026 -0400
 
     .
+
+commit af58b7e4d31a898093858915ee9eaf987de06769
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Sat Sep 19 04:01:45 2026 -0400
+
+    Refresh stale path-traversal comment in version-paths
+
+    - dist_build_version is now charset-validated (no '/'), closing the '../'
+      vector the KNOWN LIMITATION note described; correct the comment.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 9df7ec591af24af4c80af140abc4001cba7714db
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Sat Sep 19 03:12:13 2026 -0400
+
+    Factor branding charset checks into value_charset_ok
+
+    - The four inline `case ""|*[!X]*` branding-var checks repeated one idiom.
+      Centralize as value_charset_ok(value, class) in 05_lib.bsh (parameterized,
+      testable). No helper-scripts strings.bsh function fits: check_is_alpha_numeric
+      is [0-9a-zA-Z_-] (no dot, which hostname/version need), validate_safe_filename
+      is far broader.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 65739bb7bba3fae6a265aefa7bb64b3a502bd33e
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Sat Sep 19 02:47:14 2026 -0400
+
+    Move dm-raw-to-iso input validation to variables.d
+
+    - dm-raw-to-iso is invoked only by 4310 with variables.d-resolved build vars, so
+      its hostname/label/dist-pretty/dist-version/source-date-epoch validation
+      duplicated what belongs at the resolution point. Validate dist_build_hostname,
+      dist_build_type_short (also the <=32 ISO volume id), dist_build_type_short_pretty
+      (10_core) and dist_build_version (30_version-paths) where they are resolved.
+    - dm-raw-to-iso now trusts its 4310-marshalled args (not a standalone tool): drop
+      the duplicated value checks; the vars are only spliced, never re-validated.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit f7a1812e6faae70b37d287efe63d4ce50e57be2f
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Sat Sep 19 00:23:51 2026 -0400
+
+    Validate SOURCE_DATE_EPOCH at resolution in variables.d
+
+    - SOURCE_DATE_EPOCH is resolved build-wide in variables.d (10_core changelog,
+      40_upload frozen pin) and feeds debhelper/mmdebstrap/every step, but was
+      unchecked (10_core) or format-only (40_upload). Add source_date_epoch_valid
+      (05_lib.bsh) reusing helper-scripts is_whole_number + a 64-bit range check
+      ($(( )) silently wraps past 2^63); 40_upload now reuses it instead of an inline
+      copy of the is_whole_number regex.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit c40fb0f941d1734db20d1cb988240efe56566fc9
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 19:24:41 2026 -0400
+
+    Fail closed: source-date-epoch range + kb harvest
+
+    - --source-date-epoch past 2^63 silently WRAPPED in $(( )) (2^64 -> 0 -> a 1970
+      build); round-trip the normalized value against the input and error on
+      overflow.
+    - 44_kb_layout harvest failure was swallowed to an empty submenu; fail closed on
+      a non-zero exit like the kernel-hardening harvest (stderr already reaches the
+      log). An exit-0 empty result stays a legitimate "no layouts".
+
+    Found by ai-review.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 231b741d92ffa224d15c5338a10689481b809026
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 19:10:41 2026 -0400
+
+    Reject sudoers uppercase-alias usernames
+
+    - username-plain-for-sudoers accepted all-caps names (BUILD, ROOT, ...); sudoers
+      parses a bare [A-Z][A-Z0-9_]* word in a user field as an alias REFERENCE, so
+      visudo --strict aborts the build with a confusing "undefined alias" error
+      instead of this gate's clear rejection. Reject the whole class (subsumes ALL).
+
+    Found by ai-review.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 1a1d9b2021f62757783b31373c9657334e8bd6b3
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 18:33:00 2026 -0400
+
+    Reuse check_valid_linux_user_account_name for sudoers check
+
+    - username-plain-for-sudoers reimplemented the adduser NAME_REGEX and wrongly
+      accepted a leading digit/dash. Delegate the regex to the canonical
+      check_valid_linux_user_account_name (helper-scripts strings.bsh, already
+      sourced via help-steps/variables); keep only the sudoers 'ALL' guard.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 5e795bf09ae3f7dde0a9fe73fd026a1234aad652
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 12:32:47 2026 -0400
+
+    Restore kernel_img filename in dm-raw-to-iso
+
+    - The newest-kernel reuse left kernel_ver (the version) but the symlink guard
+      and vmlinuz copy still need the filename; reintroduce
+      kernel_img="vmlinuz-${kernel_ver}". nounset aborted the build at line 466
+      (SC2154 is disabled tree-wide in .shellcheckrc, so it slipped past style).
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 8a7f975686b113b1113b159bd0373fd8828c7b92
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 12:10:03 2026 -0400
+
+    Reuse newest-kernel-version in dm-raw-to-iso
+
+    - dm-raw-to-iso hand-rolled the newest-vmlinuz pick that
+      build-step-helpers.bsh::newest-kernel-version already provides and
+      3500_install-packages uses; source the helper and call it.
+    - Anchor the helper's match to '^vmlinuz-' so a name merely containing
+      vmlinuz (e.g. xen-vmlinuz-*) cannot outrank the real kernel; preserves
+      dm-raw-to-iso's prior strictness and benefits 3500 too.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit ce056c48172687129508ce3c87785aa0968fda39
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 11:51:07 2026 -0400
+
+    Source build-step-helpers.bsh by absolute path
+
+    - Bare `source build-step-helpers.bsh` runs AFTER `source variables`, which
+      leaves the CWD outside help-steps; the bare name then resolves via neither
+      PATH nor CWD and the build aborts at 1200 (both iso + qcow2 CI legs).
+    - `source pre`/`variables` stay bare only because they run while CWD is still
+      help-steps. Use a MYDIR-relative absolute path, as `pre` does for retry-run.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 541e373a46a92b8c33756e7c87ecbd2e3ead9d4c
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 11:30:56 2026 -0400
+
+    Fix raw-to-iso harvest: read grub hardening without grub-probe
+
+    - The kernel-hardening scrape ran grub-mkconfig on the COPIED rootfs, whose
+      workdir is a tmpfs; grub-probe / then fails, the scrape is empty, and the
+      (correct) fail-closed check aborted the build -- the failed CI boot run
+      on the merge confirmed this. Read GRUB_CMDLINE_LINUX(_DEFAULT) by sourcing
+      /etc/default/grub + grub.d the way grub-mkconfig assembles it: no
+      grub-probe, and it never picks up the disk's root=/rootflags (a successful
+      probe on a btrfs workdir would have leaked rootflags into the live cmdline).
+    - Validate --hostname ([A-Za-z0-9.-], like --label): it feeds the live kernel
+      cmdline and the GRUB menu, where a space splits the cmdline and a newline
+      injects GRUB commands.
+    - splash: substitute branding with a bash string replace, not
+      sed 's|...|${value}|' (a '|' broke it, a crafted value could reach sed's
+      'e' flag -> root RCE); validate --dist-pretty / --dist-version.
+
+    Found by ai-review of the merge (agy/grok/claude).
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 13cef07d5bdc899969061077b0d390c0b1b9f1c5
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 10:51:01 2026 -0400
+
+    Merge raw-to-iso into a single dm-specific step
+
+    - dm-raw-to-iso is now derivative-maker-SPECIFIC, not a generic tool: it
+      harvests the rootfs (keyboard-layout submenu, package manifest, kernel-
+      hardening command line) in the SAME chroot it builds the live initramfs
+      in -- removing the SECOND raw-image mount 4310 used to do -- reads dm's
+      GRUB menu/theme from --grub-config-dir (iso-build-data/grub-config), and
+      packs the ISO. The generic --grub-overlay/--live-overlay overlay API is
+      gone; 4310 slims to a thin caller selecting options from the variables.
+    - '--serial-console' is now USED (fed from dist_build_serial_console_enable)
+      instead of 4310 reimplementing serial; '--smbios-reader' likewise.
+    - Fail CLOSED when the kernel-hardening scrape is empty, instead of
+      silently shipping an unhardened live ISO.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 117f119ac985614bd00966d8fedd21c8093c8af1
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 03:00:18 2026 -0400
+
+    Factor build-step helpers into a sourceable library
+
+    - Move the pure helpers (resolve-partition-uuid, newest-kernel-version,
+      select-grub-probe-device, require-ext-type, username-plain-for-sudoers)
+      into help-steps/build-step-helpers.bsh; 1200/3500/4350 source it after
+      'variables'. A single definition the build steps AND the dm-help-steps
+      tests share (the tests source this file directly rather than extracting
+      the functions). Pure, strict-free; no behaviour change.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 8ebd7707a8a7b856056c20ae135905de5e61cf66
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 02:42:12 2026 -0400
+
+    Extract require-ext-type for testing
+
+    - Move the ext-only fail-closed check into require-ext-type (pure, takes
+      the blkid TYPE string), so dm-help-steps-tests can exercise the accept/
+      reject/empty-fails-closed behaviour without root or blkid. The blkid
+      read and its '|| true' stay at the call site. No behaviour change.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 2ea37c7852a3b8d35f4e4594b9863d8deb44dcd8
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 02:42:09 2026 -0400
+
+    Extract kernel and grub-probe selectors for testing
+
+    - Move the newest-kernel pick and the root=/dev/mapper device choice into
+      newest-kernel-version and select-grub-probe-device (pure, arg-driven),
+      so dm-help-steps-tests can exercise them without a build. No behaviour
+      change.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 9c4452fa071e54154a892db02ad3f5342fcdf7b9
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 02:23:18 2026 -0400
+
+    Select newest kernel and guard empty grub-probe result
+
+    - Kernel pick used 'sed -n 1p' on the vmlinuz list; under LC_ALL=C '.'
+      sorts before digits, so 'vmlinuz-6.1.0-9' precedes 'vmlinuz-6.12.0-1'
+      and a post-upgrade two-kernel /boot built dracut for the OLD kernel.
+      Version-sort and take the newest, matching grub-mkconfig.
+    - The root=/dev/mapper fixup chose the /boot grub-probe result even when
+      it was empty (a transient probe failure via '|| true'), then hard-failed
+      on the empty string. Prefer /boot only when non-empty, else the root probe.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 4c200f3d0e38d30ce545f01351332b739a9c78e9
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 02:23:17 2026 -0400
+
+    Let a blkid failure reach the ext-type guard
+
+    - blkid exits 2 when the requested tag is absent (unformatted/corrupt/
+      unknown fs). As a standalone assignment under errexit that aborted the
+      script before the fail-closed 'case' (and the UUID empty-check) could
+      report it. '|| true' lets the empty value reach the guard.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit c3e43fe45095fd79a0caa482c875e31cde784acf
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 01:58:51 2026 -0400
+
+    Capture lsblk before the UUID loop
+
+    - Assign lsblk output to a variable first so errexit aborts on its
+      failure, then iterate a here-string instead of a process substitution:
+      no subshell, so a failing lsblk is not swallowed and 'return' still
+      works. Behaviour (literal exact-field match) is unchanged.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 594bc5de2ccca5be2813f204d9b375ac7d162f0b
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 01:30:48 2026 -0400
+
+    Resolve partition UUID with a bash read loop, not awk
+
+    - Drop awk entirely: read NAME,UUID line by line and compare NAME with
+      '[ x = y ]' (literal string equality); 'read -r' keeps backslashes
+      literal. Same exact-whole-field match, no awk escape/field semantics.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 147c4bb22f7478b210b3de6fba0dd99a665c1464
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 00:54:09 2026 -0400
+
+    Target the user, not a group, in sudoers runcwd default
+
+    - 'Defaults:%${USER}' matches a GROUP named like the user, which exists
+      only under the Debian default (USERGROUPS=yes); with USERGROUPS=no or a
+      directory-joined primary group it matches nothing and the runcwd
+      override silently no-ops (later 'sudo -D' then fails). Drop the '%'.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 002677db615dc59c4b676074b23c72944bdac796
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 00:54:01 2026 -0400
+
+    Fail closed on a non-ext root in the reimage
+
+    - 4350 unconditionally rebuilds the partition as ext4, so a build that
+      requested another filesystem (--file-system -> grml --filesystem, e.g.
+      xfs/btrfs) would be SILENTLY reformatted to ext4. The removed dumpe2fs
+      feature probe aborted on a non-ext filesystem as a side effect; assert
+      the ext type explicitly instead.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 9da6d968ac9a965b29e81de5a7d098cedd0a8825
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Fri Sep 18 00:53:52 2026 -0400
+
+    Pass partition name to awk via ENVIRON, not -v
+
+    - awk -v processes C escape sequences in the value (a literal '\b'
+      becomes a backspace), so a name carrying one would not match its row;
+      ENVIRON passes the exact bytes. Same literal-match intent as the fix.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit cf7c670e0975810a423349d6a1618f54676f46b6
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Thu Sep 17 22:26:00 2026 -0400
+
+    Pin mke2fs.conf for host-independent reimage
+
+    The reproducible reimage read the filesystem features AND geometry back
+    from the grml-built original and replayed them. Those values come from
+    whatever /etc/mke2fs.conf the ORIGINAL build host had, so two hosts with
+    different mke2fs.conf defaults produced different images -- the reimage
+    did not actually make the rebuild host-independent (proven: a canary in
+    the new test shows two host configs yield different images).
+
+    - Ship build-data/mke2fs.conf (a verbatim copy of Debian's stock config)
+      and drive the reimage mke2fs via MKE2FS_CONFIG, so features, block size,
+      inode size and inode ratio come from the pinned file, not the host. The
+      rootfs partition size is fixed, so mke2fs derives the same geometry (the
+      same size-based selection grml already made) on every host.
+    - Keep only -U (the UUID must match the rootfs fstab / grub root=UUID);
+      pin the directory hash seed to the UUID so nothing is read back.
+    - CI: add e2fsprogs, needed by the new host-independence test.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit aecdefcda76518786600ca27ff817f338971e4fa
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Thu Sep 17 22:12:00 2026 -0400
+
+    Attribute migrated live-build ISO files (GPL-3+)
+
+    - The ISO GRUB menu/theme/splash under iso-build-data/grub-config/ are
+      migrated from Debian live-build (share/bootloaders/), which is GPL-3+;
+      they were carrying no attribution. Add a per-file header and a DEP-5
+      COPYING stanza crediting the Debian Live team / Daniel Baumann.
+    - help-steps/dm-raw-to-iso and build-steps.d/4310_convert-raw-to-iso
+      reimplement live-build's hybrid-ISO packaging; dual-license GPL-3+ with
+      live-build attribution alongside ENCRYPTED SUPPORT LLC.
+    - esp-redirect.cfg, loopback.cfg, smbios-reader.cfg are original dm work
+      and stay AGPL-3+ under 'Files: *'.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 19fbab50dc08cb4608067f4f362da8584d3a2e47
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Thu Sep 17 22:06:10 2026 -0400
+
+    Accept trailing '$' in sudoers username check
+
+    - /etc/adduser.conf NAME_REGEX permits a single trailing '$' (Samba
+      machine accounts, e.g. 'host$'); the old check refused it, rejecting a
+      valid username. The '$' is literal in the sudoers user/%group fields, so
+      it is safe to strip only for the plain-name check.
+    - Extract username-plain-for-sudoers so the guard is exercised by
+      dm-help-steps-tests; metacharacter/'ALL'/double-'$' refusals unchanged.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit b245b3e9d62cf8e7342c8103248d2fc04f5edfe5
+Author: claude (dev603 00d3ee15-f161-499b-ab0b-ea1e3931f258) <noreply@anthropic.com>
+Date:   Thu Sep 17 22:03:03 2026 -0400
+
+    Resolve grub root partition UUID by literal name
+
+    - commit 33e0139 dropped 'grep --fixed-strings' for a regex '^NAME ' match,
+      so grub-probe-derived device names became regex: 'loop0p1' matches
+      'loop0p10', a metacharacter is interpreted, and the wrong partition's
+      UUID lands in grub.cfg 'root=' (unbootable image).
+    - Extract resolve-partition-uuid (awk '$1 == dev', literal whole field) so
+      it is exercised by dm-help-steps-tests without a full build.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit e17d04e682368e1e787ee356648538592f6fbd28
+Author: claude (dev586 e40d0109-dfab-4668-b4a9-8a492c3155d2) <noreply@anthropic.com>
+Date:   Wed Sep 16 06:50:19 2026 -0400
+
+    dm parent: sync residual non-gitlink files from ai
+
+commit 0c6e210cea4f23e9536e78bbe25ede6857333a67
+Author: claude (dev586 e40d0109-dfab-4668-b4a9-8a492c3155d2) <noreply@anthropic.com>
+Date:   Wed Sep 16 06:20:46 2026 -0400
+
+    Fix dist-installer-cli resolver crash + config/whitespace hardening
+
+    - dist-installer-cli aborted variable resolution: 30_version-paths derives the
+      VM-image path names from SHORT_VMNAME + dist_build_desktop under nounset, but
+      this flavor (like source, a non-image build) never set them. Set both to
+      dist-installer-cli / none, mirroring source. Its 7 previously-crashing target
+      combos now resolve (were recorded as rejected only because they crashed).
+    - config-dir sourcing: split dist_build_config_dirs_list via an array, not
+      '${list#* }' -- a single-entry override (no space) otherwise double-sourced the
+      in-tree tier (here AND in 50), double-appending a user config's accumulators.
+    - whitespace bind-mount check now also covers HOMEVAR (binary_build_folder_dist
+      and ~/buildconfig.d derive from it).
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 commit 945b966e5fbc3b4ca58cc0eece7b91211190c6a4
 Author: Patrick Schleizer <adrelanos@whonix.org>
@@ -147,6 +1028,132 @@ Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Mon Sep 14 02:42:19 2026 -0400
 
     .
+
+commit d5f973cac6440b7e3e9f069034203fc376cb53b7
+Author: assisted-by-ai <assisted-by-ai@users.noreply.github.com>
+Date:   Sun Sep 13 12:00:00 2026 -0400
+
+    de-balloon ai: collapse accumulated work onto upstream
+
+    Squashes the derivative-maker parent ai branch (2716 non-merge commits, ~252
+    distinct subjects, ~17x re-applied) to a single commit on kicksecure/master
+    carrying ai's exact tip tree. The balloon was a mirror<->remaster feedback loop:
+    the parent cherry-picked ai->master (new SHAs), remaster merged ours/master
+    (carrying those copies) back into ai, repeat. Both sides now fixed
+    (idempotent mirror + remaster absorbs upstream, not ours/master).
+
+    Tip tree is byte-identical to the pre-squash ai tip -- no content lost.
+
+commit 852493cd3876c13440df1eec20ba5d51acaf5cf9
+Author: claude (dev586 e40d0109-dfab-4668-b4a9-8a492c3155d2) <noreply@anthropic.com>
+Date:   Wed Sep 16 03:47:04 2026 -0400
+
+    Move source-time effects into variables.d/99_effects.bsh
+
+    - sourcing the resolvers no longer writes files: the build-folder mkdirs and
+      the pbuilder.conf / apt-options file writes move to a last-sorted effects
+      module, run once at the end of resolution
+    - writes are atomic (temp + rename, replacing any stale file) so no source-time
+      'sudo rm' is needed; the apt-options file is one full write, not per-line append
+    - effects skip on a variable-dump run (the snapshot never writes files), so a
+      capture no longer touches the filesystem
+    - byte-identical pbuilder.conf + apt-options output verified; contract-neutral
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit f6d437cb584a3cfbddbc5617533f667ec619f613
+Author: claude (dev586 e40d0109-dfab-4668-b4a9-8a492c3155d2) <noreply@anthropic.com>
+Date:   Wed Sep 16 03:18:40 2026 -0400
+
+    Split resolution logic into variables.d/
+
+    - buildconfig.d/ is now SETTINGS only (user-overridable *.conf, loop-sourced
+      across the /etc and ~ tiers); variables.d/ is the in-tree LOGIC (derivation
+      + the functions build steps call), never a user tier
+    - help-steps/variables loop-sources variables.d/*.bsh in filename order
+      (05_lib before its 10_core caller); the loop var is unset after the loop
+    - contract-neutral (dm-varname-snapshot contract gate); full snapshot adds
+      only the loop-plumbing var, dropped in the snapshot lib
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 0f2b71b97adb7047824f1d196e484c749cf258b3
+Author: claude (dev586 e40d0109-dfab-4668-b4a9-8a492c3155d2) <noreply@anthropic.com>
+Date:   Wed Sep 16 03:04:59 2026 -0400
+
+    Drop set_default_variable; reuse default_if_empty
+
+    - set_default_variable was a byte-for-byte reimplementation of
+      helper-scripts strings.bsh default_if_empty, already sourced by
+      help-steps/variables; a copy only drifts (single-source rule)
+    - default_if_empty NAME VALUE is now the config-file precedence idiom
+    - contract-neutral: exported vars + consumed-fn bodies unchanged
+      (dm-varname-snapshot contract gate)
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit e57bdd38f345b2a7966e04b35958a9f9ae5aebc9
+Author: claude (dev584 2fd0020b-d8e5-445a-90bd-b6657d4f7ccf) <noreply@anthropic.com>
+Date:   Tue Sep 15 14:13:02 2026 -0400
+
+    Add remaster-resolve-ours.conf (help-steps/variables)
+
+commit e6e1c728034609dfdf0a519d88acad4186c7a2e1
+Merge: d7bc85d39 945b966e5
+Author: assisted-by-ai <assisted-by-ai@users.noreply.github.com>
+Date:   Tue Sep 15 13:51:30 2026 -0400
+
+    Merge upstream master into master (remaster sync)
+
+commit d7bc85d3983096ba686e0df631060d9a0358f0f9
+Author: claude (dev556 4bdc306f-7204-4d7f-ba68-0c897dcf0291) <noreply@anthropic.com>
+Date:   Mon Sep 14 10:00:37 2026 -0400
+
+    Fix grub root=UUID probe: exact device match + quote path
+
+    - Anchor the lsblk|grep device lookup to the exact partition name; a
+      substring match let loop0p1 also match loop0p10 and pick the wrong
+      partition's UUID (root=UUID=... then wrong / unbootable).
+    - Quote ${CHROOT_FOLDER} in the root= sed fixup; an unquoted path with a
+      space word-split into two sed operands, silently skipping the fixup.
+    - Pre-existing latents found while resolving the marker-file FIXME.
+
+commit aabdb750b8ac52bc30fe5e46262e86b57fef2233
+Author: claude (dev556 4bdc306f-7204-4d7f-ba68-0c897dcf0291) <noreply@anthropic.com>
+Date:   Mon Sep 14 09:36:53 2026 -0400
+
+    Stop writing live_build/skip_install_check markers
+
+    - 3500_install-packages no longer writes the live_build /
+      skip_install_check marker files; the live-image vs VM/disk path is now
+      selected in package maintainer scripts by the dist_build_iso env var
+      (preserved into the chroot via env_vars_keep_list).
+    - 4310_convert-raw-to-iso drops the strips of those now-absent files.
+
+commit 476b66214741ecc0653d8a9fd6f0ae20c16b2a2e
+Author: claude (dev556 4bdc306f-7204-4d7f-ba68-0c897dcf0291) <noreply@anthropic.com>
+Date:   Mon Sep 14 09:36:31 2026 -0400
+
+    Register reimage_cleanup via pre, not an EXIT-trap hijack
+
+    - Add a cleanup-callback registry to help-steps/pre
+      (exception_handler_register_cleanup + a run-once flush from the ERR,
+      signal and EXIT paths), so a step can add teardown without overwriting
+      the EXIT trap 'pre' owns.
+    - 4350_reimage-raw-reproducible uses exception_handler_unmount and
+      registers reimage_cleanup instead of 'trap reimage_cleanup EXIT' +
+      'trap - EXIT'; both FIXMEs resolved.
+
+commit 12275a0997211093873eeeb21564bf0e34d627ff
+Author: assisted-by-ai <assisted-by-ai@users.noreply.github.com>
+Date:   Sun Sep 13 12:00:00 2026 -0400
+
+    de-balloon master: collapse mirror onto upstream
+
+    Squashes the derivative-maker parent master (2665 commits, a re-run-churned
+    mirror of ai's ballooned history) to a single commit on kicksecure/master
+    carrying master's exact tip tree (ai's non-gitlink file work; kicksecure gitlink
+    pins). Tip tree byte-identical to the pre-squash master -- no content lost.
 
 commit 8bad5cda91a8eef0de0935074c55cc8bf036a9cd
 Author: Patrick Schleizer <adrelanos@whonix.org>

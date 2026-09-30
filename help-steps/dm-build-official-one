@@ -193,13 +193,7 @@ case "${architecture:-}" in
   ;;
 esac
 
-## 'dist_build_multi_target_list', when set (even to empty), is the AUTHORITATIVE
-## VM-target set for ALL steps -- the shared PREP included -- overriding the arch
-## default above. So a qcow2-only build does not prep (and does not apt-install)
-## VirtualBox in the cowbuilder chroot: '--target virtualbox' no longer leaks into
-## the shared prep, and parse-cmd never sets dist_build_virtualbox. The always-on
-## '--target iso' / '--target windows' the prep lines add are unaffected. Unset ->
-## the arch default (build every image the arch ships).
+## dist_build_multi_target_list overrides the multi_target_args defaults.
 if [ -n "${dist_build_multi_target_list+x}" ]; then
   multi_target_args=()
   # shellcheck disable=SC2086
@@ -207,7 +201,6 @@ if [ -n "${dist_build_multi_target_list+x}" ]; then
     multi_target_args+=("--target" "${multi_target_item}")
   done
 fi
-flavor_multi_target_args=("${multi_target_args[@]}")
 
 ############################################################
 ## Phase 1: per-flavor sanity tests.
@@ -291,8 +284,8 @@ for flavor_item in "${flavors_list[@]}"; do
       ;;
   esac
 
-  if [ "${#flavor_multi_target_args[@]}" -gt 0 ]; then
-    run_cmd ./derivative-maker "${build_args[@]}" "${reuse_shared_args[@]}" "${flavor_multi_target_args[@]}" --flavor "${flavor_item}" "$@"
+  if [ "${#multi_target_args[@]}" -gt 0 ]; then
+    run_cmd ./derivative-maker "${build_args[@]}" "${reuse_shared_args[@]}" "${multi_target_args[@]}" --flavor "${flavor_item}" "$@"
   else
     true "INFO: dist_build_multi_target_list empty: no multi-target VM image build for ${flavor_item}."
   fi
@@ -350,8 +343,8 @@ for flavor_item in "${flavors_list[@]}"; do
       ;;
   esac
 
-  if [ "${#flavor_multi_target_args[@]}" -gt 0 ]; then
-    run_cmd dm-upload-images "${build_args[@]}" "${flavor_multi_target_args[@]}" --flavor "${flavor_item}" "$@"
+  if [ "${#multi_target_args[@]}" -gt 0 ]; then
+    run_cmd dm-upload-images "${build_args[@]}" "${multi_target_args[@]}" --flavor "${flavor_item}" "$@"
   else
     true "INFO: dist_build_multi_target_list empty: no multi-target image upload for ${flavor_item}."
   fi
