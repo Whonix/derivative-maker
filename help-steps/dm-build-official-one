@@ -330,7 +330,12 @@ if flavor_built "${dist_build_source_release_flavor}"; then
 else
   true "INFO: ${BASH_SOURCE[0]}: no source release: dist_build_source_release_flavor='${dist_build_source_release_flavor}' is not in flavors_list."
 fi
-if flavor_built "whonix-workstation-lxqt"; then
+## Route the (flavor-independent) source tarball to the whonix upload location
+## too -- but ONLY when it was actually prepared above, i.e. when the
+## source-release flavor is part of this build. A reduced build (e.g. the whonix
+## pair without the source-release flavor) prepares no source, so uploading it
+## would fail on a missing file.
+if flavor_built "${dist_build_source_release_flavor}" && flavor_built "whonix-workstation-lxqt"; then
   run_cmd dm-upload-images --target source --flavor "whonix-workstation-lxqt" "$@"
 fi
 
