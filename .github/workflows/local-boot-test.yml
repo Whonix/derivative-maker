@@ -37,7 +37,24 @@ name: Boot Test
 
 on:
   workflow_dispatch:
-  ## Dispatch-only: dm-ci-dispatch --workflow local-boot-test.yml --ref <ref>
+    ## Default (no inputs) + cron keep the tiny-flavor qcow2/iso boot matrix,
+    ## byte-identical to before. The vbox path is opt-in per dispatch:
+    ##   dm-ci-dispatch --workflow local-boot-test.yml --ref <ref> \
+    ##     --input build_vbox=true
+    inputs:
+      build_vbox:
+        description: >-
+          Build the VirtualBox .ova for the 'flavors' set and run the Whonix
+          Gateway+Workstation pair leak-test, instead of the qcow2/iso boot matrix.
+        type: boolean
+        default: false
+      flavors:
+        description: >-
+          Space-separated flavors_list for the vbox build (build_vbox=true only).
+          The Whonix workstation unified .ova export requires the gateway built
+          first, so keep them paired and gateway-first.
+        type: string
+        default: "whonix-gateway-lxqt whonix-workstation-lxqt"
   schedule:
     ## Weekly, Sundays 08:00 UTC (offset from the build lane at 07:00).
     - cron: '0 8 * * 0'
@@ -73,25 +90,17 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          ## kicksecure-ci-tiny-do-not-use (minimal boot-test flavor) for FAST
-          ## iteration: the boot chain + hardening core + systemcheck +
-          ## user-sysmaint-split, no GUI/browser/anonymity layer.
-          ## -> qcow2 disk image (also builds the VirtualBox ova).
-          ##
-          ## TODO: Why do we build qcow2 and VBox images at the same time but
-          ## not ISO images? If it's because of disk space, why not just do
-          ## all builds separately for clarity? If we're going to batch some
-          ## builds, can we make the "image_kind" value here less confusing,
-          ## i.e. change "qcow2" to "vm"?
-          - flavor: kicksecure-ci-tiny-do-not-use
-            image_kind: qcow2
-            upload_glob: "*.qcow2*"
-          ## -> live ISO (same package set, live-booted).
-          - flavor: kicksecure-ci-tiny-do-not-use
-            image_kind: iso
-            upload_glob: "*.iso"
+      ## Two shapes, ONE build job (so all the caching plumbing is shared):
+      ##  - default/cron: kicksecure-ci-tiny-do-not-use as a qcow2 disk + a live
+      ##    ISO (same package set), booted across the firmware x session matrix.
+      ##  - build_vbox dispatch: a single 'vbox' entry that builds the Whonix
+      ##    VirtualBox .ova. 'flavor' here is ONLY a cache-namespace tag; the real
+      ##    flavors_list is inputs.flavors (a gateway+workstation pair).
+      ## fromJSON swap, not a literal 'include', so one input picks the shape.
+      matrix: >-
+        ${{ fromJSON(inputs.build_vbox
+        && '{"include":[{"flavor":"whonix-lxqt-vbox","image_kind":"vbox","upload_glob":"*.ova*"}]}'
+        || '{"include":[{"flavor":"kicksecure-ci-tiny-do-not-use","image_kind":"qcow2","upload_glob":"*.qcow2*"},{"flavor":"kicksecure-ci-tiny-do-not-use","image_kind":"iso","upload_glob":"*.iso"}]}') }}
     steps:
       - name: Checkout repository (no submodules yet)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -207,20 +216,25 @@ jobs:
         ## docker-run so the home-directory state signing-key-create creates persists
         ## into sign-and-tag and the build. rule 4: shell vars from env, no ${{ }}
         ## interpolation into "run:".
-        ## The ISO job needs ONLY the ISO; its sibling CLI job already builds the
-        ## qcow2 + VirtualBox images. An EMPTY dist_build_multi_target_list builds
-        ## no post-ISO VM images (the raw -> vdi -> ova + qcow2 build would exhaust
-        ## the runner filesystem); the CLI job requests 'virtualbox qcow2'.
+        ## dist_build_multi_target_list is the authoritative VM-target set: the
+        ## tiny qcow2 job builds qcow2, the tiny ISO job builds none (empty), and
+        ## the vbox dispatch builds virtualbox ALONE. rule 4: shell vars from env,
+        ## no ${{ }} interpolation into "run:".
         env:
           CI: "true"
           ARCH: ${{ env.BOOT_ARCH }}
-          FLAVOR: ${{ matrix.flavor }}
+          ## Real flavors_list. For the vbox dispatch this is inputs.flavors (a
+          ## space-separated gateway+workstation pair, gateway-first, which
+          ## dm-build-official-one splits into the per-flavor build order); the
+          ## unified Whonix .ova export needs the gateway built before the
+          ## workstation. Otherwise the tiny matrix cache-tag flavor.
+          FLAVOR: ${{ inputs.build_vbox && inputs.flavors || matrix.flavor }}
           FRESHNESS: frozen
-          ## vbox temporarily disabled (re-enable once stable): drop 'virtualbox'
-          ## so the non-iso job builds only the qcow2 and skips the raw->vdi->ova
-          ## conversion. Change 'qcow2' to 'virtualbox qcow2' below to re-enable
-          ## vbox.
-          MULTI_TARGET_LIST: ${{ matrix.image_kind != 'iso' && 'qcow2' || '' }}
+          ## 'virtualbox' ALONE for the vbox dispatch (building 'virtualbox qcow2'
+          ## together would exhaust the runner disk -- the deliverable is the
+          ## .ova); qcow2 for the tiny disk job; empty for the tiny ISO job (an
+          ## empty list builds no post-ISO VM images).
+          MULTI_TARGET_LIST: ${{ matrix.image_kind == 'vbox' && 'virtualbox' || (matrix.image_kind != 'iso' && 'qcow2' || '') }}
           ## Reusing a base the cache never restored would hand
           ## 1300_cowbuilder-setup a stale or absent tree, so the flag is tied to
           ## BASE_CACHE rather than set unconditionally.
@@ -307,30 +321,32 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
-      ## vbox temporarily disabled (re-enable once stable): the non-iso job no
-      ## longer builds the .ova (MULTI_TARGET_LIST above). Re-enable by
-      ## uncommenting this step with 'if: matrix.image_kind == 'qcow2'' (and
-      ## restoring 'virtualbox qcow2' in MULTI_TARGET_LIST + the 'vbox' image_kind
-      ## in the boot matrix).
-      ##
-      ## Commented out rather than left as 'if: false', which actionlint rejects as
-      ## a constant condition -- the same way the other disabled vbox pieces are.
-      # - name: Upload built .ova (virtualbox)
-      #   if: matrix.image_kind == 'qcow2'
-      #   uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      #   with:
-      #     name: boot-image-vbox
-      #     path: /home/runner/binary_mnt/**/*.ova
-      #     if-no-files-found: error
-      #     retention-days: 2
+      ## The generic upload above already carries the .ova (image_kind 'vbox',
+      ## glob '*.ova*') as artifact 'boot-image-vbox'. Record its sha512 as
+      ## build evidence and upload that too.
+      - name: Record .ova sha512 (evidence)
+        if: matrix.image_kind == 'vbox'
+        run: ./ci/ova-sha512
+
+      - name: Upload .ova sha512 (evidence)
+        if: matrix.image_kind == 'vbox'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ova-sha512
+          path: ova-sha512.txt
+          if-no-files-found: error
+          retention-days: 7
 
   boot-test:
     needs: build
     ## CI runs only where we enabled it; ANDed with the existing guard.
     ## Unset variable -> skipped, no runner, run stays green.
+    ## Skipped on the vbox dispatch: that build produces no qcow2/iso to download,
+    ## and the vbox path uses the pair-leak-test job below instead.
     if: >-
       vars.CI_ENABLED_ORG_AI_ASSISTED == 'true'
       && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request')
+      && ! inputs.build_vbox
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
