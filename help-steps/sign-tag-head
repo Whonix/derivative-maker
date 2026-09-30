@@ -28,7 +28,9 @@ repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." &&
 ## us there) so git operates on the right git db.
 saved_cwd="${PWD}"
 export dist_build_source_run=true
-## Don't export, child processes need to parse command-line options.
+## NOT exported: same-shell parse-skip guard (like dm-reprepro-wrapper). Exporting
+## leaks the "already parsed" state into child PROCESSES, which then skip parsing
+## their OWN argv and silently ignore/misuse it.
 dist_build_one_parsed=true
 # shellcheck source=./pre
 source "${repo_root}/help-steps/pre"

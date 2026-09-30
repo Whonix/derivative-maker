@@ -53,7 +53,11 @@ unmount_raw() {
    wait "$!"
    sync
 
-   ${SUDO_TO_ROOT} kpartx -d -s -v -- "${img}" || true "INFO: first kpartx -d non-zero exit code. Continuing anyway."
+   ## First pass is best-effort: a transient "loopNpM is in use. Not removing"
+   ## here must NOT abort the build. The per-device fallback loop below
+   ## force-removes, and the losetup --associated check is the authoritative
+   ## teardown verification.
+   ${SUDO_TO_ROOT} kpartx -d -s -v -- "${img}" || true "INFO: first kpartx -d non-zero exit code (transient in-use); fallback handles it."
    sync
 
    local loop_devices_output_before loop_devices_list loop_devices_item

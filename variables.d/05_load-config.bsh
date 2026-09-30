@@ -12,7 +12,12 @@ if [ ! "${dist_build_one_parsed:-}" = "true" ]; then
    bash -n -- "${source_code_folder_dist}/help-steps/parse-cmd"
    source "${source_code_folder_dist}/help-steps/parse-cmd"
    dist_build_one_parse_cmd "$@"
-   ## Don't export, child processes need to parse command-line options.
+   ## NOT exported: same-shell idempotency guard only. Exporting leaks the
+   ## parse-skip into child build-step PROCESSES, which then skip validating
+   ## their OWN argv -- an unknown flag is silently ignored, and --function is
+   ## dropped so ALL packages build instead of the named one. Every process
+   ## re-parses its own complete argv (the main flow forwards full args), so
+   ## re-parse is idempotent.
    dist_build_one_parsed="true"
 fi
 
