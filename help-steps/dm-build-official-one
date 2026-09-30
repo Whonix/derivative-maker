@@ -105,7 +105,7 @@ elif [ "${CI:-}" = "true" ]; then
   ## reproducible, and a reproducible image must not embed opaque prebuilt
   ## packages. Trade-off: slower (compiles all derivative packages).
   build_args+=(--remote-derivative-packages false)
-  export dist_build_upgrade_build_machine=1
+  export dist_build_upgrade_build_machine='true'
 else
   architecture="amd64"
 fi
@@ -219,9 +219,30 @@ fi
 ## offline build.
 
 for flavor_item in "${flavors_list[@]}"; do
-  ## Not yet using multi_target_args as the sanity test for Whonix-Gateway ISO would complain that the VMs
-  ## have not been built yet.
-  run_cmd ./build-steps.d/*_sanity-tests "${build_args[@]}" "${multi_target_args[@]}" --flavor "${flavor_item}" "$@"
+  ## Sanity-test the target(s) actually built for this flavor. A non-empty
+  ## multi_target_args (VM image build) is passed as-is -- deliberately WITHOUT an
+  ## added '--target iso', so a Whonix-Gateway ISO sanity does not complain the VMs
+  ## are not built yet. An EMPTY multi_target_args (dist_build_multi_target_list='',
+  ## ISO-only build) would otherwise leave NO --target and parse-cmd rejects it
+  ## ("--target must be ..."); handle that per-flavor in the else branch.
+  if [ "${#multi_target_args[@]}" -gt 0 ]; then
+    run_cmd ./build-steps.d/*_sanity-tests "${build_args[@]}" "${multi_target_args[@]}" --flavor "${flavor_item}" "$@"
+  else
+    ## Empty multi_target_args = ISO-only build. Only the Kicksecure ISO flavors
+    ## (same gate as Phase 3 below) actually get an ISO build here, so sanity-test
+    ## '--target iso' for them only. Other flavors build no image in this config;
+    ## adding '--target iso' would set dist_build_iso=true and, for Whonix
+    ## (dist_build_type_short=whonix), trip check-copy-vms-into-raw ("Whonix VMs
+    ## need to be build first"), so skip their no-op sanity call.
+    case "${flavor_item:-}" in
+      kicksecure-lxqt|kicksecure-ci-tiny-do-not-use)
+        run_cmd ./build-steps.d/*_sanity-tests "${build_args[@]}" --target iso --flavor "${flavor_item}" "$@"
+        ;;
+      *)
+        true "INFO: ${flavor_item}: no image built in ISO-only config; skipping its sanity-test."
+        ;;
+    esac
+  fi
 done
 
 ############################################################
@@ -237,7 +258,7 @@ run_cmd ./build-steps.d/*_local-dependencies "${build_args[@]}" --target iso --t
 
 ## '--flavor source' would lead to variable dist_build_hostname being unset.
 ## Therefore using '--flavor kicksecure-cli' to create a raw base image.
-run_cmd ./build-steps.d/*_create-raw-image "${build_args[@]}" "${multi_target_args[@]}" --flavor kicksecure-cli --base-image-role create "$@"
+run_cmd ./build-steps.d/*_create-raw-image "${build_args[@]}" --target iso "${multi_target_args[@]}" --flavor kicksecure-cli --base-image-role create "$@"
 
 ## '--target iso' is required to download calamares from backports.
 run_cmd ./build-steps.d/*_create-debian-packages "${build_args[@]}" --target iso "${multi_target_args[@]}" --flavor source --skip-published-packages "$@"
