@@ -1,3 +1,85 @@
+commit 34e4059f3aa2aa09481d94b56e37b5c48c78d3e9
+Merge: 560d28b27 03cfc6563
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 08:28:08 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit 03cfc6563b63cc2fe1a0606dd7ce6f1816ea996d
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Wed Sep 30 08:09:57 2026 -0400
+
+    dm parent: sync residual non-gitlink files from ai
+
+commit 43148280699a3c6f4a46dbc8d70628c7e9f618c8
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Wed Sep 30 08:04:38 2026 -0400
+
+    Reconcile fork files with upstream for remaster
+
+    - parse-cmd: drop now-redundant FUNCTION export (child build-steps
+      re-parse forwarded argv since dist_build_one_parsed is unexported);
+      restore upstream TODO-HUMAN-DEVELOPER-ONLY marker rather than override it
+    - dm-build-official-one: adopt upstream multi_target_args cleanup (drop
+      flavor_multi_target_args alias); keep our ISO-only sanity gating and
+      create-raw-image --target iso CI fixes
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 560d28b27455edb6e62344cfeb0d290220827d3c
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 07:21:46 2026 -0400
+
+    .
+
+commit 71aca8739145b3d98fa1bab6f9e8f6da25446f93
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 07:19:04 2026 -0400
+
+    .
+
+commit b938a6e7806d366bda43490be88a7a34cb7499d1
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 07:02:17 2026 -0400
+
+    .
+
+commit ec1f4f602a44ff49dd4bef82095ad7500ce69741
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 06:59:27 2026 -0400
+
+    .
+
+commit d0c0b60206518dffa1007188cdb03b7b37722e57
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 06:37:04 2026 -0400
+
+    .
+
+commit 3fd75185e97b6c6efaee99b060f0a36f191470a3
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 05:33:54 2026 -0400
+
+    update
+
+commit ba8a1631dbeb242fbfaf60f79351634d3113c68a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 05:33:40 2026 -0400
+
+    .
+
+commit 3178f4169d8b51b2ccb5998468b76caa250185a4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 05:29:01 2026 -0400
+
+    .
+
+commit bccd7bc3db02679dea6b58336fd389e673c868a9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 08:43:08 2026 +0000
+
+    bumped changelog version
+
 commit ea8591ba73c7b03b1ceef960f37404eed6fad018
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Wed Sep 30 04:37:07 2026 -0400
@@ -178,6 +260,121 @@ Author: Aaron Rainbolt <arraybolt3@gmail.com>
 Date:   Sun Sep 27 20:15:34 2026 -0400
 
     Overhaul, mainly to refactor variables.d into logical pieces
+
+commit f43c901927576c1501c5a8b88332f80b7c6d6604
+Author: claude (dev692 9411e4ee-e940-416c-aba7-370ec7356789) <noreply@anthropic.com>
+Date:   Fri Sep 25 04:16:53 2026 -0400
+
+    dm-build-official-one: honor target override in shared prep
+
+    - multi_target_args now applies dist_build_multi_target_list to the shared PREP
+      steps (not only the build/upload), so a qcow2-only build does not prep (and
+      apt-install) VirtualBox in the cowbuilder chroot -- the --dry-run VirtualBox
+      failure. VirtualBox still preps when requested or on an unset override.
+    - add the missing export LC_ALL=C (R-010).
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 3c24b1d5f9ca342e7692747c4b381e7fc8215955
+Merge: a6fe27ed8 bccd7bc3d
+Author: assisted-by-ai <assisted-by-ai@users.noreply.github.com>
+Date:   Wed Sep 30 08:09:56 2026 -0400
+
+    Merge upstream master into master (remaster sync)
+
+commit a6fe27ed81f3fbddf7d105aea3719203d3811123
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Wed Sep 30 06:33:35 2026 -0400
+
+    1100_sanity-tests: skip dm self-test if driver unreachable
+
+    - upstream-polish adoption (90c04b8c9) reintroduced a hard error when
+      'dmsetup version' fails; dm is unreachable at the 1100 stage in the CI
+      docker image, so that re-breaks every CI build at 1100
+    - skip the self-test there instead (a wedged device still has a reachable
+      driver, so the stale-mapping scan still runs)
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 2a40806fe072fb2828476e86ae7c45fd0162a812
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Wed Sep 30 06:02:31 2026 -0400
+
+    3500_install-packages: default dist_build_iso ref
+
+    - line 700 used bare ${dist_build_iso}; unset for non-iso targets (qcow2)
+      under set -u -> "unbound variable", failing the qcow2 build once the
+      --target fixes let it reach 3500
+    - use ${dist_build_iso:-} like every other reference
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 8fa2eedf1b55362cd42888f0340d92988fe0f8a4
+Author: claude (dev770 3158d11a-0427-4596-bbb3-f9d8b46f5f44) <noreply@anthropic.com>
+Date:   Wed Sep 30 05:37:43 2026 -0400
+
+    1100_sanity-tests: adopt upstream polish, keep rm
+
+    - Take upstream's rewritten mount-test/sanity checks.
+    - Keep rm (not safe-rm) for the test image cleanup: safe-rm is only
+      installed later in this same step, so it is unavailable here.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 3fe30e673fc7394a346b0ea84187bf7e27d4784b
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Wed Sep 30 05:02:12 2026 -0400
+
+    dm-build-official-one: --target iso for create-raw-image
+
+    - ISO-only build (empty multi_target_args) passed create-raw-image no
+      --target, so parse-cmd rejected it ("--target must be ...") at 3200
+    - add --target iso to match its Phase 2 siblings; an ISO is always built
+      (Phase 3), so the shared base raw is created with it
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 98a1b5de29e5d013f2a9c4fdbb4a71da0a680b89
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Wed Sep 30 04:11:22 2026 -0400
+
+    1100_sanity-tests: skip self-test if dm unreachable
+
+    - 1100 runs before the build sets up the device-mapper stack; some build
+      containers (CI docker) have no dm at this stage though loop works
+    - hard-failing there was a regression that broke every CI build; skip the
+      dm/loop self-test when the driver is unreachable (a wedged device still
+      has a reachable driver, so the scan still runs where it matters)
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 51a67e7c975f88baf431c1a5782e6fcd664e4d7d
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Wed Sep 30 03:44:42 2026 -0400
+
+    dm-build-official-one: gate ISO-only sanity to kicksecure
+
+    - prior fix added --target iso for EVERY flavor when multi_target_args is
+      empty; for Whonix flavors that sets dist_build_iso=true and trips
+      check-copy-vms-into-raw ("Whonix VMs need to be build first")
+    - gate --target iso to the kicksecure ISO flavors (same case as Phase 3);
+      other flavors build no image in an ISO-only run, so skip their sanity
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit f74fe170b2ad7e31e369a96be4d68163d4311566
+Author: claude (dev756 0acb06e3-e451-4717-80db-dc4de14659ec) <noreply@anthropic.com>
+Date:   Wed Sep 30 03:32:00 2026 -0400
+
+    dm-build-official-one: sanity --target for ISO-only
+
+    - ISO-only build sets dist_build_multi_target_list='' so multi_target_args
+      is empty; the sanity-test call then passed NO --target and parse-cmd
+      rejected it ("--target must be ..."), failing every ISO build at 1100
+    - pass --target iso in that case (the target the ISO build produces);
+      multi-target path unchanged, keeping Whonix-Gateway off --target iso
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 commit ec4ce167cc08c7bef99e3aa76675493db7179ae6
 Author: claude (dev651 634d00b5-7189-458b-ab09-5aa46e29e604) <noreply@anthropic.com>
