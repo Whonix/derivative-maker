@@ -1,0 +1,42 @@
+#!/bin/bash
+
+## Copyright (C) 2026 - 2026 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
+## See the file COPYING for copying conditions.
+
+## AI-Assisted
+
+## Validate the space-separated flavors_list from the workflow_dispatch 'flavors'
+## input BEFORE it is spliced into the build command. dm-build-official is invoked
+## as flavors_list='<value>' inside a bash -c, so a single quote (or any shell
+## metacharacter) in a free-form input would break out and inject commands into the
+## build container. Restrict to a strict charset -- lowercase, digits, hyphen,
+## single-space separated -- which cannot carry any shell metacharacter. An unknown
+## (but charset-clean) flavor is left for parse-cmd to reject with its own error.
+## Kept as a ci/ script (github-actions-security.md rule 7) so this shell is
+## shellcheck / 'bash -n' covered and runnable locally.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+export LC_ALL=C
+
+flavors="${1:-}"
+
+if [ -z "${flavors}" ]; then
+   printf 'validate-flavors: empty flavors value\n' >&2
+   exit 1
+fi
+
+## Reject any character outside [a-z 0-9 space hyphen]. The '-' is last so it is a
+## literal, not a range.
+case "${flavors}" in
+   *[!a-z0-9\ -]*)
+      printf 'validate-flavors: illegal character in flavors (only [a-z0-9], space and hyphen allowed): %s\n' "${flavors}" >&2
+      exit 1
+      ;;
+esac
+
+printf 'validate-flavors: ok: %s\n' "${flavors}"

@@ -44,8 +44,10 @@ on:
     inputs:
       build_vbox:
         description: >-
-          Build the VirtualBox .ova for the 'flavors' set and run the Whonix
-          Gateway+Workstation pair leak-test, instead of the qcow2/iso boot matrix.
+          Build the VirtualBox .ova for the 'flavors' set (Whonix
+          Gateway+Workstation) and upload it plus its sha512, instead of the
+          qcow2/iso boot matrix. The pair boot + Tor/leak-test is a planned
+          follow-up; this path currently builds and records evidence only.
         type: boolean
         default: false
       flavors:
@@ -207,6 +209,15 @@ jobs:
         if: env.BASE_CACHE == 'true'
         run: ./ci/cowbuilder-base-cache unpack
 
+      ## The vbox 'flavors' input is free-form and is spliced into the build
+      ## command as flavors_list='<value>' inside a bash -c; validate its charset
+      ## FIRST so it cannot carry a shell metacharacter (command injection).
+      - name: Validate flavors input
+        if: inputs.build_vbox
+        env:
+          FLAVORS: ${{ inputs.flavors }}
+        run: ./ci/validate-flavors "${FLAVORS}"
+
       - name: Build ${{ matrix.flavor }} via dm-build-official (${{ env.BOOT_ARCH }})
         id: dm-build
         ## Build through the official orchestration -- the SAME single build path as
@@ -341,8 +352,9 @@ jobs:
     needs: build
     ## CI runs only where we enabled it; ANDed with the existing guard.
     ## Unset variable -> skipped, no runner, run stays green.
-    ## Skipped on the vbox dispatch: that build produces no qcow2/iso to download,
-    ## and the vbox path uses the pair-leak-test job below instead.
+    ## Skipped on the vbox dispatch: that build produces no qcow2/iso to download.
+    ## (The vbox pair boot + Tor/leak-test is a planned follow-up job; the vbox
+    ## path currently only builds and uploads the .ova + sha512.)
     if: >-
       vars.CI_ENABLED_ORG_AI_ASSISTED == 'true'
       && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request')
