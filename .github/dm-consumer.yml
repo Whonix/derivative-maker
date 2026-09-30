@@ -18,8 +18,17 @@ dist-ai-tests:
   ## calls 'lsb_release --short --id' for the distro id (via genmkfile / dist-base
   ## detection), which exits 127 without it and aborts the whole source -- none of
   ## which ship in debian:trixie-slim; and e2fsprogs, which
-  ## mke2fs_reimage_host_independent drives (mke2fs/e2fsck/debugfs on image files).
-  apt-packages: "python3 python3-pytest python3-hypothesis procps safe-rm xz-utils strip-nondeterminism xkb-data passwd sudo lsb-release e2fsprogs"
+  ## mke2fs_reimage_host_independent drives (mke2fs/e2fsck/debugfs on image files);
+  ## and shellcheck, which raw_to_iso_no_unbound_var_test runs against dm-raw-to-iso
+  ## (asserting zero SC2154) -- absent, the test FATALs on a missing shellcheck.
+  apt-packages: "python3 python3-pytest python3-hypothesis procps safe-rm xz-utils strip-nondeterminism xkb-data passwd sudo lsb-release e2fsprogs shellcheck"
+
+  ## dm-help-steps suites drive helper-scripts: raw_to_iso_no_unbound_var_test
+  ## sources /usr/libexec/helper-scripts/has.bsh (absolute), and frozen_snapshot_pin
+  ## sources ${HELPER_SCRIPTS_PATH}/.../strings.bsh. helper-scripts: true checks out
+  ## helper-scripts, symlinks it at /usr/libexec/helper-scripts, and (via
+  ## dist-ai-tests-all) exports HELPER_SCRIPTS_PATH -- without it both FATAL.
+  helper-scripts: true
 
   ## dm-grub-smbios-tests compares the disk-side SMBIOS reader, which lives in
   ## the vm-config-dist SUBMODULE, against the ISO-side copy in the main tree.

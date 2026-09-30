@@ -964,7 +964,10 @@ dist_build_one_parse_cmd() {
                   printf '%s\n' "${red}${bold}ERROR: --function may not be empty.${reset}"
                   exit 1
                else
-                  FUNCTION="${2:-}"
+                  ## Exported so a separately-invoked build-step child sees the
+                  ## selected function; create-debian-packages runs ONLY ${FUNCTION}
+                  ## when set, else ALL packages.
+                  export FUNCTION="${2:-}"
                   true "${cyan}INFO: --function set to ${FUNCTION}${reset}"
                fi
                shift 2

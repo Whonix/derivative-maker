@@ -10,6 +10,7 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 true "$0: START"
 
@@ -192,22 +193,21 @@ case "${architecture:-}" in
   ;;
 esac
 
-## 'dist_build_multi_target_list' overrides multi_target_args when set (even to
-## empty), but only for the build and upload steps.
-##
-## TODO: This is very weird, it will allow us to build for a target without
-## having done the prep steps for that target. Shouldn't we just unify these
-## and accept that shared code that doesn't apply for our specified target set
-## isn't going to run?
-flavor_multi_target_args=()
+## 'dist_build_multi_target_list', when set (even to empty), is the AUTHORITATIVE
+## VM-target set for ALL steps -- the shared PREP included -- overriding the arch
+## default above. So a qcow2-only build does not prep (and does not apt-install)
+## VirtualBox in the cowbuilder chroot: '--target virtualbox' no longer leaks into
+## the shared prep, and parse-cmd never sets dist_build_virtualbox. The always-on
+## '--target iso' / '--target windows' the prep lines add are unaffected. Unset ->
+## the arch default (build every image the arch ships).
 if [ -n "${dist_build_multi_target_list+x}" ]; then
+  multi_target_args=()
   # shellcheck disable=SC2086
   for multi_target_item in ${dist_build_multi_target_list}; do
-    flavor_multi_target_args+=("--target" "${multi_target_item}")
+    multi_target_args+=("--target" "${multi_target_item}")
   done
-else
-  flavor_multi_target_args=("${multi_target_args[@]}")
 fi
+flavor_multi_target_args=("${multi_target_args[@]}")
 
 ############################################################
 ## Phase 1: per-flavor sanity tests.

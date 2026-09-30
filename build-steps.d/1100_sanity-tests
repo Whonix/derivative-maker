@@ -445,35 +445,122 @@ Recommendation:
    true
 }
 
-# shellcheck disable=SC2317
 mount-test() {
-   ## TODO
-   return 0
+   ## Fail fast if the host's device-mapper / loop-partition stack is broken or
+   ## wedged. Otherwise the failure surfaces deep in the build (3200/3500) as a
+   ## confusing "kpartx -d: loopNpM is in use. Not removing" or "mke2fs: apparently
+   ## in use by the system" -- usually a red herring for stale/zombie dm state left
+   ## by a prior aborted build (a reboot clears it), a container without host /dev,
+   ## or a libdevmapper/kernel mismatch. Mirrors the real attach/mkfs/mount/teardown
+   ## cycle (help-steps/mount-raw + help-steps/unmount-raw) on a tiny throwaway image.
 
-   ## Debugging.
+   local test_img="" test_dir="" part_dev="" part_name kpartx_out loop_assoc mt_loop
 
-   ${SUDO_TO_ROOT} mount
+   ## Idempotent cleanup for every exit path.
+   _mt_cleanup() {
+      if [ -n "${test_dir}" ]; then
+         ${SUDO_TO_ROOT} umount -- "${test_dir}" 2>/dev/null || true
+         ${SUDO_TO_ROOT} rmdir -- "${test_dir}" 2>/dev/null || true
+         test_dir=""
+      fi
+      if [ -n "${test_img}" ]; then
+         ${SUDO_TO_ROOT} kpartx -d -s -- "${test_img}" 2>/dev/null || true
+         while read -r mt_loop; do
+            [ -n "${mt_loop}" ] || continue
+            ${SUDO_TO_ROOT} losetup --detach -- "${mt_loop}" 2>/dev/null || true
+         done < <(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null)
+         ${SUDO_TO_ROOT} rm --force -- "${test_img}" 2>/dev/null || true
+         test_img=""
+      fi
+   }
 
-   mkdir --parents /home/user/whonix_binary
+   true "INFO: device-mapper / loop-partition self-test..."
 
-   ${SUDO_TO_ROOT} kpartx -av /home/user/whonix_binary/Whonix-Gateway.img
+   ## 1. device-mapper driver reachable (catches libdevmapper<->kernel mismatch,
+   ##    missing dm-mod, or an isolated /dev/mapper/control).
+   if ! ${SUDO_TO_ROOT} dmsetup version >/dev/null 2>&1; then
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: device-mapper driver unreachable \
+(dmsetup version failed): kernel dm module missing or a libdevmapper/kernel-driver mismatch. \
+In a container the build needs '--privileged --volume /dev:/dev'.${reset}"
+   fi
 
-   ${SUDO_TO_ROOT} mkdir --parents /home/user/whonix_binary/Whonix-Gateway_image
+   ## 1b. no stale loop-partition device-mapper mapping may pre-exist. A wedged
+   ##     zombie mapping left by a prior aborted build (often unremovable without a
+   ##     reboot) collides with this build and surfaces MUCH later as an opaque
+   ##     "kpartx -d: loopNpM is in use" / "mke2fs: apparently in use". Fail here
+   ##     with the real cause instead.
+   local stale_dm
+   stale_dm="$(${SUDO_TO_ROOT} dmsetup ls 2>/dev/null | grep -E '^loop[0-9]+p[0-9]+' || true)"
+   if [ -n "${stale_dm}" ]; then
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: stale device-mapper loop-partition mapping(s) present \
+before the build:
+${stale_dm}
+These are usually wedged remnants of a prior aborted build and collide with this build. \
+Recommendation: reboot the build host to clear them, then retry.${reset}"
+   fi
 
-   ${SUDO_TO_ROOT} mount --verbose /dev/mapper/loop0p1 /home/user/whonix_binary/Whonix-Gateway_image
+   ## 2. tiny partitioned throwaway image. mktemp as root: security-misc sets
+   ##    fs.protected_regular=2 (see check-build-primitives).
+   test_img="$(${SUDO_TO_ROOT} mktemp)"
+   if ! ${SUDO_TO_ROOT} truncate --size=32M -- "${test_img}"; then
+      _mt_cleanup
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: could not size the self-test image (truncate).${reset}"
+   fi
+   if ! ${SUDO_TO_ROOT} parted --script -- "${test_img}" mklabel msdos mkpart primary ext2 1MiB 100% >/dev/null 2>&1; then
+      _mt_cleanup
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: could not partition the self-test image (parted).${reset}"
+   fi
 
-   ## TODO
-   ${SUDO_TO_ROOT} umount --verbose /home/user/whonix_binary/Whonix-Gateway_image/etc/resolv.conf || true
+   ## 3. kpartx -a -s -v : create /dev/mapper/loopNpM (mirrors help-steps/mount-raw).
+   if ! kpartx_out="$(${SUDO_TO_ROOT} kpartx -a -s -v -- "${test_img}" 2>&1)" ; then
+      _mt_cleanup
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: kpartx -a failed on the self-test image. \
+Output: ${kpartx_out}${reset}"
+   fi
+   part_name="$(printf '%s\n' "${kpartx_out}" | grep -o -E 'loop[0-9]+p[0-9]+' | head -1 || true)"
+   if [ -z "${part_name}" ]; then
+      _mt_cleanup
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: kpartx -a mapped no partition. Output: ${kpartx_out}${reset}"
+   fi
+   part_dev="/dev/mapper/${part_name}"
+   if [ ! -b "${part_dev}" ]; then
+      _mt_cleanup
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: partition node '${part_dev}' missing after kpartx -a \
+(isolated /dev or wedged dm state). In a container the build needs '--privileged --volume /dev:/dev'.${reset}"
+   fi
 
-   ${SUDO_TO_ROOT} umount --verbose /home/user/whonix_binary/Whonix-Gateway_image
+   ## 4. mke2fs : the direct catch for "apparently in use by the system" -- a
+   ##    stale/zombie dm mapping (typically from a prior aborted build).
+   if ! ${SUDO_TO_ROOT} mke2fs -F -q -- "${part_dev}" 2>/dev/null; then
+      _mt_cleanup
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mke2fs failed on a freshly-mapped partition \
+('apparently in use by the system' = stale/wedged device-mapper state, usually from a prior aborted \
+build). Recommendation: reboot the build host to clear it, then retry.${reset}"
+   fi
 
-   ${SUDO_TO_ROOT} kpartx -dv /home/user/whonix_binary/Whonix-Gateway.img
+   ## 5. mount + umount.
+   test_dir="$(${SUDO_TO_ROOT} mktemp --directory)"
+   if ! ${SUDO_TO_ROOT} mount -- "${part_dev}" "${test_dir}" 2>/dev/null; then
+      _mt_cleanup
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mounting the self-test partition failed.${reset}"
+   fi
+   ${SUDO_TO_ROOT} umount -- "${test_dir}" 2>/dev/null || true
+   ${SUDO_TO_ROOT} rmdir -- "${test_dir}" 2>/dev/null || true
+   test_dir=""
 
-   ${SUDO_TO_ROOT} rmdir -- /home/user/whonix_binary/Whonix-Gateway_image
+   ## 6. teardown must FULLY release (mirrors unmount-raw's authoritative check):
+   ##    no loop device may remain associated with the image after kpartx -d.
+   ${SUDO_TO_ROOT} kpartx -d -s -- "${test_img}" 2>/dev/null || true
+   loop_assoc="$(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null || true)"
+   if [ -n "${loop_assoc}" ]; then
+      _mt_cleanup
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: device-mapper/loop teardown did not release cleanly \
+(loop still attached: '${loop_assoc}') -- wedged dm state, usually from a prior aborted build. \
+Recommendation: reboot the build host, then retry.${reset}"
+   fi
 
-   ${SUDO_TO_ROOT} mount
-
-   true
+   _mt_cleanup
+   true "${bold}${cyan}INFO: device-mapper / loop-partition self-test OK.${reset}"
 }
 
 check-build-primitives() {
