@@ -220,9 +220,18 @@ flavor_multi_target_args=("${multi_target_args[@]}")
 ## offline build.
 
 for flavor_item in "${flavors_list[@]}"; do
-  ## Not yet using multi_target_args as the sanity test for Whonix-Gateway ISO would complain that the VMs
-  ## have not been built yet.
-  run_cmd ./build-steps.d/*_sanity-tests "${build_args[@]}" "${multi_target_args[@]}" --flavor "${flavor_item}" "$@"
+  ## Sanity-test the target(s) actually built for this flavor. A non-empty
+  ## multi_target_args (VM image build) is passed as-is -- deliberately WITHOUT an
+  ## added '--target iso', so a Whonix-Gateway ISO sanity does not complain the VMs
+  ## are not built yet. But an ISO-only build has an EMPTY multi_target_args
+  ## (dist_build_multi_target_list=''), which would leave NO --target at all and
+  ## parse-cmd rejects it ("--target must be ..."); that build produces an ISO
+  ## (--target iso below), so sanity-test --target iso.
+  if [ "${#multi_target_args[@]}" -gt 0 ]; then
+    run_cmd ./build-steps.d/*_sanity-tests "${build_args[@]}" "${multi_target_args[@]}" --flavor "${flavor_item}" "$@"
+  else
+    run_cmd ./build-steps.d/*_sanity-tests "${build_args[@]}" --target iso --flavor "${flavor_item}" "$@"
+  fi
 done
 
 ############################################################
