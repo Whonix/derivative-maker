@@ -483,6 +483,17 @@ stage (set up later in the build); skipping dm/loop self-test.${reset}"
       return 0
    fi
 
+   ## mke2fs (e2fsprogs) is a PRECONDITION for the filesystem-creation part below,
+   ## but is not shipped in every build container at this stage -- the build's real
+   ## mkfs runs later inside grml's chroot, which has it. Skip (not fail) when it is
+   ## absent, mirroring the dm-reachable skip above, so a container without
+   ## e2fsprogs does not fail 1100 on a tool it legitimately lacks here.
+   if ! ${SUDO_TO_ROOT} sh -c 'command -v mke2fs' >/dev/null 2>&1; then
+      true "${bold}${cyan}INFO: ${BASH_SOURCE[0]}: mke2fs (e2fsprogs) not available at \
+this stage; skipping dm/loop self-test.${reset}"
+      return 0
+   fi
+
    ## Check for stale loop partition device-mapper devices.
    local stale_dm
    stale_dm="$(${SUDO_TO_ROOT} dmsetup ls 2>/dev/null | grep -E '^loop[0-9]+p[0-9]+' || true)"
@@ -520,25 +531,14 @@ Output: ${kpartx_out}${reset}"
       error "${bold}${red}ERROR ${BASH_SOURCE[0]}: partition node '${part_dev}' missing after kpartx -a.${reset}"
    fi
 
-   ## Create an ext4 filesystem on the test image. kpartx -s waits for udev, but
-   ## udevd may not run in a build container, so the dm partition node can exist
-   ## (the -b check passed above) while the target is not yet ready for I/O and
-   ## mke2fs races it. Best-effort settle, then a short bounded retry; on final
-   ## failure surface mke2fs's OWN error instead of swallowing it, so the cause is
-   ## diagnosable rather than a bare "mke2fs failed".
-   ${SUDO_TO_ROOT} udevadm settle 2>/dev/null || true
-   local mke2fs_out="" mke2fs_try=0
-   while true; do
-      if mke2fs_out="$(${SUDO_TO_ROOT} mke2fs -F -q -- "${part_dev}" 2>&1)"; then
-         break
-      fi
-      mke2fs_try="$(( mke2fs_try + 1 ))"
-      if [ "${mke2fs_try}" -ge 5 ]; then
-         _mt_cleanup
-         error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mke2fs failed on a freshly-mapped partition after ${mke2fs_try} tries (mke2fs: ${mke2fs_out}). Recommendation: reboot the build host, then retry.${reset}"
-      fi
-      sleep 0.5
-   done
+   ## Create an ext4 filesystem on the test image; surface mke2fs's OWN error on
+   ## failure instead of swallowing it, so the cause is diagnosable rather than a
+   ## bare "mke2fs failed".
+   local mke2fs_out=""
+   if ! mke2fs_out="$(${SUDO_TO_ROOT} mke2fs -F -q -- "${part_dev}" 2>&1)"; then
+      _mt_cleanup
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mke2fs failed on a freshly-mapped partition (mke2fs: ${mke2fs_out}). Recommendation: reboot the build host, then retry.${reset}"
+   fi
 
    ## Mount and unmount the filesystem.
    test_dir="$(${SUDO_TO_ROOT} mktemp --directory)"
