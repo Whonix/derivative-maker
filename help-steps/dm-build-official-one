@@ -125,14 +125,23 @@ build_args+=(--arch "${architecture}")
 ##
 ## NOTE: Fewer flavors are build on CI. If 'CI=true', 'help-steps/parse-cmd'
 ##       will inject 'build_dry_run="true"' (equivalent of '--dry-run true').
-[ -n "${flavors_list:-}" ] || flavors_list=(
-  kicksecure-lxqt
-  kicksecure-cli
-  whonix-gateway-lxqt
-  whonix-workstation-lxqt
-  whonix-gateway-cli
-  whonix-workstation-cli
-)
+## 'flavors_list' may arrive as a space-separated SCALAR (an env var, e.g. from
+## CI selecting a subset such as 'whonix-gateway-lxqt whonix-workstation-lxqt').
+## Split it into the array the loops below iterate; a scalar iterated as
+## "${flavors_list[@]}" would otherwise be ONE element and pass the whole string
+## as a single '--flavor', which parse-cmd rejects. Unset -> the full default set.
+if [ -n "${flavors_list:-}" ]; then
+  read -r -a flavors_list <<< "${flavors_list}"
+else
+  flavors_list=(
+    kicksecure-lxqt
+    kicksecure-cli
+    whonix-gateway-lxqt
+    whonix-workstation-lxqt
+    whonix-gateway-cli
+    whonix-workstation-cli
+  )
+fi
 
 flavor_built() {
   printf '%s\n' "${flavors_list[@]}" \
