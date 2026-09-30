@@ -53,7 +53,7 @@ unmount_raw() {
    wait "$!"
    sync
 
-   ${SUDO_TO_ROOT} kpartx -d -s -v -- "${img}"
+   ${SUDO_TO_ROOT} kpartx -d -s -v -- "${img}" || true "INFO: first kpartx -d non-zero exit code. Continuing anyway."
    sync
 
    local loop_devices_output_before loop_devices_list loop_devices_item

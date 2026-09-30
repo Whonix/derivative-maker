@@ -406,7 +406,10 @@ jobs:
   ## EXPLICIT instead of leaving a silent mystery.
   postmortem:
     needs: build
-    if: always() && needs.build.result != 'success'
+    ## CI runs only where we enabled it; ANDed with the build-failure guard.
+    if: >-
+      always() && needs.build.result != 'success'
+      && vars.CI_ENABLED_ORG_AI_ASSISTED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

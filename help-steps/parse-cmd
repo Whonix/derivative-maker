@@ -964,6 +964,11 @@ dist_build_one_parse_cmd() {
                   printf '%s\n' "${red}${bold}ERROR: --function may not be empty.${reset}"
                   exit 1
                else
+                  ## TODO-HUMAN-DEVELOPER-ONLY: This export was supposed to fix
+                  ## dm-get-tor-from-tpo-repo, but it doesn't look like it will
+                  ## do anything and a different change may have fixed the bug.
+                  ## Test.
+                  #export FUNCTION="${2:-}"
                   FUNCTION="${2:-}"
                   true "${cyan}INFO: --function set to ${FUNCTION}${reset}"
                fi

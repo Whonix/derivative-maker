@@ -20,11 +20,13 @@ set -o pipefail
 set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
+export LC_ALL=C
 
 repo_root="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
 
 export dist_build_source_run=true
-export dist_build_one_parsed=true
+## Don't export, child processes need to parse command-line options.
+dist_build_one_parsed=true
 # shellcheck source=./pre
 source "${repo_root}/help-steps/pre"
 # shellcheck source=./variables
