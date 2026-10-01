@@ -744,13 +744,18 @@ main() {
    check-copy-vms-into-raw "$@"
    check_required_packages_installed "$@"
 
-   ## --sign-and-tag true: make a single `derivative-maker --sign-and-tag true` a
-   ## self-contained signed build. Create the signing key (idempotent) and sign+tag
-   ## HEAD + submodules HERE, immediately before the verify below -- the only point
-   ## where the ordering holds: the signing tools the verify already needs are
-   ## present, the git tree is validated (check-git-folder ran above), and the sign
-   ## precedes the verify it must satisfy. No-op on an already-signed HEAD; both
-   ## helpers are env-driven (dist_build_sign_and_tag) and argless like CI. sign-and-tag
+   ## --sign-and-tag true: on a PREPARED build machine, create the signing key
+   ## (idempotent) and sign+tag HEAD + submodules HERE, immediately before the verify
+   ## below, so no separate signing-key-create / sign-and-tag pre-step is needed. This
+   ## is the only spot the order holds: the sign must precede the verify it satisfies,
+   ## and the git tree is already validated (check-git-folder ran above).
+   ## PRECONDITION (identical to this step's own verify): the signing tools are already
+   ## installed -- git_sanity_test needs sq/sq-git/sqop, and signing-key-create also
+   ## needs signify-openbsd + sponge, all from prepare-build-machine (step 1200, which
+   ## runs AFTER this step). So a never-prepared host must run prepare-build-machine
+   ## first; this does NOT fix the pre-existing 1100-before-1200 dep ordering (which
+   ## the verify already depends on too). No-op on an already-signed HEAD; both helpers
+   ## are env-driven (dist_build_sign_and_tag) and argless like CI; sign-and-tag
    ## self-refuses a redistributable build. Gated on the dangerous --sign-and-tag flag.
    if [ "${dist_build_sign_and_tag}" = "true" ]; then
       "${dist_source_help_steps_folder}/signing-key-create"
