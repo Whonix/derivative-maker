@@ -43,14 +43,10 @@ fi
 ## Using short option -o instead of long option --option, because aptitude does
 ## (used by grml-debootstrap) not support that.
 
-## The EMPTY_DIR variable is provided by the help-steps/variables script.
-## export, so chroot-scripts-post.d can read it. It defaults to /tmp/empty.
-## You can leave it as is.
-##
-## Do NOT replace $EMPTY_DIR with /dev/null; this apt setting expects a
-## directory, not a file.
+## Despite its name, Dir::Etc::sourcelist expects a file as argument, not a
+## directory. See `man apt-cache`.
 if [ "${apt_sourcelist_empty:-}" = "" ]; then
-   export apt_sourcelist_empty=" -o Dir::Etc::sourcelist=$EMPTY_DIR "
+   export apt_sourcelist_empty=" -o Dir::Etc::sourcelist=/dev/null "
 fi
 
 ## The dist_sources_list_temp_build_folder variable is provided by the 25_apt_sources.conf script.

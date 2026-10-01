@@ -26,9 +26,6 @@ main() {
    ## dist_sources_list_temp_build_folder Example:
    ## /var/lib/whonix/sources_temp_list.d
 
-   ## EMPTY_DIR Example:
-   ## "/tmp/empty"
-
    ## dist_apt_repository_folder Examples:
    ## /home/user/derivative-binary/aptrepo_local/kicksecure
    ## /home/user/derivative-binary/aptrepo_local/whonix
@@ -46,7 +43,6 @@ main() {
       set_dist_build_reprepro_folder_options
 
       ${SUDO_TO_ROOT} mkdir --parents -- "${CHROOT_FOLDER}/${DEB_INSTALL_FOLDER}/${derivative_name_item}"
-      ${SUDO_TO_ROOT} mkdir --parents -- "${CHROOT_FOLDER}/${EMPTY_DIR}"
       ${SUDO_TO_ROOT} mkdir --parents -- "${CHROOT_FOLDER}/${dist_sources_list_temp_build_folder}"
 
       true "dist_sources_list_temp_initial_deb_sources_list: ${dist_sources_list_temp_initial_deb_sources_list}"
