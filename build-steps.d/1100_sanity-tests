@@ -462,8 +462,7 @@ mount-test() {
             [ -n "${mt_loop}" ] || continue
             ${SUDO_TO_ROOT} losetup --detach -- "${mt_loop}" 2>/dev/null || true
          done < <(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null)
-         ## safe-rm is only installed later in this step; use rm here.
-         ${SUDO_TO_ROOT} rm --force -- "${test_img}" 2>/dev/null || true
+         ${SUDO_TO_ROOT} safe-rm --force -- "${test_img}" 2>/dev/null || true
          test_img=""
       fi
    }
