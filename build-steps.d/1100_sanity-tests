@@ -744,6 +744,19 @@ main() {
    check-copy-vms-into-raw "$@"
    check_required_packages_installed "$@"
 
+   ## --sign-and-tag true: make a single `derivative-maker --sign-and-tag true` a
+   ## self-contained signed build. Create the signing key (idempotent) and sign+tag
+   ## HEAD + submodules HERE, immediately before the verify below -- the only point
+   ## where the ordering holds: the signing tools the verify already needs are
+   ## present, the git tree is validated (check-git-folder ran above), and the sign
+   ## precedes the verify it must satisfy. No-op on an already-signed HEAD; both
+   ## helpers are env-driven (dist_build_sign_and_tag) and argless like CI. sign-and-tag
+   ## self-refuses a redistributable build. Gated on the dangerous --sign-and-tag flag.
+   if [ "${dist_build_sign_and_tag}" = "true" ]; then
+      "${dist_source_help_steps_folder}/signing-key-create"
+      "${dist_source_help_steps_folder}/sign-and-tag"
+   fi
+
    "${dist_source_help_steps_folder}/git_sanity_test" --mode all --context "main repo"
 
    true
