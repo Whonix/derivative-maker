@@ -739,10 +739,15 @@ main() {
    check-umask-in-sync "$@"
    check-stale-nbd "$@"
    check-stray-mounts "$@"
+   ## Install the required packages (check_required_packages_installed installs any
+   ## missing -- incl. kpartx, parted, approx) BEFORE the checks below that USE them:
+   ## mount-test invokes kpartx, and 1200's approx_proxy_setup needs approx. Running
+   ## it AFTER mount-test (as before) failed a fresh machine with "kpartx: command
+   ## not found" before this install ever ran.
+   check_required_packages_installed "$@"
    mount-test "$@"
    check-build-primitives "$@"
    check-copy-vms-into-raw "$@"
-   check_required_packages_installed "$@"
 
    ## --sign-and-tag true: on a PREPARED build machine, create the signing key
    ## (idempotent) and sign+tag HEAD + submodules HERE, immediately before the verify
