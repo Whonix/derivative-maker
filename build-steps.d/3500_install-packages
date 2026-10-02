@@ -698,6 +698,7 @@ ${dist_build_script_skip_package_install}${reset}"
    ## Prepare the on-ISO apt repo if appropriate. Packages have to be
    ## downloaded in the chroot to ensure they are the right packages.
    if [ "${dist_build_iso:-}" = 'true' ]; then
+      safe-rm --recursive --force -- "${binary_iso_pkg_repo_dir}"
       mkdir -p "${binary_iso_pkg_repo_dir}"
       ${SUDO_TO_ROOT} mkdir -p "${CHROOT_FOLDER}/tmp_iso_pkg_repo_dir"
       for iso_pkg_repo_seed_item in ${iso_pkg_repo_seed_list} ; do
@@ -705,7 +706,12 @@ ${dist_build_script_skip_package_install}${reset}"
       done
       ${SUDO_TO_ROOT} mv -- "${CHROOT_FOLDER}/tmp_iso_pkg_repo_dir"/* "${binary_iso_pkg_repo_dir}/"
       ${SUDO_TO_ROOT} rmdir "${CHROOT_FOLDER}/tmp_iso_pkg_repo_dir"
-      dpkg-scanpackages "${binary_iso_pkg_repo_dir}" /dev/null | tee -- "${binary_iso_pkg_repo_dir}/Packages" >/dev/null
+      ## Must be in ${binary_iso_pkg_repo_dir} when creating the Packages file,
+      ## otherwise the file will contain absolute paths that are no longer
+      ## valid in the live session.
+      pushd "${binary_iso_pkg_repo_dir}"
+      dpkg-scanpackages . /dev/null | tee -- ./Packages >/dev/null
+      popd
    fi
 
    "${dist_source_help_steps_folder}/remove-local-temp-apt-repo" "$@"

@@ -155,9 +155,6 @@ default_if_empty dist_build_wait_auto_retry "5"
 default_if_empty DEB_INSTALL_FOLDER "mnt/initialdeb"
 export DEB_INSTALL_FOLDER
 
-default_if_empty EMPTY_DIR "/tmp/empty"
-export EMPTY_DIR
-
 [ -n "${dist_build_sources_clearnet_or_onion:-}" ] || dist_build_sources_clearnet_or_onion="clearnet"
 
 ## Help update-torbrowser and other software find the Tor server if using
@@ -230,4 +227,4 @@ export dist_build_apt_codename
 
 default_if_empty dist_build_file_system "ext4"
 
-default_if_empty iso_pkg_repo_seed_list "grub-efi grub-pc ucf grub-efi-${dist_build_target_arch:-}"
+default_if_empty iso_pkg_repo_seed_list "grub-efi grub-pc ucf libtext-wrapi18n-perl libtext-charwidth-perl grub-efi-${dist_build_target_arch:-}"
