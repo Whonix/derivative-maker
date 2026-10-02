@@ -17,21 +17,21 @@ name: Boot Test
 ##   - live ISO        (the same packages, live-booted).
 ##   - virtualbox .ova -- TEMPORARILY DISABLED (re-enable once stable; search
 ##     'vbox temporarily disabled' -- build target, .ova upload, boot matrix).
-## The sysmaint session is selected -- identically on every kind -- via dm-qemu's
+## The sysmaint session is selected -- identically on every kind -- via dm-smbios-reader-qemu's
 ## SMBIOS kernel-cmdline injection of 'boot-role=sysmaint
 ## systemd.unit=sysmaint-boot.target', the exact pair the sysmaint GRUB entry adds
 ## (user-sysmaint-split grub.d_10_10_linux_sysmaint). SMBIOS injection is disk/ISO
 ## agnostic, so no image kind is excluded from either session.
 ##
-## All boot logic lives in dist-ai's dm-image-boot-tests, which bundles dm-qemu
-## (qemu/firmware/Secure Boot + SMBIOS kernel-cmdline injection) and dm-image-test
+## All boot logic lives in dist-ai's dm-smbios-reader-boot-tests, which bundles dm-smbios-reader-qemu
+## (qemu/firmware/Secure Boot + SMBIOS kernel-cmdline injection) and dm-smbios-reader-image-test
 ## (login + checks). This workflow is a thin wrapper that builds the images, checks
 ## out dist-ai and fans out the matrix, so the shell stays lint-covered and locally
 ## runnable. See agents/github-actions-security.md for the pinning / permissions
 ## patterns.
 
 ## REMINDER: If the kernel arguments for enabling sysmaint mode ever change,
-## they will need updated in dist-ai/usr/bin/dm-boot-test as well. This could
+## they will need updated in dist-ai/usr/bin/dm-smbios-reader-boot-test as well. This could
 ## be avoided by making it possible to select a default boot mode in GRUB using
 ## an SMBIOS string, but this is not necessary for the time being.
 
@@ -251,7 +251,7 @@ jobs:
           ## BASE_CACHE rather than set unconditionally.
           COWBASE_REUSE_FLAG: ${{ env.BASE_CACHE == 'true' && '--reuse-cowbuilder-base' || '' }}
           ## '--smbios-reader true' below: this lane's images are the only ones
-          ## that need the GRUB SMBIOS cmdline reader, because dm-qemu selects the
+          ## that need the GRUB SMBIOS cmdline reader, because dm-smbios-reader-qemu selects the
           ## session and the serial console through it. It is default OFF, so a
           ## released image carries no reader -- without this flag every boot leg
           ## would time out with a 0-byte serial log rather than fail loudly.
@@ -383,7 +383,7 @@ jobs:
           - sysmaint
         ## No exclusions: kicksecure-ci-tiny-do-not-use ships user-sysmaint-split,
         ## so every built image kind (qcow2 / iso) has a real sysmaint session,
-        ## selected uniformly via dm-qemu's SMBIOS cmdline injection. Both sessions
+        ## selected uniformly via dm-smbios-reader-qemu's SMBIOS cmdline injection. Both sessions
         ## run on all kinds.
     steps:
       - name: Checkout repository (no submodules yet)
@@ -400,9 +400,9 @@ jobs:
         run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
 
       - name: Check out dist-ai (boot harness)
-        ## The boot harness + CI front-end (dm-boot-test -> dm-image-boot-tests ->
-        ## dm-qemu + dm-image-test) lives in dist-ai (public). Checked out into the
-        ## workspace so the boot step can call dist-ai/usr/bin/dm-boot-test (works
+        ## The boot harness + CI front-end (dm-smbios-reader-boot-test -> dm-smbios-reader-boot-tests ->
+        ## dm-smbios-reader-qemu + dm-smbios-reader-image-test) lives in dist-ai (public). Checked out into the
+        ## workspace so the boot step can call dist-ai/usr/bin/dm-smbios-reader-boot-test (works
         ## inside the build container too, since the whole workspace is mounted).
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -411,8 +411,8 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Init helper-scripts submodule (dm-boot-test sources it)
-        ## This job checks out with submodules:false, but dm-boot-test sources
+      - name: Init helper-scripts submodule (dm-smbios-reader-boot-test sources it)
+        ## This job checks out with submodules:false, but dm-smbios-reader-boot-test sources
         ## helper-scripts' package_installed_check.sh. Init just that one submodule
         ## (the next step switches it to the matching fork branch if present).
         run: git submodule update --init -- packages/kicksecure/helper-scripts
@@ -445,9 +445,9 @@ jobs:
           FIRMWARE: ${{ matrix.firmware }}
           SESSION: ${{ matrix.session }}
           KIND: ${{ matrix.image_kind }}
-        ## dm-boot-test (in dist-ai) dispatches --iso vs --disk by the image
+        ## dm-smbios-reader-boot-test (in dist-ai) dispatches --iso vs --disk by the image
         ## extension. dist-ai is mounted at ./dist-ai inside the workspace/container.
-        run: ./docker/derivative-maker-docker-run -- dist-ai/usr/bin/dm-boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${KIND}-${FIRMWARE}-${SESSION}.serial.log"
+        run: ./docker/derivative-maker-docker-run -- dist-ai/usr/bin/dm-smbios-reader-boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${KIND}-${FIRMWARE}-${SESSION}.serial.log"
 
       - name: Upload serial log
         if: always()
