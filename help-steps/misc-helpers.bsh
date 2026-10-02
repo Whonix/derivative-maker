@@ -124,7 +124,9 @@ loop_teardown_verify() {
    ## does not mask a real teardown failure. The bounded re-poll (not udev) is what
    ## absorbs the transient reference; 'udevadm settle' is only a best-effort nudge
    ## whose result is ignored (and during image creation it is the help-steps/udevadm
-   ## no-op shim anyway).
+   ## no-op shim anyway). It carries '--timeout 5' because 'udevadm settle' defaults
+   ## to a 120s timeout, which a wedged udev queue would otherwise use to blow past
+   ## this function's intended few-seconds-per-attempt bound.
    ##
    ## A FAILURE of 'losetup --associated' itself (sudo needs a password, losetup
    ## missing, permission denied) is NOT the same as "nothing associated" (which
@@ -159,7 +161,7 @@ loop_teardown_verify() {
          ${SUDO_TO_ROOT} kpartx -d -s -v -- "${loop_devices_item}" || true "INFO: kpartx non-zero exit code."
          ${SUDO_TO_ROOT} losetup --detach "${loop_devices_item}" || true "INFO: losetup non-zero exit code."
       done <<< "${loop_devices_output}"
-      ${SUDO_TO_ROOT} udevadm settle || true
+      ${SUDO_TO_ROOT} udevadm settle --timeout 5 || true
       sleep 1
    done
 
