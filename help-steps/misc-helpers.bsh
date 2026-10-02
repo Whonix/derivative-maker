@@ -121,15 +121,22 @@ loop_teardown_verify() {
    ## device attached: an explicit 'losetup --detach' plus a bounded re-poll
    ## releases it. A device that stays associated after the whole bounded window
    ## is a GENUINE stuck device and still returns non-zero -- the benign tolerance
-   ## does not mask a real teardown failure. Does NOT depend on udev events firing
-   ## (the help-steps/udevadm shim turns 'udevadm settle' into a no-op during image
-   ## builds), so the re-poll, not udev, is what absorbs the transient reference.
+   ## does not mask a real teardown failure. The bounded re-poll (not udev) is what
+   ## absorbs the transient reference; 'udevadm settle' is only a best-effort nudge
+   ## whose result is ignored (and during image creation it is the help-steps/udevadm
+   ## no-op shim anyway).
+   ##
+   ## A FAILURE of 'losetup --associated' itself (sudo needs a password, losetup
+   ## missing, permission denied) is NOT the same as "nothing associated" (which
+   ## exits 0 with empty output): its non-zero exit is caught and returned as a
+   ## verification failure, never swallowed into a false "clean" -- stderr is left
+   ## visible for diagnosis.
    ##
    ## 'losetup --detach' takes the loop device as a plain operand and does NOT
    ## honor a '--' end-of-options separator: util-linux parses the '--' AS the
    ## device ("losetup: /dev/--: detach failed"). Loop device names are always
    ## '/dev/loopN' and never begin with '-', so passing them without '--' is safe.
-   local image loop_devices_output loop_devices_item attempt
+   local image loop_devices_output loop_devices_item attempt losetup_rc
    image="$1"
 
    if [ "${image:-}" = "" ]; then
@@ -137,7 +144,11 @@ loop_teardown_verify() {
    fi
 
    for (( attempt = 0; attempt < 5; attempt++ )); do
-      loop_devices_output="$(${SUDO_TO_ROOT} losetup --associated "${image}" --noheadings --output NAME 2>/dev/null)" || loop_devices_output=""
+      losetup_rc=0
+      loop_devices_output="$(${SUDO_TO_ROOT} losetup --associated "${image}" --noheadings --output NAME)" || losetup_rc="$?"
+      if [ "${losetup_rc}" != "0" ]; then
+         return 1
+      fi
       if [ "${loop_devices_output:-}" = "" ]; then
          return 0
       fi
@@ -152,7 +163,11 @@ loop_teardown_verify() {
       sleep 1
    done
 
-   loop_devices_output="$(${SUDO_TO_ROOT} losetup --associated "${image}" --noheadings --output NAME 2>/dev/null)" || loop_devices_output=""
+   losetup_rc=0
+   loop_devices_output="$(${SUDO_TO_ROOT} losetup --associated "${image}" --noheadings --output NAME)" || losetup_rc="$?"
+   if [ "${losetup_rc}" != "0" ]; then
+      return 1
+   fi
    [ "${loop_devices_output:-}" = "" ]
 }
 
