@@ -1,3 +1,93 @@
+commit f30f9e7c2432644974508bd37004eb4ba433df27
+Merge: 92668e6a2 a8fe8c717
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 09:08:36 2026 -0400
+
+    Merge remote-tracking branch 'org-ai-assisted/master'
+
+commit 92668e6a2a3687bb54f21849b0377d642b52b488
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 09:00:54 2026 -0400
+
+    .
+
+commit ad8c05403ca1a0634e42d91cfde44c141d3ebd76
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 08:57:28 2026 -0400
+
+    .
+
+commit a8fe8c7178435295fbc7ec91475e5f209264421d
+Author: claude (dev841 e3bebec2-0cb4-45a4-89c3-44b4289b8715) <noreply@anthropic.com>
+Date:   Fri Oct 2 08:45:04 2026 -0400
+
+    loop_teardown_verify: bound udevadm settle to 5s
+
+    - 'udevadm settle' defaults to a 120s timeout; a wedged udev queue would use it to
+      blow past the function's few-seconds-per-attempt bound (~600s over 5 retries).
+      '--timeout 5' keeps the best-effort nudge within the intended bound.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 4dfd28c40edad432b965cb411c9dc07019a9d8eb
+Author: claude (dev841 e3bebec2-0cb4-45a4-89c3-44b4289b8715) <noreply@anthropic.com>
+Date:   Fri Oct 2 08:25:41 2026 -0400
+
+    loop_teardown_verify: fail on losetup query error
+
+    - a FAILURE of 'losetup --associated' itself (sudo needs a password, losetup
+      missing, permission denied) was swallowed by '|| out=""' into a false "clean"
+      that let the build proceed; capture its rc and return non-zero instead.
+    - correct the udevadm comment: the real udevadm runs at these callsites (no PATH
+      shim), result ignored; the bounded re-poll, not settle, guarantees progress.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 36daeb0c558b82ccf5676993e7c9b6cabfcc8c46
+Author: claude (dev841 e3bebec2-0cb4-45a4-89c3-44b4289b8715) <noreply@anthropic.com>
+Date:   Fri Oct 2 07:47:48 2026 -0400
+
+    fix loop-teardown false positive in Qubes build VM
+
+    - losetup -d/--detach parses a '--' separator AS the device operand
+      ("/dev/--: detach failed"), so unmount-raw's per-device detach silently
+      no-opped; a loop kpartx -d left attached (Qubes/Xen/docker, no udevd
+      auto-release) then tripped the one-shot losetup --associated check.
+    - shared loop_teardown_verify (misc-helpers.bsh): explicit losetup --detach
+      (no '--') + bounded re-poll; still errors on a genuinely stuck device.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit bc377abea70cc1b374d57999d90495329a330342
+Merge: 941fe816c c34d559ef
+Author: assisted-by-ai <assisted-by-ai@users.noreply.github.com>
+Date:   Fri Oct 2 08:33:19 2026 -0400
+
+    Merge upstream master into master (remaster sync)
+
+commit 941fe816cfadca94df86d84e2fe0edc91ae3f007
+Author: claude (dev835 cc0002ca-040b-48b1-8b7d-f4daae0945d4) <noreply@anthropic.com>
+Date:   Fri Oct 2 07:24:04 2026 -0400
+
+    Point boot CI at renamed dm-smbios-reader-boot-test
+
+    - dist-ai renamed the boot harness dm-boot-test -> dm-smbios-reader-boot-test;
+      CI invokes it by path, so the dist-ai master rename needs this in lockstep
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit c34d559ef2c1d7ab6b982cf172a93885e26fbbdf
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 10:55:02 2026 +0000
+
+    bumped changelog version
+
+commit 6ff42f8bf683148f79ca265edc993e37f4ac5b97
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 06:54:35 2026 -0400
+
+    .
+
 commit 705773f6367bc88469a8e5d21e4d2eb30835030b
 Author: Patrick Schleizer <adrelanos@whonix.org>
 Date:   Fri Oct 2 06:48:47 2026 -0400
@@ -35,9 +125,21 @@ Date:   Fri Oct 2 04:18:59 2026 -0400
 
     Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
 
+commit 443823b8e0845c92a1179b01084b9fb417bda49b
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Oct 1 20:44:27 2026 -0400
+
+    fix
+
 commit 78ec664f4ea4aa8d542d7efb9f5e68b4bbec2a44
 Author: Aaron Rainbolt <arraybolt3@gmail.com>
 Date:   Thu Oct 1 20:44:27 2026 -0400
+
+    fix
+
+commit 09da307657844c2d278e1168b2c6ea48ab763df1
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Oct 1 20:10:56 2026 -0400
 
     fix
 
@@ -53,7 +155,19 @@ Date:   Thu Oct 1 19:25:14 2026 -0400
 
     fix
 
+commit b07c67da4dd015102cc9cdbae85843774c0ee852
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Oct 1 19:25:14 2026 -0400
+
+    fix
+
 commit aa1b3be25b65f901a2a73540d024485fd7bdee48
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Wed Sep 30 23:49:07 2026 -0400
+
+    Undo faulty correction, EMPTY_DIR is unnecessary after all
+
+commit e4b3f1864106174047f1d725d5afd942511ca5a8
 Author: Aaron Rainbolt <arraybolt3@gmail.com>
 Date:   Wed Sep 30 23:49:07 2026 -0400
 
@@ -64,6 +178,162 @@ Author: Aaron Rainbolt <arraybolt3@gmail.com>
 Date:   Wed Sep 30 23:14:08 2026 -0400
 
     Attempt to unbreak continuing past an error, make interactive vs. non-interactive detection saner
+
+commit 244a1893e66f09d7f930b725fb266841dd6bd2a6
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Wed Sep 30 23:14:08 2026 -0400
+
+    Attempt to unbreak continuing past an error, make interactive vs. non-interactive detection saner
+
+commit 651135c527b8446cbf4d4cfbb7019f9c83824c3b
+Author: claude (dev739 a484adab-5391-4594-b071-7684e6899573) <noreply@anthropic.com>
+Date:   Thu Oct 1 12:14:27 2026 -0400
+
+    1100_sanity-tests: mount-test uses safe-rm, drop now-stale comment
+
+    - the reorder installs safe-rm (in required_packages_list) before mount-test, so
+      its "safe-rm is only installed later; use rm here" comment was false; use the
+      safe-rm wrapper (the default) and drop the comment.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 4380075a503874190fc93d17408f7384e401bc23
+Author: claude (dev739 a484adab-5391-4594-b071-7684e6899573) <noreply@anthropic.com>
+Date:   Thu Oct 1 12:04:41 2026 -0400
+
+    1100_sanity-tests: install required packages before mount-test uses them
+
+    - check_required_packages_installed INSTALLS any missing required package
+      (kpartx, parted, approx, ...), but ran AFTER mount-test, which invokes kpartx
+      -- so a fresh build machine died "kpartx: command not found" before the
+      install. Move the install ahead of mount-test et al.
+    - also fixes 1200 approx_proxy_setup: approx is in the same list, now installed
+      before 1200 needs it.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 0db2a4bcda51fc59d7cacbbf5a8ffc3c84370a2e
+Author: claude (dev739 a484adab-5391-4594-b071-7684e6899573) <noreply@anthropic.com>
+Date:   Thu Oct 1 11:11:49 2026 -0400
+
+    1100_sanity-tests: scope the --sign-and-tag comment to a prepared builder
+
+    - ai-review: the block is self-contained only where the signing tools exist;
+      signing-key-create needs sq/sq-git/sqop + signify-openbsd + sponge from
+      prepare-build-machine (1200, runs after this), same precondition as this step's
+      own git_sanity_test verify (needs sq-git). Do not overclaim fresh-machine self-
+      containment -- that is the pre-existing 1100-before-1200 dep ordering.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 7c0261f5397567961aeba350f86135cc8a6e2663
+Author: claude (dev739 a484adab-5391-4594-b071-7684e6899573) <noreply@anthropic.com>
+Date:   Thu Oct 1 10:58:50 2026 -0400
+
+    1100_sanity-tests: auto sign-and-tag before verify on --sign-and-tag
+
+    - make `derivative-maker --sign-and-tag true` self-contained: create the signing
+      key (idempotent) and sign+tag HEAD + submodules immediately before the
+      git_sanity_test verify -- the only point where ordering holds (the signing
+      tools the verify needs are present, the tree is validated, the sign precedes
+      the verify it must satisfy)
+    - no-op on an already-signed HEAD; both helpers are env-driven + argless like CI;
+      gated on the dangerous --sign-and-tag flag; sign-and-tag self-refuses redistributable
+    - removes the need for the manual signing-key-create && sign-and-tag pre-step
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 261f8580124842e13c0d098ed5d1c120fd70cc19
+Author: claude (dev790 f4418d44-9370-4497-b61c-93e80447c33c) <noreply@anthropic.com>
+Date:   Wed Sep 30 15:46:29 2026 -0400
+
+    dm parent: sync residual non-gitlink files from ai
+
+commit 8d924e391eefb9df1fd2879014ea7633c7bd24f3
+Author: claude (dev779 b56c0d4a-c594-4b06-9077-0c7083cb8b50) <noreply@anthropic.com>
+Date:   Wed Sep 30 15:14:31 2026 -0400
+
+    dm-build-official-one: gate whonix source upload on source prepared
+
+    The source tarball is prepared only when dist_build_source_release_flavor
+    is built; the whonix-workstation source upload ran whenever that flavor
+    was built, so a reduced build (whonix pair, no source-release flavor --
+    e.g. the vbox CI build) tried to upload a source file that was never
+    created and failed dm-upload-images. Require the source to have been
+    prepared. Full release builds (both flavors) are unaffected.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 0d67c185dca09d914098a0818557bda09737921a
+Author: claude (dev779 b56c0d4a-c594-4b06-9077-0c7083cb8b50) <noreply@anthropic.com>
+Date:   Wed Sep 30 11:47:17 2026 -0400
+
+    1100_sanity-tests: skip dm self-test when mke2fs absent
+
+    Root cause of the vbox-build failures: the dm/loop self-test called
+    mke2fs, but e2fsprogs is not in the build container at this stage
+    (the real mkfs runs later in grml's chroot). It failed only when dm
+    happened to be reachable, so it read as an intermittent "mke2fs failed"
+    (2>/dev/null hid "command not found"). Skip when mke2fs is absent, like
+    the dm-reachable skip; surface mke2fs's own error on a genuine failure.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 2d69b9a29c82121b0ed1159a184ca71b1c82ef60
+Author: claude (dev779 b56c0d4a-c594-4b06-9077-0c7083cb8b50) <noreply@anthropic.com>
+Date:   Wed Sep 30 11:31:05 2026 -0400
+
+    1100_sanity-tests: settle+retry mke2fs, surface its error
+
+    The dm/loop self-test ran mke2fs right after kpartx with no settle and
+    hid the error with 2>/dev/null, so a dm-readiness race in a build
+    container failed the whole build with an undiagnosable "mke2fs failed"
+    (hit consistently on a GitHub runner). Best-effort udevadm settle, a
+    bounded retry, and report mke2fs's own error on final failure.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit f16ba5a3502ee735473e62f6b1c7c8c67e6d2e53
+Author: claude (dev779 b56c0d4a-c594-4b06-9077-0c7083cb8b50) <noreply@anthropic.com>
+Date:   Wed Sep 30 10:55:26 2026 -0400
+
+    local-boot-test: validate flavors input; honest vbox scope
+
+    - the free-form 'flavors' dispatch input is spliced into flavors_list='...'
+      inside a bash -c; ci/validate-flavors rejects any non-[a-z0-9 -] char
+      first, closing the command-injection path into the build container
+    - build_vbox description/comment no longer claim a pair leak-test this path
+      does not yet run (deferred follow-up); it builds + uploads .ova + sha512
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 12070798794462cd3d221390709fc63516871e41
+Author: claude (dev779 b56c0d4a-c594-4b06-9077-0c7083cb8b50) <noreply@anthropic.com>
+Date:   Wed Sep 30 10:32:04 2026 -0400
+
+    local-boot-test: opt-in Whonix VirtualBox build
+
+    - build_vbox dispatch input builds the flavors_list set for the
+      virtualbox target (alone, to fit runner disk) and uploads the .ova
+    - flavors defaults to the gateway+workstation pair; tiny qcow2/iso
+      scheduled matrix stays byte-identical (fromJSON matrix swap)
+    - ci/ova-sha512 records .ova sha512 as build evidence
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 0f00b30928269bf223eb1997e73971574095b11e
+Author: claude (dev779 b56c0d4a-c594-4b06-9077-0c7083cb8b50) <noreply@anthropic.com>
+Date:   Wed Sep 30 10:31:50 2026 -0400
+
+    dm-build-official-one: split scalar flavors_list
+
+    - an env-var flavors_list is a scalar; "${flavors_list[@]}" iterated it
+      as ONE element, passing the whole string as a single --flavor which
+      parse-cmd rejects
+    - needed to build the Whonix vbox gateway+workstation pair (unified .ova
+      export needs the gateway built first) from one CI invocation
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 commit 1f4044cc31ea64fa74c6f19807d31c77f741e96e
 Author: Patrick Schleizer <adrelanos@whonix.org>
@@ -333,6 +603,20 @@ Author: Aaron Rainbolt <arraybolt3@gmail.com>
 Date:   Sun Sep 27 20:15:34 2026 -0400
 
     Overhaul, mainly to refactor variables.d into logical pieces
+
+commit 91c263ec0720709018ab57c68115a467c87c1411
+Author: claude (dev692 9411e4ee-e940-416c-aba7-370ec7356789) <noreply@anthropic.com>
+Date:   Fri Sep 25 04:16:53 2026 -0400
+
+    dm-build-official-one: honor target override in shared prep
+
+    - multi_target_args now applies dist_build_multi_target_list to the shared PREP
+      steps (not only the build/upload), so a qcow2-only build does not prep (and
+      apt-install) VirtualBox in the cowbuilder chroot -- the --dry-run VirtualBox
+      failure. VirtualBox still preps when requested or on an unset override.
+    - add the missing export LC_ALL=C (R-010).
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 commit f43c901927576c1501c5a8b88332f80b7c6d6604
 Author: claude (dev692 9411e4ee-e940-416c-aba7-370ec7356789) <noreply@anthropic.com>
