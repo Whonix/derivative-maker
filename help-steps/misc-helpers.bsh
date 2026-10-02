@@ -110,6 +110,52 @@ unmount_if_mounted() {
    ${SUDO_TO_ROOT} umount --verbose -- "$1"
 }
 
+loop_teardown_verify() {
+   ## Release every loop device still associated with an image, then verify the
+   ## image is fully detached. Returns 0 when nothing is associated any more,
+   ## non-zero when a loop device remains after best-effort explicit teardown.
+   ##
+   ## Tolerates the benign case -- seen in a Qubes/Xen build VM and inside docker
+   ## -- where 'kpartx -d' reports a partition map "in use. Not removing" (a
+   ## transient straggler reference during teardown) and leaves the backing loop
+   ## device attached: an explicit 'losetup --detach' plus a bounded re-poll
+   ## releases it. A device that stays associated after the whole bounded window
+   ## is a GENUINE stuck device and still returns non-zero -- the benign tolerance
+   ## does not mask a real teardown failure. Does NOT depend on udev events firing
+   ## (the help-steps/udevadm shim turns 'udevadm settle' into a no-op during image
+   ## builds), so the re-poll, not udev, is what absorbs the transient reference.
+   ##
+   ## 'losetup --detach' takes the loop device as a plain operand and does NOT
+   ## honor a '--' end-of-options separator: util-linux parses the '--' AS the
+   ## device ("losetup: /dev/--: detach failed"). Loop device names are always
+   ## '/dev/loopN' and never begin with '-', so passing them without '--' is safe.
+   local image loop_devices_output loop_devices_item attempt
+   image="$1"
+
+   if [ "${image:-}" = "" ]; then
+      return 1
+   fi
+
+   for (( attempt = 0; attempt < 5; attempt++ )); do
+      loop_devices_output="$(${SUDO_TO_ROOT} losetup --associated "${image}" --noheadings --output NAME 2>/dev/null)" || loop_devices_output=""
+      if [ "${loop_devices_output:-}" = "" ]; then
+         return 0
+      fi
+      while read -r loop_devices_item ; do
+         if [ "${loop_devices_item:-}" = "" ]; then
+            continue
+         fi
+         ${SUDO_TO_ROOT} kpartx -d -s -v -- "${loop_devices_item}" || true "INFO: kpartx non-zero exit code."
+         ${SUDO_TO_ROOT} losetup --detach "${loop_devices_item}" || true "INFO: losetup non-zero exit code."
+      done <<< "${loop_devices_output}"
+      ${SUDO_TO_ROOT} udevadm settle || true
+      sleep 1
+   done
+
+   loop_devices_output="$(${SUDO_TO_ROOT} losetup --associated "${image}" --noheadings --output NAME 2>/dev/null)" || loop_devices_output=""
+   [ "${loop_devices_output:-}" = "" ]
+}
+
 repository_dist_initializer_setup() {
    ## Sets up repository-dist so it is set up properly when the built system
    ## first boots.

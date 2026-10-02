@@ -457,10 +457,12 @@ mount-test() {
       if [ -n "${test_img}" ]; then
          ${SUDO_TO_ROOT} kpartx -d -s -v -- "${test_img}" 2>/dev/null || true
          ## kpartx is supposed to remove the loop device too, but try manually
-         ## removing too it just in case.
+         ## removing too it just in case. NOTE: 'losetup --detach' takes the loop
+         ## device as a plain operand and does NOT honor a '--' separator (it would
+         ## parse '--' AS the device: "losetup: /dev/--: detach failed").
          while read -r mt_loop; do
             [ -n "${mt_loop}" ] || continue
-            ${SUDO_TO_ROOT} losetup --detach -- "${mt_loop}" 2>/dev/null || true
+            ${SUDO_TO_ROOT} losetup --detach "${mt_loop}" 2>/dev/null || true
          done < <(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null)
          ${SUDO_TO_ROOT} safe-rm --force -- "${test_img}" 2>/dev/null || true
          test_img=""
@@ -549,10 +551,14 @@ Output: ${kpartx_out}${reset}"
    ${SUDO_TO_ROOT} rmdir -- "${test_dir}" 2>/dev/null || true
    test_dir=""
 
-   ## Detach the test image and clean up.
+   ## Detach the test image and verify teardown. loop_teardown_verify
+   ## (help-steps/misc-helpers.bsh) tolerates the benign Qubes/Xen/docker case
+   ## where 'kpartx -d' leaves the backing loop attached (an explicit
+   ## 'losetup --detach' plus a bounded re-poll releases it), but still fails on a
+   ## genuinely stuck device.
    ${SUDO_TO_ROOT} kpartx -d -s -v -- "${test_img}" 2>/dev/null || true
-   loop_assoc="$(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null || true)"
-   if [ -n "${loop_assoc}" ]; then
+   if ! loop_teardown_verify "${test_img}" ; then
+      loop_assoc="$(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null || true)"
       _mt_cleanup
       error "${bold}${red}ERROR ${BASH_SOURCE[0]}: device-mapper/loop teardown did not release cleanly, loop device '${loop_assoc}' still attached. Recommendation: reboot the build host, then retry.${reset}"
    fi
