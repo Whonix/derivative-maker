@@ -54,50 +54,17 @@ unmount_raw() {
    sync
 
    ## First pass is best-effort: a transient "loopNpM is in use. Not removing"
-   ## here must NOT abort the build. The per-device fallback loop below
-   ## force-removes, and the losetup --associated check is the authoritative
-   ## teardown verification.
-   ${SUDO_TO_ROOT} kpartx -d -s -v -- "${img}" || true "INFO: first kpartx -d non-zero exit code (transient in-use); fallback handles it."
+   ## here must NOT abort the build. loop_teardown_verify below force-removes any
+   ## leftover and is the authoritative teardown verification.
+   ${SUDO_TO_ROOT} kpartx -d -s -v -- "${img}" || true "INFO: first kpartx -d non-zero exit code (transient in-use); loop_teardown_verify handles it."
    sync
 
-   local loop_devices_output_before loop_devices_list loop_devices_item
-   ## Example:
-   ## sudo losetup --associated /home/user/derivative-binary/17.4.0.2/Kicksecure-CLI-17.4.0.2.Intel_AMD64.raw --noheadings --output NAME
-   #/dev/loop1
-   #/dev/loop2
-   #/dev/loop0
-   ## NOTE: There should only be one loop device (such as '/dev/loop1'). But in case of bugs, there might be multiple.
-   loop_devices_output_before="$(${SUDO_TO_ROOT} losetup --associated "${img}" --noheadings --output NAME)"
-
-   mapfile -t loop_devices_list <<< "${loop_devices_output_before}"
-
-   for loop_devices_item in "${loop_devices_list[@]}" ; do
-      ## Check if the block device still exists.
-      if ! test -b "${loop_devices_item}" ; then
-         continue
-      fi
-      true "INFO: kpartx -d -s -v failed to unmount all loop devices, attempting to unmount..."
-      ## Inside docker (and maybe other corner cases) 'kpartx -d -s -v "$img"' might fail to unmount loop devices.
-      ## https://forums.whonix.org/t/docker-container-that-builds-whonix-images/17494/43
-
-      ## Overwrite with '|| true' because it might exit non-zero.
-      ## sudo kpartx -d -s -v /dev/loop0
-      #del devmap : loop0p1
-      #del devmap : loop0p2
-      #loop0p3 is in use. Not removing
-      #zsh: exit 1
-      ${SUDO_TO_ROOT} kpartx -d -s -v -- "${loop_devices_item}" || true "INFO: kpartx non-zero exit code."
-
-      ## Overwrite with '|| true' because: Precaution. Testing. Unknown is strictly required.
-      ${SUDO_TO_ROOT} losetup -d -- "${loop_devices_item}" || true "INFO: losetup non-zero exit code."
-   done
-
-   true "INFO: Middle of ${FUNCNAME[0]}. losetup --associated after kpartx -d (Delete partition mappings.)"
-   local loop_devices_output_after
-   loop_devices_output_after="$(${SUDO_TO_ROOT} losetup --associated "${img}" --noheadings --output NAME)"
-
-   if [ ! "${loop_devices_output_after:-}" = "" ]; then
-      error "Unmount failed. Variable loop_devices_output_after is non-empty."
+   ## Authoritative teardown + verification. loop_teardown_verify (misc-helpers.bsh)
+   ## tolerates the benign Qubes/Xen/docker case where 'kpartx -d' leaves the
+   ## backing loop attached (an explicit 'losetup --detach' plus a bounded re-poll
+   ## releases it), but still fails the build on a genuinely stuck device.
+   if ! loop_teardown_verify "${img}" ; then
+      error "Unmount failed. Loop device(s) still associated with '${img}' after teardown."
    fi
 
    true "INFO: Middle of ${FUNCNAME[0]}. Running losetup --all for debugging after kpartx -d (Delete partition mappings.)"

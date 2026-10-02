@@ -457,13 +457,14 @@ mount-test() {
       if [ -n "${test_img}" ]; then
          ${SUDO_TO_ROOT} kpartx -d -s -v -- "${test_img}" 2>/dev/null || true
          ## kpartx is supposed to remove the loop device too, but try manually
-         ## removing too it just in case.
+         ## removing too it just in case. NOTE: 'losetup --detach' takes the loop
+         ## device as a plain operand and does NOT honor a '--' separator (it would
+         ## parse '--' AS the device: "losetup: /dev/--: detach failed").
          while read -r mt_loop; do
             [ -n "${mt_loop}" ] || continue
-            ${SUDO_TO_ROOT} losetup --detach -- "${mt_loop}" 2>/dev/null || true
+            ${SUDO_TO_ROOT} losetup --detach "${mt_loop}" 2>/dev/null || true
          done < <(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null)
-         ## safe-rm is only installed later in this step; use rm here.
-         ${SUDO_TO_ROOT} rm --force -- "${test_img}" 2>/dev/null || true
+         ${SUDO_TO_ROOT} safe-rm --force -- "${test_img}" 2>/dev/null || true
          test_img=""
       fi
    }
@@ -480,6 +481,17 @@ mount-test() {
    if ! ${SUDO_TO_ROOT} dmsetup version >/dev/null 2>&1; then
       true "${bold}${cyan}INFO: ${BASH_SOURCE[0]}: device-mapper not reachable at this \
 stage (set up later in the build); skipping dm/loop self-test.${reset}"
+      return 0
+   fi
+
+   ## mke2fs (e2fsprogs) is a PRECONDITION for the filesystem-creation part below,
+   ## but is not shipped in every build container at this stage -- the build's real
+   ## mkfs runs later inside grml's chroot, which has it. Skip (not fail) when it is
+   ## absent, mirroring the dm-reachable skip above, so a container without
+   ## e2fsprogs does not fail 1100 on a tool it legitimately lacks here.
+   if ! ${SUDO_TO_ROOT} sh -c 'command -v mke2fs' >/dev/null 2>&1; then
+      true "${bold}${cyan}INFO: ${BASH_SOURCE[0]}: mke2fs (e2fsprogs) not available at \
+this stage; skipping dm/loop self-test.${reset}"
       return 0
    fi
 
@@ -520,10 +532,13 @@ Output: ${kpartx_out}${reset}"
       error "${bold}${red}ERROR ${BASH_SOURCE[0]}: partition node '${part_dev}' missing after kpartx -a.${reset}"
    fi
 
-   ## Create an ext4 filesystem on the test image.
-   if ! ${SUDO_TO_ROOT} mke2fs -F -q -- "${part_dev}" 2>/dev/null; then
+   ## Create an ext4 filesystem on the test image; surface mke2fs's OWN error on
+   ## failure instead of swallowing it, so the cause is diagnosable rather than a
+   ## bare "mke2fs failed".
+   local mke2fs_out=""
+   if ! mke2fs_out="$(${SUDO_TO_ROOT} mke2fs -F -q -- "${part_dev}" 2>&1)"; then
       _mt_cleanup
-      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mke2fs failed on a freshly-mapped partition. Recommendation: reboot the build host, then retry.${reset}"
+      error "${bold}${red}ERROR ${BASH_SOURCE[0]}: mke2fs failed on a freshly-mapped partition (mke2fs: ${mke2fs_out}). Recommendation: reboot the build host, then retry.${reset}"
    fi
 
    ## Mount and unmount the filesystem.
@@ -536,10 +551,14 @@ Output: ${kpartx_out}${reset}"
    ${SUDO_TO_ROOT} rmdir -- "${test_dir}" 2>/dev/null || true
    test_dir=""
 
-   ## Detach the test image and clean up.
+   ## Detach the test image and verify teardown. loop_teardown_verify
+   ## (help-steps/misc-helpers.bsh) tolerates the benign Qubes/Xen/docker case
+   ## where 'kpartx -d' leaves the backing loop attached (an explicit
+   ## 'losetup --detach' plus a bounded re-poll releases it), but still fails on a
+   ## genuinely stuck device.
    ${SUDO_TO_ROOT} kpartx -d -s -v -- "${test_img}" 2>/dev/null || true
-   loop_assoc="$(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null || true)"
-   if [ -n "${loop_assoc}" ]; then
+   if ! loop_teardown_verify "${test_img}" ; then
+      loop_assoc="$(${SUDO_TO_ROOT} losetup --associated "${test_img}" --noheadings --output NAME 2>/dev/null || true)"
       _mt_cleanup
       error "${bold}${red}ERROR ${BASH_SOURCE[0]}: device-mapper/loop teardown did not release cleanly, loop device '${loop_assoc}' still attached. Recommendation: reboot the build host, then retry.${reset}"
    fi
@@ -725,10 +744,33 @@ main() {
    check-umask-in-sync "$@"
    check-stale-nbd "$@"
    check-stray-mounts "$@"
+   ## Install the required packages (check_required_packages_installed installs any
+   ## missing -- incl. kpartx, parted, approx) BEFORE the checks below that USE them:
+   ## mount-test invokes kpartx, and 1200's approx_proxy_setup needs approx. Running
+   ## it AFTER mount-test (as before) failed a fresh machine with "kpartx: command
+   ## not found" before this install ever ran.
+   check_required_packages_installed "$@"
    mount-test "$@"
    check-build-primitives "$@"
    check-copy-vms-into-raw "$@"
-   check_required_packages_installed "$@"
+
+   ## --sign-and-tag true: on a PREPARED build machine, create the signing key
+   ## (idempotent) and sign+tag HEAD + submodules HERE, immediately before the verify
+   ## below, so no separate signing-key-create / sign-and-tag pre-step is needed. This
+   ## is the only spot the order holds: the sign must precede the verify it satisfies,
+   ## and the git tree is already validated (check-git-folder ran above).
+   ## PRECONDITION (identical to this step's own verify): the signing tools are already
+   ## installed -- git_sanity_test needs sq/sq-git/sqop, and signing-key-create also
+   ## needs signify-openbsd + sponge, all from prepare-build-machine (step 1200, which
+   ## runs AFTER this step). So a never-prepared host must run prepare-build-machine
+   ## first; this does NOT fix the pre-existing 1100-before-1200 dep ordering (which
+   ## the verify already depends on too). No-op on an already-signed HEAD; both helpers
+   ## are env-driven (dist_build_sign_and_tag) and argless like CI; sign-and-tag
+   ## self-refuses a redistributable build. Gated on the dangerous --sign-and-tag flag.
+   if [ "${dist_build_sign_and_tag}" = "true" ]; then
+      "${dist_source_help_steps_folder}/signing-key-create"
+      "${dist_source_help_steps_folder}/sign-and-tag"
+   fi
 
    "${dist_source_help_steps_folder}/git_sanity_test" --mode all --context "main repo"
 

@@ -17,27 +17,46 @@ name: Boot Test
 ##   - live ISO        (the same packages, live-booted).
 ##   - virtualbox .ova -- TEMPORARILY DISABLED (re-enable once stable; search
 ##     'vbox temporarily disabled' -- build target, .ova upload, boot matrix).
-## The sysmaint session is selected -- identically on every kind -- via dm-qemu's
+## The sysmaint session is selected -- identically on every kind -- via dm-smbios-reader-qemu's
 ## SMBIOS kernel-cmdline injection of 'boot-role=sysmaint
 ## systemd.unit=sysmaint-boot.target', the exact pair the sysmaint GRUB entry adds
 ## (user-sysmaint-split grub.d_10_10_linux_sysmaint). SMBIOS injection is disk/ISO
 ## agnostic, so no image kind is excluded from either session.
 ##
-## All boot logic lives in dist-ai's dm-image-boot-tests, which bundles dm-qemu
-## (qemu/firmware/Secure Boot + SMBIOS kernel-cmdline injection) and dm-image-test
+## All boot logic lives in dist-ai's dm-smbios-reader-boot-tests, which bundles dm-smbios-reader-qemu
+## (qemu/firmware/Secure Boot + SMBIOS kernel-cmdline injection) and dm-smbios-reader-image-test
 ## (login + checks). This workflow is a thin wrapper that builds the images, checks
 ## out dist-ai and fans out the matrix, so the shell stays lint-covered and locally
 ## runnable. See agents/github-actions-security.md for the pinning / permissions
 ## patterns.
 
 ## REMINDER: If the kernel arguments for enabling sysmaint mode ever change,
-## they will need updated in dist-ai/usr/bin/dm-boot-test as well. This could
+## they will need updated in dist-ai/usr/bin/dm-smbios-reader-boot-test as well. This could
 ## be avoided by making it possible to select a default boot mode in GRUB using
 ## an SMBIOS string, but this is not necessary for the time being.
 
 on:
   workflow_dispatch:
-  ## Dispatch-only: dm-ci-dispatch --workflow local-boot-test.yml --ref <ref>
+    ## Default (no inputs) + cron keep the tiny-flavor qcow2/iso boot matrix,
+    ## byte-identical to before. The vbox path is opt-in per dispatch:
+    ##   dm-ci-dispatch --workflow local-boot-test.yml --ref <ref> \
+    ##     --input build_vbox=true
+    inputs:
+      build_vbox:
+        description: >-
+          Build the VirtualBox .ova for the 'flavors' set (Whonix
+          Gateway+Workstation) and upload it plus its sha512, instead of the
+          qcow2/iso boot matrix. The pair boot + Tor/leak-test is a planned
+          follow-up; this path currently builds and records evidence only.
+        type: boolean
+        default: false
+      flavors:
+        description: >-
+          Space-separated flavors_list for the vbox build (build_vbox=true only).
+          The Whonix workstation unified .ova export requires the gateway built
+          first, so keep them paired and gateway-first.
+        type: string
+        default: "whonix-gateway-lxqt whonix-workstation-lxqt"
   schedule:
     ## Weekly, Sundays 08:00 UTC (offset from the build lane at 07:00).
     - cron: '0 8 * * 0'
@@ -73,25 +92,17 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          ## kicksecure-ci-tiny-do-not-use (minimal boot-test flavor) for FAST
-          ## iteration: the boot chain + hardening core + systemcheck +
-          ## user-sysmaint-split, no GUI/browser/anonymity layer.
-          ## -> qcow2 disk image (also builds the VirtualBox ova).
-          ##
-          ## TODO: Why do we build qcow2 and VBox images at the same time but
-          ## not ISO images? If it's because of disk space, why not just do
-          ## all builds separately for clarity? If we're going to batch some
-          ## builds, can we make the "image_kind" value here less confusing,
-          ## i.e. change "qcow2" to "vm"?
-          - flavor: kicksecure-ci-tiny-do-not-use
-            image_kind: qcow2
-            upload_glob: "*.qcow2*"
-          ## -> live ISO (same package set, live-booted).
-          - flavor: kicksecure-ci-tiny-do-not-use
-            image_kind: iso
-            upload_glob: "*.iso"
+      ## Two shapes, ONE build job (so all the caching plumbing is shared):
+      ##  - default/cron: kicksecure-ci-tiny-do-not-use as a qcow2 disk + a live
+      ##    ISO (same package set), booted across the firmware x session matrix.
+      ##  - build_vbox dispatch: a single 'vbox' entry that builds the Whonix
+      ##    VirtualBox .ova. 'flavor' here is ONLY a cache-namespace tag; the real
+      ##    flavors_list is inputs.flavors (a gateway+workstation pair).
+      ## fromJSON swap, not a literal 'include', so one input picks the shape.
+      matrix: >-
+        ${{ fromJSON(inputs.build_vbox
+        && '{"include":[{"flavor":"whonix-lxqt-vbox","image_kind":"vbox","upload_glob":"*.ova*"}]}'
+        || '{"include":[{"flavor":"kicksecure-ci-tiny-do-not-use","image_kind":"qcow2","upload_glob":"*.qcow2*"},{"flavor":"kicksecure-ci-tiny-do-not-use","image_kind":"iso","upload_glob":"*.iso"}]}') }}
     steps:
       - name: Checkout repository (no submodules yet)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -198,6 +209,15 @@ jobs:
         if: env.BASE_CACHE == 'true'
         run: ./ci/cowbuilder-base-cache unpack
 
+      ## The vbox 'flavors' input is free-form and is spliced into the build
+      ## command as flavors_list='<value>' inside a bash -c; validate its charset
+      ## FIRST so it cannot carry a shell metacharacter (command injection).
+      - name: Validate flavors input
+        if: inputs.build_vbox
+        env:
+          FLAVORS: ${{ inputs.flavors }}
+        run: ./ci/validate-flavors "${FLAVORS}"
+
       - name: Build ${{ matrix.flavor }} via dm-build-official (${{ env.BOOT_ARCH }})
         id: dm-build
         ## Build through the official orchestration -- the SAME single build path as
@@ -207,26 +227,31 @@ jobs:
         ## docker-run so the home-directory state signing-key-create creates persists
         ## into sign-and-tag and the build. rule 4: shell vars from env, no ${{ }}
         ## interpolation into "run:".
-        ## The ISO job needs ONLY the ISO; its sibling CLI job already builds the
-        ## qcow2 + VirtualBox images. An EMPTY dist_build_multi_target_list builds
-        ## no post-ISO VM images (the raw -> vdi -> ova + qcow2 build would exhaust
-        ## the runner filesystem); the CLI job requests 'virtualbox qcow2'.
+        ## dist_build_multi_target_list is the authoritative VM-target set: the
+        ## tiny qcow2 job builds qcow2, the tiny ISO job builds none (empty), and
+        ## the vbox dispatch builds virtualbox ALONE. rule 4: shell vars from env,
+        ## no ${{ }} interpolation into "run:".
         env:
           CI: "true"
           ARCH: ${{ env.BOOT_ARCH }}
-          FLAVOR: ${{ matrix.flavor }}
+          ## Real flavors_list. For the vbox dispatch this is inputs.flavors (a
+          ## space-separated gateway+workstation pair, gateway-first, which
+          ## dm-build-official-one splits into the per-flavor build order); the
+          ## unified Whonix .ova export needs the gateway built before the
+          ## workstation. Otherwise the tiny matrix cache-tag flavor.
+          FLAVOR: ${{ inputs.build_vbox && inputs.flavors || matrix.flavor }}
           FRESHNESS: frozen
-          ## vbox temporarily disabled (re-enable once stable): drop 'virtualbox'
-          ## so the non-iso job builds only the qcow2 and skips the raw->vdi->ova
-          ## conversion. Change 'qcow2' to 'virtualbox qcow2' below to re-enable
-          ## vbox.
-          MULTI_TARGET_LIST: ${{ matrix.image_kind != 'iso' && 'qcow2' || '' }}
+          ## 'virtualbox' ALONE for the vbox dispatch (building 'virtualbox qcow2'
+          ## together would exhaust the runner disk -- the deliverable is the
+          ## .ova); qcow2 for the tiny disk job; empty for the tiny ISO job (an
+          ## empty list builds no post-ISO VM images).
+          MULTI_TARGET_LIST: ${{ matrix.image_kind == 'vbox' && 'virtualbox' || (matrix.image_kind != 'iso' && 'qcow2' || '') }}
           ## Reusing a base the cache never restored would hand
           ## 1300_cowbuilder-setup a stale or absent tree, so the flag is tied to
           ## BASE_CACHE rather than set unconditionally.
           COWBASE_REUSE_FLAG: ${{ env.BASE_CACHE == 'true' && '--reuse-cowbuilder-base' || '' }}
           ## '--smbios-reader true' below: this lane's images are the only ones
-          ## that need the GRUB SMBIOS cmdline reader, because dm-qemu selects the
+          ## that need the GRUB SMBIOS cmdline reader, because dm-smbios-reader-qemu selects the
           ## session and the serial console through it. It is default OFF, so a
           ## released image carries no reader -- without this flag every boot leg
           ## would time out with a 0-byte serial log rather than fail loudly.
@@ -307,30 +332,33 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
-      ## vbox temporarily disabled (re-enable once stable): the non-iso job no
-      ## longer builds the .ova (MULTI_TARGET_LIST above). Re-enable by
-      ## uncommenting this step with 'if: matrix.image_kind == 'qcow2'' (and
-      ## restoring 'virtualbox qcow2' in MULTI_TARGET_LIST + the 'vbox' image_kind
-      ## in the boot matrix).
-      ##
-      ## Commented out rather than left as 'if: false', which actionlint rejects as
-      ## a constant condition -- the same way the other disabled vbox pieces are.
-      # - name: Upload built .ova (virtualbox)
-      #   if: matrix.image_kind == 'qcow2'
-      #   uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      #   with:
-      #     name: boot-image-vbox
-      #     path: /home/runner/binary_mnt/**/*.ova
-      #     if-no-files-found: error
-      #     retention-days: 2
+      ## The generic upload above already carries the .ova (image_kind 'vbox',
+      ## glob '*.ova*') as artifact 'boot-image-vbox'. Record its sha512 as
+      ## build evidence and upload that too.
+      - name: Record .ova sha512 (evidence)
+        if: matrix.image_kind == 'vbox'
+        run: ./ci/ova-sha512
+
+      - name: Upload .ova sha512 (evidence)
+        if: matrix.image_kind == 'vbox'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ova-sha512
+          path: ova-sha512.txt
+          if-no-files-found: error
+          retention-days: 7
 
   boot-test:
     needs: build
     ## CI runs only where we enabled it; ANDed with the existing guard.
     ## Unset variable -> skipped, no runner, run stays green.
+    ## Skipped on the vbox dispatch: that build produces no qcow2/iso to download.
+    ## (The vbox pair boot + Tor/leak-test is a planned follow-up job; the vbox
+    ## path currently only builds and uploads the .ova + sha512.)
     if: >-
       vars.CI_ENABLED_ORG_AI_ASSISTED == 'true'
       && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request')
+      && ! inputs.build_vbox
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
@@ -355,7 +383,7 @@ jobs:
           - sysmaint
         ## No exclusions: kicksecure-ci-tiny-do-not-use ships user-sysmaint-split,
         ## so every built image kind (qcow2 / iso) has a real sysmaint session,
-        ## selected uniformly via dm-qemu's SMBIOS cmdline injection. Both sessions
+        ## selected uniformly via dm-smbios-reader-qemu's SMBIOS cmdline injection. Both sessions
         ## run on all kinds.
     steps:
       - name: Checkout repository (no submodules yet)
@@ -372,9 +400,9 @@ jobs:
         run: ./ci/configure-fork-mirror "${REPOSITORY_OWNER}" "${REPOSITORY_OWNER}"
 
       - name: Check out dist-ai (boot harness)
-        ## The boot harness + CI front-end (dm-boot-test -> dm-image-boot-tests ->
-        ## dm-qemu + dm-image-test) lives in dist-ai (public). Checked out into the
-        ## workspace so the boot step can call dist-ai/usr/bin/dm-boot-test (works
+        ## The boot harness + CI front-end (dm-smbios-reader-boot-test -> dm-smbios-reader-boot-tests ->
+        ## dm-smbios-reader-qemu + dm-smbios-reader-image-test) lives in dist-ai (public). Checked out into the
+        ## workspace so the boot step can call dist-ai/usr/bin/dm-smbios-reader-boot-test (works
         ## inside the build container too, since the whole workspace is mounted).
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -383,8 +411,8 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Init helper-scripts submodule (dm-boot-test sources it)
-        ## This job checks out with submodules:false, but dm-boot-test sources
+      - name: Init helper-scripts submodule (dm-smbios-reader-boot-test sources it)
+        ## This job checks out with submodules:false, but dm-smbios-reader-boot-test sources
         ## helper-scripts' package_installed_check.sh. Init just that one submodule
         ## (the next step switches it to the matching fork branch if present).
         run: git submodule update --init -- packages/kicksecure/helper-scripts
@@ -417,9 +445,9 @@ jobs:
           FIRMWARE: ${{ matrix.firmware }}
           SESSION: ${{ matrix.session }}
           KIND: ${{ matrix.image_kind }}
-        ## dm-boot-test (in dist-ai) dispatches --iso vs --disk by the image
+        ## dm-smbios-reader-boot-test (in dist-ai) dispatches --iso vs --disk by the image
         ## extension. dist-ai is mounted at ./dist-ai inside the workspace/container.
-        run: ./docker/derivative-maker-docker-run -- dist-ai/usr/bin/dm-boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${KIND}-${FIRMWARE}-${SESSION}.serial.log"
+        run: ./docker/derivative-maker-docker-run -- dist-ai/usr/bin/dm-smbios-reader-boot-test --image "${IMAGE}" --arch "${ARCH}" --firmware "${FIRMWARE}" --session "${SESSION}" --serial-log "boot-${KIND}-${FIRMWARE}-${SESSION}.serial.log"
 
       - name: Upload serial log
         if: always()
