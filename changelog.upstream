@@ -1,3 +1,76 @@
+commit 705773f6367bc88469a8e5d21e4d2eb30835030b
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 06:48:47 2026 -0400
+
+    update
+
+commit 10dae1d045188f70c43f365516fb1173186ad8a9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 06:48:38 2026 -0400
+
+    .
+
+commit e96d87cad52a8fb36b100ad3502e04419736f1f2
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 10:34:19 2026 +0000
+
+    bumped changelog version
+
+commit 4546f71f7f356a7bed67b296770753ba981610e9
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 04:32:47 2026 -0400
+
+    .
+
+commit b31c95ac6d30900a7b993db6f4c19be852728f9e
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 04:19:16 2026 -0400
+
+    .
+
+commit 354fae9c41f89ff4bcecd41bfedd2dfc932ae1bf
+Merge: 1f4044cc3 78ec664f4
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Oct 2 04:18:59 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/ArrayBolt3/arraybolt3/trixie'
+
+commit 78ec664f4ea4aa8d542d7efb9f5e68b4bbec2a44
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Oct 1 20:44:27 2026 -0400
+
+    fix
+
+commit e872901a286a1cf0d40751ea115fb11d8256b3d9
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Oct 1 20:10:56 2026 -0400
+
+    fix
+
+commit aa3e21b4bfd68dd48f6eed9d8b92537eb95e630b
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Thu Oct 1 19:25:14 2026 -0400
+
+    fix
+
+commit aa1b3be25b65f901a2a73540d024485fd7bdee48
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Wed Sep 30 23:49:07 2026 -0400
+
+    Undo faulty correction, EMPTY_DIR is unnecessary after all
+
+commit 1af69ee64656e034c9b4519e5207331c74f0a386
+Author: Aaron Rainbolt <arraybolt3@gmail.com>
+Date:   Wed Sep 30 23:14:08 2026 -0400
+
+    Attempt to unbreak continuing past an error, make interactive vs. non-interactive detection saner
+
+commit 1f4044cc31ea64fa74c6f19807d31c77f741e96e
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Sep 30 12:28:24 2026 +0000
+
+    bumped changelog version
+
 commit 34e4059f3aa2aa09481d94b56e37b5c48c78d3e9
 Merge: 560d28b27 03cfc6563
 Author: Patrick Schleizer <adrelanos@whonix.org>
