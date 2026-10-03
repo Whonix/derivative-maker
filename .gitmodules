@@ -125,6 +125,11 @@
         url = https://github.com/Kicksecure/dist-base-files.git
         #url = https://gitlab.com/kicksecure/dist-base-files.git
 
+[submodule "dist-system-metadata"]
+        path = packages/kicksecure/dist-system-metadata
+        url = https://github.com/Kicksecure/dist-system-metadata.git
+        #url = https://gitlab.com/kicksecure/dist-system-metadata.git
+
 [submodule "genmkfile"]
         path = packages/kicksecure/genmkfile
         url = https://github.com/Kicksecure/genmkfile.git
