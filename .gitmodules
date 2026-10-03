@@ -380,31 +380,31 @@
 
 [submodule "grml-debootstrap"]
         path = grml-debootstrap
-        url  = https://github.com/Kicksecure/grml-debootstrap.git
-        #url = https://gitlab.com/Kicksecure/grml-debootstrap.git
+        url = https://github.com/Kicksecure/grml-debootstrap.git
+        #url = https://gitlab.com/kicksecure/grml-debootstrap.git
 
 [submodule "grml-debootstraptest"]
         path = grml-debootstraptest
-        url  = https://github.com/Kicksecure/grml-debootstraptest.git
-        #url = https://gitlab.com/Kicksecure/grml-debootstraptest.git
-
-[submodule "whonix-installer"]
-        path = windows/Whonix-Installer
-        url  = https://github.com/Whonix/Whonix-Installer.git
-        #url = https://gitlab.com/whonix/Whonix-Installer.git
-
-[submodule "whonix-starter"]
-        path = windows/Whonix-Starter
-        url  = https://github.com/Whonix/Whonix-Starter.git
-        #url = https://gitlab.com/whonix/Whonix-Starter.git
+        url = https://github.com/Kicksecure/grml-debootstraptest.git
+        #url = https://gitlab.com/kicksecure/grml-debootstraptest.git
 
 [submodule "qubes-template-kicksecure"]
         path = qubes/qubes-template-kicksecure
-        url  = https://github.com/Kicksecure/qubes-template-kicksecure.git
-        #url = https://gitlab.com/Kicksecure/qubes-template-kicksecure.git
+        url = https://github.com/Kicksecure/qubes-template-kicksecure.git
+        #url = https://gitlab.com/kicksecure/qubes-template-kicksecure.git
 
 [submodule "qubes-template-whonix"]
         path = qubes/qubes-template-whonix
-        url  = https://github.com/Whonix/qubes-template-whonix.git
-        #url = https://gitlab.com/Whonix/qubes-template-whonix.git
+        url = https://github.com/Whonix/qubes-template-whonix.git
+        #url = https://gitlab.com/whonix/qubes-template-whonix.git
+
+[submodule "Whonix-Installer"]
+        path = windows/Whonix-Installer
+        url = https://github.com/Whonix/Whonix-Installer.git
+        #url = https://gitlab.com/whonix/Whonix-Installer.git
+
+[submodule "Whonix-Starter"]
+        path = windows/Whonix-Starter
+        url = https://github.com/Whonix/Whonix-Starter.git
+        #url = https://gitlab.com/whonix/Whonix-Starter.git
 
